@@ -1,7 +1,16 @@
 import json
 import re
+from typing import Annotated
 
-from langchain_core.tools import tool
+from langchain_core.tools import InjectedToolCallId, tool
+
+_TABLE_DISPLAY_REGISTRY: dict[str, dict] = {}
+
+
+def pop_table_display(tool_call_id: str | None) -> dict | None:
+    if not tool_call_id:
+        return None
+    return _TABLE_DISPLAY_REGISTRY.pop(tool_call_id, None)
 
 AGENT_INSTRUCTION_AFTER_TABLE = (
     "La tabla ya está visible en el chat del usuario. "
@@ -290,6 +299,7 @@ def show_data_table(
     rows: list[list[str | int | float | None]],
     caption: str = "",
     column_widths: list[str] | None = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Display a formatted data table in the chat for the user.
 
@@ -307,4 +317,6 @@ def show_data_table(
         payload = validate_table_input(columns, rows, caption, column_widths)
     except ValueError as exc:
         return json.dumps({"ok": False, "error": str(exc)})
+    if tool_call_id:
+        _TABLE_DISPLAY_REGISTRY[tool_call_id] = payload
     return build_agent_tool_response(payload)

@@ -8,10 +8,23 @@ from apps.agent.tools.table import (
     build_grid_template_columns,
     detect_numeric_columns,
     infer_column_widths,
+    pop_table_display,
     prepare_table_for_render,
     show_data_table,
     validate_table_input,
 )
+
+
+def invoke_show_data_table(**kwargs):
+    result = show_data_table.invoke(
+        {
+            "type": "tool_call",
+            "name": "show_data_table",
+            "id": "call_test",
+            "args": kwargs,
+        }
+    )
+    return result.content if hasattr(result, "content") else result
 
 
 class TestValidateTableInput:
@@ -126,12 +139,10 @@ class TestColumnWidths:
 
     def test_tool_accepts_column_widths(self):
         result = json.loads(
-            show_data_table.invoke(
-                {
-                    "columns": ["ID", "Nombre"],
-                    "rows": [["1", "Alpha"]],
-                    "column_widths": ["narrow", "fill"],
-                }
+            invoke_show_data_table(
+                columns=["ID", "Nombre"],
+                rows=[["1", "Alpha"]],
+                column_widths=["narrow", "fill"],
             )
         )
         assert result["displayed_to_user"] is True
@@ -141,11 +152,9 @@ class TestColumnWidths:
 class TestShowDataTableTool:
     def test_success_response_omits_rows_from_agent_payload(self):
         result = json.loads(
-            show_data_table.invoke(
-                {
-                    "columns": ["Artist", "Revenue"],
-                    "rows": [["AC/DC", "$50.00"]],
-                }
+            invoke_show_data_table(
+                columns=["Artist", "Revenue"],
+                rows=[["AC/DC", "$50.00"]],
             )
         )
         assert result["ok"] is True
@@ -157,12 +166,17 @@ class TestShowDataTableTool:
 
     def test_error_response(self):
         result = json.loads(
-            show_data_table.invoke(
-                {
-                    "columns": ["A", "B"],
-                    "rows": [["only one"]],
-                }
+            invoke_show_data_table(
+                columns=["A", "B"],
+                rows=[["only one"]],
             )
         )
         assert result["ok"] is False
         assert "expected 2" in result["error"]
+
+    def test_stores_payload_for_stream_resolution(self):
+        invoke_show_data_table(columns=["Artist"], rows=[["AC/DC"]])
+        payload = pop_table_display("call_test")
+        assert payload is not None
+        assert payload["rows"] == [["AC/DC"]]
+        assert pop_table_display("call_test") is None

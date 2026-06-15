@@ -4,7 +4,7 @@ from collections.abc import Callable
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from apps.agent.tools.display import PLAN_TOOL_LABEL, get_tool_display
-from apps.agent.tools.table import prepare_table_for_render, validate_table_input
+from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
 
 PLAN_TOOLS = {"write_todos"}
@@ -194,6 +194,10 @@ class StreamEventHandler:
         output: str,
         tool_call_id: str | None,
     ) -> dict:
+        registry_result = pop_table_display(tool_call_id)
+        if registry_result:
+            return registry_result
+
         if tool_call_id and tool_call_id in self.pending_table_displays:
             return self.pending_table_displays.pop(tool_call_id)
 
