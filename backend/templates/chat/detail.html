@@ -51,19 +51,24 @@
                 <div class="ay-msg-user__bubble">{{ message.content }}</div>
               </div>
           {% elif message.role == "assistant" %}
-            {% if message.content_blocks %}
+            {% if message.content_blocks or message.tool_trace %}
               <div class="ay-msg-agent" data-message-id="{{ message.id }}">
                 {% include "components/avatar.html" with agent=True %}
                 <div class="ay-msg-agent__body">
-                  <div class="ay-msg-agent__content">
-                    {% for block in message.content_blocks %}
-                      {% if block.type == "text" %}
-                        <div class="ay-msg-agent__text">{{ block.content }}</div>
-                      {% elif block.type == "table" %}
-                        {% include "components/data_table.html" with table=block.table %}
-                      {% endif %}
-                    {% endfor %}
-                  </div>
+                  {% if message.content_blocks %}
+                    <div class="ay-msg-agent__content">
+                      {% for block in message.content_blocks %}
+                        {% if block.type == "text" %}
+                          <div class="ay-msg-agent__text">{{ block.content }}</div>
+                        {% elif block.type == "table" %}
+                          {% include "components/data_table.html" with table=block.table %}
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                  {% if message.tool_trace %}
+                    {% include "components/tool_trace.html" with trace=message.tool_trace %}
+                  {% endif %}
                 </div>
               </div>
             {% endif %}
@@ -175,6 +180,20 @@
     return streamContainer;
   }
 
+  function initToolTraceToggle(trace) {
+    const toggle = trace.querySelector(".ay-tool-trace__toggle");
+    if (!toggle || toggle.dataset.bound === "true") return;
+    toggle.dataset.bound = "true";
+    toggle.addEventListener("click", function () {
+      const collapsed = trace.classList.toggle("is-collapsed");
+      this.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    });
+  }
+
+  function initToolTraces(root) {
+    (root || document).querySelectorAll(".ay-tool-trace").forEach(initToolTraceToggle);
+  }
+
   function ensureToolTrace(toolsEl) {
     let trace = toolsEl.querySelector(".ay-tool-trace");
     if (!trace) {
@@ -186,10 +205,7 @@
           '<svg class="ay-tool-trace__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>' +
         '</button>' +
         '<ul class="ay-tool-trace__list"></ul>';
-      trace.querySelector(".ay-tool-trace__toggle").addEventListener("click", function () {
-        const collapsed = trace.classList.toggle("is-collapsed");
-        this.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      });
+      initToolTraceToggle(trace);
       toolsEl.appendChild(trace);
     }
     return trace;
@@ -361,8 +377,11 @@
 
   function appendTableBlock(bubble, table) {
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
-    contentEl.appendChild(renderDataTable(table));
+    if (currentTextEl && !currentTextEl.textContent) {
+      currentTextEl.remove();
+    }
     currentTextEl = null;
+    contentEl.appendChild(renderDataTable(table));
   }
 
   function applyEvent(event) {
@@ -482,6 +501,7 @@
   });
 
   scrollToBottom();
+  initToolTraces(chatThreadEl);
   loadEvents();
 })();
 </script>

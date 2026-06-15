@@ -1,0 +1,18 @@
+<div class="ay-msg-agent__tools">
+  <div class="ay-tool-trace is-collapsed">
+    <button type="button" class="ay-tool-trace__toggle" aria-expanded="false">
+      <span class="ay-tool-trace__summary">{{ trace.summary }}</span>
+      <svg class="ay-tool-trace__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <ul class="ay-tool-trace__list">
+      {% for item in trace.items %}
+        <li class="ay-tool-trace__item" data-label="{{ item.label }}"{% if item.tool %} data-tool="{{ item.tool }}"{% endif %}>
+          <span class="ay-tool-trace__verb">{{ item.label }}</span>
+          {% if item.detail %}
+            <span class="ay-tool-trace__detail">{{ item.detail }}</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>

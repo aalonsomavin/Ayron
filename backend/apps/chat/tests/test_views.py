@@ -355,6 +355,50 @@ class TestConversationDetail:
         text_pos = content.index("Interpretación breve.")
         assert table_pos < text_pos
 
+    def test_detail_renders_persisted_tool_trace(self, client, user, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Son 10 álbumes.",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_label": "Buscando datos",
+                "tool_subtitle": 'SELECT * FROM "Album" LIMIT 10',
+                "tool_call_id": "call_1",
+                "input": {"sql": 'SELECT * FROM "Album" LIMIT 10'},
+            },
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "show_data_table",
+                "tool_label": "Mostrar tabla",
+                "tool_subtitle": "10 filas",
+                "tool_call_id": "call_2",
+                "input": {},
+            },
+            sequence_number=1,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:detail", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+        content = response.content.decode()
+
+        assert "ay-tool-trace" in content
+        assert "Buscó datos 1 vez, mostró 1 tabla" in content
+        assert "Buscando datos" in content
+        assert "Mostrar tabla" in content
+        assert content.index("Son 10 álbumes.") < content.index("ay-tool-trace")
+
 
 @pytest.mark.django_db
 class TestConversationNew:

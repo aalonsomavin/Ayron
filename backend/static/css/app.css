@@ -1098,7 +1098,7 @@ body {
 .ay-chat__messages {
   flex: 1;
   overflow-y: auto;
-  padding: 28px 0;
+  padding: 16px 0 28px;
 }
 
 .ay-chat__thread {
@@ -1134,13 +1134,15 @@ body {
 .ay-msg-agent__body {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   font-size: 14.5px;
   line-height: 1.55;
   white-space: pre-wrap;
 }
 
 .ay-msg-agent__tools {
-  margin-top: 10px;
+  margin-top: 6px;
   white-space: normal;
 }
 
@@ -1189,11 +1191,11 @@ body {
 
 .ay-tool-trace__list {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .ay-tool-trace__item {
@@ -1227,6 +1229,13 @@ body {
   flex-direction: column;
 }
 
+.ay-msg-agent__content > .ay-data-table + .ay-msg-agent__text,
+  .ay-msg-agent__content > .ay-msg-agent__text + .ay-data-table,
+  .ay-msg-agent__content > .ay-data-table + .ay-data-table,
+  .ay-msg-agent__content > .ay-msg-agent__text + .ay-msg-agent__text {
+  margin-top: 16px;
+}
+
 .ay-msg-agent__text {
   white-space: pre-wrap;
 }
@@ -1236,7 +1245,6 @@ body {
 }
 
 .ay-data-table {
-  margin-top: 12px;
   white-space: normal;
 }
 

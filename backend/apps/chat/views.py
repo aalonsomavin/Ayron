@@ -10,6 +10,7 @@ from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_disp
 from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
+from apps.chat.tool_trace import tool_trace_for_message
 
 
 def _get_conversation(request, conversation_id):
@@ -104,6 +105,7 @@ def _messages_with_content_blocks(conversation: Conversation) -> list[Message]:
     for message in messages:
         if message.role == Message.Role.ASSISTANT:
             message.content_blocks = _content_blocks_for_message(message)
+            message.tool_trace = tool_trace_for_message(message)
     return messages
 
 
