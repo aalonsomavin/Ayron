@@ -1,0 +1,18 @@
+{
+  "name": "django-htmx-template-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "tailwindcss -i ./src/styles.css -o /output/app.css --watch",
+    "dev:docker": "tailwindcss -i ./src/styles.css -o /output/app.css && while true; do sleep 2 && tailwindcss -i ./src/styles.css -o /output/app.css >/dev/null 2>&1; done",
+    "build": "tailwindcss -i ./src/styles.css -o /output/app.css",
+    "watch": "npm run dev",
+    "build:local": "tailwindcss -i ./src/styles.css -o ../backend/static/css/app.css",
+    "watch:local": "tailwindcss -i ./src/styles.css -o ../backend/static/css/app.css --watch"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "daisyui": "^4.12.10",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16"
+  }
+}

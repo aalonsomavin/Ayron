@@ -1,0 +1,12 @@
+<div class="flex items-center gap-4">
+  <span class="text-2xl font-mono">{{ count|default:0 }}</span>
+  <button hx-post="{% url 'core:htmx_counter' %}"
+          hx-target="#counter-container"
+          hx-swap="innerHTML"
+          hx-include="#counter-container input"
+          class="btn btn-primary">
+    Increment
+  </button>
+  {% csrf_token %}
+  <input type="hidden" name="count" value="{{ count|default:0 }}">
+</div>
