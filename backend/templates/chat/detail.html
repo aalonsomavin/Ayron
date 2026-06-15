@@ -44,7 +44,8 @@
       </div>
     </header>
 
-    <div id="chat-messages" class="ay-chat__messages">
+    <div class="ay-chat__viewport">
+      <div id="chat-messages" class="ay-chat__messages">
       <div class="ay-chat__thread">
         {% for message in chat_messages %}
           {% if message.role == "user" and message.content %}
@@ -79,6 +80,10 @@
         {% endfor %}
         <div id="agent-stream"></div>
       </div>
+      </div>
+      <button type="button" id="chat-scroll-bottom" class="ay-chat__scroll-btn" aria-label="Scroll to bottom" aria-hidden="true">
+        {% include "components/icon.html" with name="arrowdown" size=18 %}
+      </button>
     </div>
 
     <footer class="ay-composer">
@@ -127,6 +132,9 @@
   let currentTextEl = null;
   let caretEl = null;
   let isStreaming = false;
+  let stickToBottom = true;
+
+  const SCROLL_THRESHOLD = 48;
 
   const AGENT_AVATAR_HTML = '<div class="ay-agent-avatar ay-agent-avatar--active"><canvas class="ay-agent-avatar__canvas" aria-hidden="true"></canvas></div>';
 
@@ -134,6 +142,7 @@
   const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
   const messagesEl = document.getElementById("chat-messages");
+  const scrollBtnEl = document.getElementById("chat-scroll-bottom");
   const agentStreamEl = document.getElementById("agent-stream");
   const chatThreadEl = agentStreamEl.parentElement;
   const activeMessageId = {{ active_message_id|default:"null" }};
@@ -147,10 +156,31 @@
     return event.tool_subtitle || "";
   }
 
-  function scrollToBottom() {
+  function isNearBottom() {
+    if (!messagesEl) return true;
+    return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight <= SCROLL_THRESHOLD;
+  }
+
+  function updateScrollAffordance() {
+    if (!scrollBtnEl) return;
+    const nearBottom = isNearBottom();
+    stickToBottom = nearBottom;
+    scrollBtnEl.classList.toggle("is-visible", !nearBottom);
+    scrollBtnEl.setAttribute("aria-hidden", nearBottom ? "true" : "false");
+  }
+
+  function scrollToBottom(force) {
     if (!messagesEl) return;
+    if (!force && !stickToBottom) return;
     requestAnimationFrame(function () {
       messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (force) {
+        stickToBottom = true;
+        if (scrollBtnEl) {
+          scrollBtnEl.classList.remove("is-visible");
+          scrollBtnEl.setAttribute("aria-hidden", "true");
+        }
+      }
     });
   }
 
@@ -193,7 +223,7 @@
         AGENT_AVATAR_HTML +
       "</div>";
     mountAgentAvatar(agentStreamEl.querySelector(".ay-agent-avatar"), true);
-    scrollToBottom();
+    scrollToBottom(true);
   }
 
   function hideThinking() {
@@ -567,7 +597,7 @@
           lastAppliedSeq = data.last_sequence;
           setConversationStatus(data.status === "failed" ? "failed" : "active");
         }
-        scrollToBottom();
+        scrollToBottom(true);
       });
   }
 
@@ -590,10 +620,20 @@
     setConversationStatus("processing");
     closeStream();
     openStream();
-    scrollToBottom();
+    scrollToBottom(true);
   });
 
-  scrollToBottom();
+  if (scrollBtnEl) {
+    scrollBtnEl.addEventListener("click", function () {
+      scrollToBottom(true);
+    });
+  }
+
+  if (messagesEl) {
+    messagesEl.addEventListener("scroll", updateScrollAffordance, { passive: true });
+  }
+
+  scrollToBottom(true);
   initToolTraces(chatThreadEl);
   window.AyronAgentAvatar.mountAll(chatThreadEl);
   if (window.AyronChart) window.AyronChart.mountAll(chatThreadEl);
