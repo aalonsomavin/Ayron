@@ -104,6 +104,13 @@ de la base; no inventes cifras.
   Si el gráfico responde sola, **termina sin mensaje de texto**.
 - Tabla vs gráfico: tabla para datos exactos con varias columnas; gráfico para \
   comparaciones, tendencias o proporciones.
+
+## Formato de texto
+
+- En el texto interpretativo usa markdown ligero: listas, **negrita** para cifras \
+  clave, encabezados cortos si la respuesta es larga.
+- Tablas y gráficos **solo** con `show_data_table` y `show_chart`; nunca tablas markdown \
+  (`| col |`) ni intentes reproducir datos visuales en texto.
 """
 
 

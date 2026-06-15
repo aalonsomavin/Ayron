@@ -61,7 +61,7 @@
                     <div class="ay-msg-agent__content">
                       {% for block in message.content_blocks %}
                         {% if block.type == "text" %}
-                          <div class="ay-msg-agent__text">{{ block.content }}</div>
+                          <div class="ay-msg-agent__text ay-markdown">{{ block.content }}</div>
                         {% elif block.type == "table" %}
                           {% include "components/data_table.html" with table=block.table %}
                         {% elif block.type == "chart" %}
@@ -120,8 +120,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="{% static 'js/ayron-avatar.js' %}"></script>
 <script src="{% static 'js/ayron-chart.js' %}"></script>
+<script src="{% static 'js/ayron-markdown.js' %}"></script>
 <script>
 (function () {
   const eventsUrl = "{% url 'chat:events' conversation_id=conversation.id %}";
@@ -130,6 +133,8 @@
   let eventSource = null;
   let streamContainer = null;
   let currentTextEl = null;
+  let currentMarkdownBuffer = "";
+  let markdownRenderScheduled = false;
   let caretEl = null;
   let isStreaming = false;
   let stickToBottom = true;
@@ -203,18 +208,30 @@
     window.AyronAgentAvatar.stop(root);
   }
 
-  function ensureCaret(textEl) {
-    if (!textEl || !isStreaming) return;
+  function getCaretEl() {
+    if (!isStreaming) return null;
     if (!caretEl) {
       caretEl = document.createElement("span");
       caretEl.className = "ay-msg-agent__caret";
       caretEl.setAttribute("aria-hidden", "true");
     }
-    textEl.appendChild(caretEl);
+    return caretEl;
   }
 
   function removeCaret() {
-    if (caretEl) caretEl.remove();
+    if (caretEl && caretEl.parentNode) caretEl.parentNode.removeChild(caretEl);
+  }
+
+  function scheduleMarkdownRender() {
+    if (!currentTextEl || !window.AyronMarkdown || markdownRenderScheduled) return;
+    markdownRenderScheduled = true;
+    requestAnimationFrame(function () {
+      markdownRenderScheduled = false;
+      if (!currentTextEl || !window.AyronMarkdown) return;
+      window.AyronMarkdown.renderStreaming(currentTextEl, currentMarkdownBuffer, {
+        caretEl: getCaretEl(),
+      });
+    });
   }
 
   function showThinking() {
@@ -234,12 +251,16 @@
   function finalizeStreamBubble() {
     if (!streamContainer) return;
     stopAgentAvatar(streamContainer.querySelector(".ay-agent-avatar"));
+    if (currentTextEl && window.AyronMarkdown && currentMarkdownBuffer) {
+      window.AyronMarkdown.render(currentTextEl, currentMarkdownBuffer);
+    }
     removeCaret();
     isStreaming = false;
     chatThreadEl.insertBefore(streamContainer, agentStreamEl);
     if (window.AyronChart) window.AyronChart.mountAll(streamContainer);
     streamContainer = null;
     currentTextEl = null;
+    currentMarkdownBuffer = "";
   }
 
   function ensureStreamBubble(messageId) {
@@ -248,6 +269,7 @@
     }
     finalizeStreamBubble();
     currentTextEl = null;
+    currentMarkdownBuffer = "";
     streamContainer = document.createElement("div");
     streamContainer.className = "ay-msg-agent";
     streamContainer.dataset.messageId = messageId;
@@ -458,11 +480,12 @@
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
     if (!currentTextEl) {
       currentTextEl = document.createElement("div");
-      currentTextEl.className = "ay-msg-agent__text";
+      currentTextEl.className = "ay-msg-agent__text ay-markdown";
       contentEl.appendChild(currentTextEl);
+      currentMarkdownBuffer = "";
     }
-    currentTextEl.textContent += content;
-    ensureCaret(currentTextEl);
+    currentMarkdownBuffer += content;
+    scheduleMarkdownRender();
   }
 
   function chartPayloadFromEvent(event) {
@@ -479,10 +502,13 @@
   function appendChartBlock(bubble, event) {
     removeCaret();
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
-    if (currentTextEl && !currentTextEl.textContent) {
+    if (currentTextEl && !currentMarkdownBuffer.trim()) {
       currentTextEl.remove();
+    } else if (currentTextEl && window.AyronMarkdown && currentMarkdownBuffer) {
+      window.AyronMarkdown.render(currentTextEl, currentMarkdownBuffer);
     }
     currentTextEl = null;
+    currentMarkdownBuffer = "";
     if (window.AyronChart) {
       const chartEl = window.AyronChart.create(chartPayloadFromEvent(event));
       contentEl.appendChild(chartEl);
@@ -493,10 +519,13 @@
   function appendTableBlock(bubble, table) {
     removeCaret();
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
-    if (currentTextEl && !currentTextEl.textContent) {
+    if (currentTextEl && !currentMarkdownBuffer.trim()) {
       currentTextEl.remove();
+    } else if (currentTextEl && window.AyronMarkdown && currentMarkdownBuffer) {
+      window.AyronMarkdown.render(currentTextEl, currentMarkdownBuffer);
     }
     currentTextEl = null;
+    currentMarkdownBuffer = "";
     contentEl.appendChild(renderDataTable(table));
   }
 
@@ -635,6 +664,7 @@
 
   scrollToBottom(true);
   initToolTraces(chatThreadEl);
+  if (window.AyronMarkdown) window.AyronMarkdown.mountAll(chatThreadEl);
   window.AyronAgentAvatar.mountAll(chatThreadEl);
   if (window.AyronChart) window.AyronChart.mountAll(chatThreadEl);
   loadEvents();

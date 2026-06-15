@@ -1325,6 +1325,93 @@ body {
 }
 
 .ay-msg-agent__text {
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.ay-msg-agent__text.ay-markdown {
+  white-space: normal;
+}
+
+.ay-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ay-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.ay-markdown p,
+  .ay-markdown ul,
+  .ay-markdown ol,
+  .ay-markdown pre,
+  .ay-markdown blockquote {
+  margin: 0 0 0.75em;
+}
+
+.ay-markdown h1,
+  .ay-markdown h2,
+  .ay-markdown h3 {
+  margin: 0 0 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ay-markdown h1 {
+  font-size: 1.25em;
+}
+
+.ay-markdown h2 {
+  font-size: 1.125em;
+}
+
+.ay-markdown h3 {
+  font-size: 1em;
+}
+
+.ay-markdown ul,
+  .ay-markdown ol {
+  padding-left: 1.25em;
+}
+
+.ay-markdown li + li {
+  margin-top: 0.25em;
+}
+
+.ay-markdown code {
+  font-family: var(--ay-font-mono);
+  font-size: 0.9em;
+  background: var(--ay-bg-subtle);
+  border: 1px solid var(--ay-border-subtle);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+
+.ay-markdown pre {
+  overflow-x: auto;
+  padding: 12px 14px;
+  background: var(--ay-bg-subtle);
+  border: 1px solid var(--ay-border-subtle);
+  border-radius: var(--ay-radius-md);
+}
+
+.ay-markdown pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+.ay-markdown a {
+  color: var(--ay-accent);
+  text-decoration: none;
+}
+
+.ay-markdown a:hover {
+  text-decoration: underline;
+}
+
+.ay-markdown__tail {
   white-space: pre-wrap;
 }
 
@@ -1751,6 +1838,10 @@ body {
 
 .uppercase{
   text-transform:   uppercase;
+}
+
+.underline{
+  text-decoration-line:   underline;
 }
 
 .opacity-80{
