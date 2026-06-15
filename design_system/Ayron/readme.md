@@ -131,9 +131,9 @@ Headers use h3/h4 in semibold; supporting text in `--ay-text-muted`.
   `effects.css`.
 - `assets/logo/` — placeholder symbol marks (ink + light).
 - `components/` — reusable React primitives (Button, Input, Badge, Card, Tabs,
-  Switch, Avatar). Each has `.jsx`, `.d.ts`, `.prompt.md`, and a `*.card.html`.
+  Switch, Avatar, DataTable). Each has `.jsx`, `.d.ts`, `.prompt.md`, and a `*.card.html`.
 - `ui_kits/ayron-app/` — product UI kit: chat with the agent, dashboard, data
   sources, automations. `index.html` is an interactive click-through.
-- `guidelines/` — foundation specimen cards (Type, Colors, Spacing, Effects)
-  shown in the Design System tab.
+- `guidelines/` — foundation specimen cards (Type, Colors, Spacing, Effects,
+  Chat data table) shown in the Design System tab.
 - `SKILL.md` — Agent-Skill manifest for downloading/using this system elsewhere.

@@ -1,8 +1,9 @@
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
-from langchain_core.messages import AIMessageChunk, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from openai import OpenAIError
 
 from apps.agent.events import persist_event
@@ -325,3 +326,193 @@ class TestStreamEventHandler:
         assert emitted[0]["event_type"] == AgentEvent.EventType.TOOL_START
         assert emitted[0]["payload"]["tool_label"] == "Buscando datos"
         assert emitted[0]["payload"]["tool_subtitle"] == 'SELECT * FROM "Artist" LIMIT 5'
+
+    def test_show_data_table_emits_table_event(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        tool_output = json.dumps(
+            {
+                "ok": True,
+                "caption": "",
+                "columns": ["Artist", "Revenue"],
+                "rows": [["AC/DC", "$50.00"]],
+                "numeric_columns": [False, True],
+                "row_count": 1,
+            }
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=tool_output,
+                        name="show_data_table",
+                        tool_call_id="call_table",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        assert len(emitted) == 2
+        assert emitted[0]["event_type"] == AgentEvent.EventType.TABLE
+        assert emitted[0]["payload"]["columns"] == ["Artist", "Revenue"]
+        assert emitted[0]["payload"]["render_rows"][0][1]["mono"] is True
+        assert emitted[1]["event_type"] == AgentEvent.EventType.TOOL_END
+        assert emitted[1]["payload"]["tool"] == "show_data_table"
+        assert emitted[1]["payload"]["output_summary"] == "Tabla mostrada"
+
+    def test_show_data_table_uses_staged_tool_input(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_table",
+                                "name": "show_data_table",
+                                "args": json.dumps(
+                                    {
+                                        "columns": ["Artist"],
+                                        "rows": [["AC/DC"]],
+                                    }
+                                ),
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=json.dumps(
+                            {
+                                "ok": True,
+                                "displayed_to_user": True,
+                                "row_count": 1,
+                                "agent_instruction": "No repitas filas.",
+                            }
+                        ),
+                        name="show_data_table",
+                        tool_call_id="call_table",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        table_event = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.TABLE
+        )
+        assert table_event["payload"]["rows"] == [["AC/DC"]]
+
+    def test_show_data_table_stages_after_complete_tool_call(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_table",
+                                "name": "show_data_table",
+                                "args": '{"columns":',
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "id": "call_table",
+                                "name": "show_data_table",
+                                "args": {
+                                    "columns": ["Artist"],
+                                    "rows": [["AC/DC"]],
+                                },
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=json.dumps(
+                            {
+                                "ok": True,
+                                "displayed_to_user": True,
+                                "row_count": 1,
+                            }
+                        ),
+                        name="show_data_table",
+                        tool_call_id="call_table",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        table_event = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.TABLE
+        )
+        assert table_event["payload"]["rows"] == [["AC/DC"]]

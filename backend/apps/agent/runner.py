@@ -1,7 +1,7 @@
 from django.conf import settings
 from deepagents import create_deep_agent
 
-from apps.agent.tools import SQL_TOOLS
+from apps.agent.tools import AGENT_TOOLS
 
 CHINOOK_SYSTEM_PROMPT = """\
 Eres un asistente de datos para la base Chinook: una tienda de música digital \
@@ -71,12 +71,31 @@ de la base; no inventes cifras.
    `ORDER BY` cuando ayude, y `LIMIT` en exploraciones.
 3. Interpreta los resultados: responde la pregunta del usuario, resume hallazgos \
    y menciona supuestos o limitaciones de los datos.
+
+## Presentación de datos
+
+- Usa `show_data_table` cuando el resultado sea tabular y tenga **≤25 filas** y \
+  **≤12 columnas**. La tool dibuja la tabla en el chat; el usuario ya la ve ahí.
+- Tras `show_data_table`, **no vuelvas a escribir los datos**: prohibido listar filas, \
+  enumerar valores celda por celda, tablas markdown (`| col |`), bloques de código con \
+  filas, o frases del tipo "1. Álbum X, ID Y".
+- Tu texto posterior solo interpreta (tendencias, totales agregados, contexto, \
+  limitaciones). Si la tabla responde sola, **termina sin mensaje de texto**.
+- Ejemplo correcto: muestras la tabla y respondes "Son los 10 álbumes con ID más bajo."
+- Ejemplo incorrecto: muestras la tabla y luego copias las mismas filas en texto o markdown.
+- Pasa columnas con nombres legibles en español (no nombres SQL crudos).
+- Formatea números, moneda y porcentajes en las celdas antes de enviar.
+- Los anchos de columna se infieren solos (IDs estrechos, texto largo expande). \
+  Opcionalmente pasa `column_widths`: `narrow` (IDs), `auto` (ajuste al contenido), \
+  `fill` (columna principal). Ej.: `["narrow", "fill", "narrow"]`.
+- Si hay más de 25 filas: agrega con SQL, muestra un top-N con `show_data_table` \
+  y menciona el total en el caption o en una frase de contexto (sin re-listar filas).
 """
 
 
 def create_agent():
     return create_deep_agent(
         model=settings.DEFAULT_LLM_MODEL,
-        tools=SQL_TOOLS,
+        tools=AGENT_TOOLS,
         system_prompt=CHINOOK_SYSTEM_PROMPT,
     )

@@ -46,15 +46,25 @@
     <div id="chat-messages" class="ay-chat__messages">
       <div class="ay-chat__thread">
         {% for message in chat_messages %}
-          {% if message.content %}
-            {% if message.role == "user" %}
+          {% if message.role == "user" and message.content %}
               <div class="ay-msg-user" data-message-id="{{ message.id }}">
                 <div class="ay-msg-user__bubble">{{ message.content }}</div>
               </div>
-            {% else %}
+          {% elif message.role == "assistant" %}
+            {% if message.content_blocks %}
               <div class="ay-msg-agent" data-message-id="{{ message.id }}">
                 {% include "components/avatar.html" with agent=True %}
-                <div class="ay-msg-agent__body">{{ message.content }}</div>
+                <div class="ay-msg-agent__body">
+                  <div class="ay-msg-agent__content">
+                    {% for block in message.content_blocks %}
+                      {% if block.type == "text" %}
+                        <div class="ay-msg-agent__text">{{ block.content }}</div>
+                      {% elif block.type == "table" %}
+                        {% include "components/data_table.html" with table=block.table %}
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                </div>
               </div>
             {% endif %}
           {% endif %}
@@ -102,8 +112,8 @@
   const streamUrl = "{% url 'chat:stream' conversation_id=conversation.id %}";
   let lastAppliedSeq = -1;
   let eventSource = null;
-  let streamText = "";
   let streamContainer = null;
+  let currentTextEl = null;
 
   const statusEl = document.getElementById("chat-status");
   const inputEl = document.getElementById("chat-input");
@@ -142,7 +152,7 @@
     if (!streamContainer) return;
     chatThreadEl.insertBefore(streamContainer, agentStreamEl);
     streamContainer = null;
-    streamText = "";
+    currentTextEl = null;
   }
 
   function ensureStreamBubble(messageId) {
@@ -150,14 +160,14 @@
       return streamContainer;
     }
     finalizeStreamBubble();
-    streamText = "";
+    currentTextEl = null;
     streamContainer = document.createElement("div");
     streamContainer.className = "ay-msg-agent";
     streamContainer.dataset.messageId = messageId;
     streamContainer.innerHTML =
       '<span class="ay-avatar ay-avatar--agent">A</span>' +
       '<div class="ay-msg-agent__body">' +
-        '<div class="stream-content"></div>' +
+        '<div class="ay-msg-agent__content"></div>' +
         '<div class="ay-msg-agent__tools"></div>' +
       '</div>';
     agentStreamEl.appendChild(streamContainer);
@@ -207,6 +217,10 @@
     if (counts.run_sql_query) {
       const n = counts.run_sql_query;
       parts.push("buscó datos " + n + (n === 1 ? " vez" : " veces"));
+    }
+    if (counts.show_data_table) {
+      const n = counts.show_data_table;
+      parts.push("mostró " + n + (n === 1 ? " tabla" : " tablas"));
     }
     if (counts.plan || counts.write_todos) parts.push("planificó pasos");
 
@@ -262,6 +276,95 @@
     return items.length ? items[items.length - 1] : null;
   }
 
+  function buildRenderRows(table) {
+    if (table.render_rows) return table.render_rows;
+    const numericColumns = table.numeric_columns || [];
+    const widths = table.column_widths || [];
+    return (table.rows || []).map(function (row) {
+      return row.map(function (cell, colIdx) {
+        return {
+          value: cell,
+          mono: colIdx < numericColumns.length && numericColumns[colIdx],
+          width: colIdx < widths.length ? widths[colIdx] : "auto",
+        };
+      });
+    });
+  }
+
+  function renderDataTable(table) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "ay-data-table";
+
+    const card = document.createElement("div");
+    card.className = "ay-card ay-data-table__card";
+
+    const colCount = (table.columns || []).length;
+    const gridCols = table.grid_template_columns || ("repeat(" + colCount + ", minmax(0, 1fr))");
+
+    const grid = document.createElement("div");
+    grid.className = "ay-data-table__grid";
+    grid.style.gridTemplateColumns = gridCols;
+
+    const head = document.createElement("div");
+    head.className = "ay-data-table__head";
+    const headColumns = table.render_columns || (table.columns || []).map(function (label) {
+      return { label: label, mono: false, width: "auto" };
+    });
+    headColumns.forEach(function (column) {
+      const cell = document.createElement("span");
+      const width = column.width || "auto";
+      cell.className =
+        "ay-data-table__head-cell ay-data-table__head-cell--" + width +
+        (column.mono ? " ay-data-table__head-cell--mono" : "");
+      cell.textContent = column.label;
+      head.appendChild(cell);
+    });
+    grid.appendChild(head);
+
+    buildRenderRows(table).forEach(function (row) {
+      const rowEl = document.createElement("div");
+      rowEl.className = "ay-data-table__row";
+      row.forEach(function (cell) {
+        const cellEl = document.createElement("span");
+        const width = cell.width || "auto";
+        cellEl.className =
+          "ay-data-table__cell ay-data-table__cell--" + width +
+          (cell.mono ? " ay-data-table__cell--mono" : "");
+        cellEl.textContent = cell.value;
+        rowEl.appendChild(cellEl);
+      });
+      grid.appendChild(rowEl);
+    });
+    card.appendChild(grid);
+
+    if (table.caption) {
+      const caption = document.createElement("div");
+      caption.className = "ay-data-table__caption";
+      caption.textContent = table.caption;
+      card.appendChild(caption);
+    }
+
+    wrapper.appendChild(card);
+    return wrapper;
+  }
+
+  function appendTokenBlock(bubble, content) {
+    if (!content) return;
+    const contentEl = bubble.querySelector(".ay-msg-agent__content");
+    if (!currentTextEl) {
+      currentTextEl = document.createElement("div");
+      currentTextEl.className = "ay-msg-agent__text";
+      contentEl.appendChild(currentTextEl);
+    }
+    currentTextEl.textContent += content;
+  }
+
+  function appendTableBlock(bubble, table) {
+    const contentEl = bubble.querySelector(".ay-msg-agent__content");
+    contentEl.appendChild(renderDataTable(table));
+    currentTextEl = null;
+  }
+
   function applyEvent(event) {
     if (event.seq <= lastAppliedSeq) return;
     lastAppliedSeq = event.seq;
@@ -270,8 +373,7 @@
     const bubble = messageId ? ensureStreamBubble(messageId) : null;
 
     if (event.type === "token" && bubble) {
-      streamText += event.content || "";
-      bubble.querySelector(".stream-content").textContent = streamText;
+      appendTokenBlock(bubble, event.content || "");
     } else if (event.type === "plan" && bubble) {
       const tools = bubble.querySelector(".ay-msg-agent__tools");
       const trace = ensureToolTrace(tools);
@@ -300,6 +402,8 @@
       }
       item.classList.remove("is-running");
       updateTraceSummary(trace);
+    } else if (event.type === "table" && bubble) {
+      appendTableBlock(bubble, event);
     } else if (event.type === "error") {
       finalizeStreamBubble();
       const alert = document.createElement("div");
@@ -327,7 +431,7 @@
   function openStream() {
     closeStream();
     eventSource = new EventSource(streamUrl + "?after=" + lastAppliedSeq);
-    ["token", "plan", "tool_start", "tool_end", "error", "done"].forEach(function (type) {
+    ["token", "plan", "tool_start", "tool_end", "table", "error", "done"].forEach(function (type) {
       eventSource.addEventListener(type, function (e) {
         applyEvent(JSON.parse(e.data));
       });

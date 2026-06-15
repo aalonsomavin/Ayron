@@ -1222,6 +1222,109 @@ body {
   content: "…";
 }
 
+.ay-msg-agent__content {
+  display: flex;
+  flex-direction: column;
+}
+
+.ay-msg-agent__text {
+  white-space: pre-wrap;
+}
+
+.ay-msg-agent__text:empty {
+  display: none;
+}
+
+.ay-data-table {
+  margin-top: 12px;
+  white-space: normal;
+}
+
+.ay-data-table__card {
+  overflow: hidden;
+}
+
+.ay-data-table__grid {
+  display: grid;
+  -moz-column-gap: 12px;
+       column-gap: 12px;
+  padding: 0 16px;
+}
+
+.ay-data-table__head,
+  .ay-data-table__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.ay-data-table__head {
+  padding: 9px 16px;
+  margin: 0 -16px;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ay-text-subtle);
+  background: var(--ay-bg-subtle);
+  border-bottom: 1px solid var(--ay-border-subtle);
+}
+
+.ay-data-table__head-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.ay-data-table__head-cell--mono {
+  font-family: var(--ay-font-mono);
+}
+
+.ay-data-table__head-cell--fill {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.ay-data-table__row {
+  padding: 11px 0;
+  font-size: 14px;
+  border-top: 1px solid var(--ay-border-subtle);
+}
+
+.ay-data-table__cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  text-align: left;
+}
+
+.ay-data-table__cell--mono {
+  font-family: var(--ay-font-mono);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.ay-data-table__cell--fill {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
+  font-weight: 500;
+}
+
+.ay-data-table__caption {
+  padding: 10px 16px 14px;
+  font-size: 12px;
+  color: var(--ay-text-muted);
+  border-top: 1px solid var(--ay-border-subtle);
+}
+
 .ay-composer {
   flex: none;
   padding: 0 0 22px;
@@ -1416,6 +1519,10 @@ body {
   line-height: 1.5;
 }
 
+.visible{
+  visibility:   visible;
+}
+
 .static{
   position:   static;
 }
@@ -1430,6 +1537,14 @@ body {
 
 .flex{
   display:   flex;
+}
+
+.table{
+  display:   table;
+}
+
+.grid{
+  display:   grid;
 }
 
 .hidden{

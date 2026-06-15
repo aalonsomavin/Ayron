@@ -7,6 +7,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.agent.events import get_redis_client
 from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_display
+from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
 
@@ -63,6 +64,49 @@ def _sidebar_conversations(request):
     return Conversation.objects.filter(user=request.user).order_by("-updated_at")[:50]
 
 
+def _content_blocks_for_message(message: Message) -> list[dict]:
+    events = AgentEvent.objects.filter(
+        message=message,
+        event_type__in=(
+            AgentEvent.EventType.TOKEN,
+            AgentEvent.EventType.TABLE,
+        ),
+    ).order_by("sequence_number")
+
+    blocks: list[dict] = []
+    for event in events:
+        if event.event_type == AgentEvent.EventType.TOKEN:
+            chunk = event.payload.get("content", "")
+            if not chunk:
+                continue
+            if blocks and blocks[-1]["type"] == "text":
+                blocks[-1]["content"] += chunk
+            else:
+                blocks.append({"type": "text", "content": chunk})
+        else:
+            blocks.append(
+                {
+                    "type": "table",
+                    "table": prepare_table_for_render(event.payload),
+                }
+            )
+
+    if blocks and message.content and not any(block["type"] == "text" for block in blocks):
+        blocks.insert(0, {"type": "text", "content": message.content})
+    elif not blocks and message.content:
+        blocks.append({"type": "text", "content": message.content})
+
+    return blocks
+
+
+def _messages_with_content_blocks(conversation: Conversation) -> list[Message]:
+    messages = list(conversation.messages.select_related().order_by("created_at"))
+    for message in messages:
+        if message.role == Message.Role.ASSISTANT:
+            message.content_blocks = _content_blocks_for_message(message)
+    return messages
+
+
 @require_GET
 def conversation_list(request):
     conversations = _sidebar_conversations(request)
@@ -78,7 +122,7 @@ def conversation_new(request):
 @require_GET
 def conversation_detail(request, conversation_id):
     conversation = _get_conversation(request, conversation_id)
-    chat_messages = conversation.messages.select_related().order_by("created_at")
+    chat_messages = _messages_with_content_blocks(conversation)
     return render(
         request,
         "chat/detail.html",

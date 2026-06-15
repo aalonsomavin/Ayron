@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from apps.agent.events import persist_event
 from apps.chat.models import AgentEvent, Conversation, Message
-from apps.chat.views import serialize_agent_event
+from apps.chat.views import _content_blocks_for_message, serialize_agent_event
 
 User = get_user_model()
 
@@ -248,6 +248,112 @@ class TestConversationDetail:
         assert "user @" not in content
         assert "assistant @" not in content
         assert "Hola, ¿en qué te ayudo?" in content
+
+    def test_detail_renders_table_events(self, client, user, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Aquí están los resultados:",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "caption": "Top 3",
+                "columns": ["Artist", "Revenue"],
+                "rows": [["AC/DC", "$50.00"]],
+                "numeric_columns": [False, True],
+                "row_count": 1,
+            },
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:detail", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "AC/DC" in content
+        assert "ay-data-table" in content
+        assert "Top artists" not in content
+        assert "Aquí están los resultados:" in content
+
+    def test_content_blocks_interleave_text_and_table(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Antes Después",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Antes "},
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "columns": ["Artist"],
+                "rows": [["AC/DC"]],
+                "numeric_columns": [False],
+                "row_count": 1,
+            },
+            sequence_number=1,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Después"},
+            sequence_number=2,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert [block["type"] for block in blocks] == ["text", "table", "text"]
+        assert blocks[0]["content"] == "Antes "
+        assert blocks[1]["table"]["columns"] == ["Artist"]
+        assert blocks[2]["content"] == "Después"
+
+    def test_detail_renders_blocks_in_event_order(self, client, user, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "columns": ["Artist"],
+                "rows": [["AC/DC"]],
+                "numeric_columns": [False],
+                "row_count": 1,
+            },
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Interpretación breve."},
+            sequence_number=1,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:detail", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+        content = response.content.decode()
+
+        table_pos = content.index("ay-data-table")
+        text_pos = content.index("Interpretación breve.")
+        assert table_pos < text_pos
 
 
 @pytest.mark.django_db

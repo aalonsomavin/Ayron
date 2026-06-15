@@ -60,6 +60,7 @@ class AgentEvent(models.Model):
         TOOL_START = "tool_start", "Tool Start"
         TOOL_END = "tool_end", "Tool End"
         PLAN = "plan", "Plan"
+        TABLE = "table", "Table"
         ERROR = "error", "Error"
         DONE = "done", "Done"
 

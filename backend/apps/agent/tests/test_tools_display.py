@@ -39,3 +39,12 @@ class TestGetToolDisplay:
         assert get_tool_display("propose_skill_revision") == {
             "tool_label": "Propose Skill Revision",
         }
+
+    def test_show_data_table_with_row_count(self):
+        assert get_tool_display(
+            "show_data_table",
+            {"rows": [["a"], ["b"], ["c"]]},
+        ) == {
+            "tool_label": "Mostrar tabla",
+            "tool_subtitle": "3 filas",
+        }

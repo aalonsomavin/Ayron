@@ -33,10 +33,21 @@ def _sql_query_subtitle(tool_input: ToolInput) -> str:
     return _truncate(str(sql))
 
 
+def _table_subtitle(tool_input: ToolInput) -> str:
+    if not tool_input:
+        return ""
+    rows = tool_input.get("rows")
+    if isinstance(rows, list) and rows:
+        count = len(rows)
+        return f"{count} fila" if count == 1 else f"{count} filas"
+    return ""
+
+
 TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "list_tables": ("Listar tablas", lambda _: "Base Chinook"),
     "describe_table": ("Describir tabla", _sql_table_subtitle),
     "run_sql_query": ("Buscando datos", _sql_query_subtitle),
+    "show_data_table": ("Mostrar tabla", _table_subtitle),
     "write_todos": ("Planificar", None),
 }
 
