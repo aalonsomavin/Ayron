@@ -992,6 +992,45 @@ body {
   font-size: 15px;
 }
 
+.ay-agent-avatar {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--ay-neutral-150);
+  border: 1px solid var(--ay-border);
+  overflow: hidden;
+}
+
+.ay-agent-avatar__canvas {
+  display: block;
+  width: 36px;
+  height: 36px;
+}
+
+@keyframes ay-caret {
+  0%,
+    45% {
+    opacity: 1;
+  }
+
+  55%,
+    100% {
+    opacity: 0;
+  }
+}
+
+.ay-msg-agent__caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  background: var(--ay-accent);
+  border-radius: 1px;
+  margin-left: 1px;
+  transform: translateY(2px);
+  animation: ay-caret 1s steps(1) infinite;
+}
+
 .ay-icon {
   display: inline-flex;
   flex: none;

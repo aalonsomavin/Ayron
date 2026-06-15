@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ conversation.title|default:"Chat" }} — Ayron{% endblock %}
 
@@ -53,7 +54,7 @@
           {% elif message.role == "assistant" %}
             {% if message.content_blocks or message.tool_trace %}
               <div class="ay-msg-agent" data-message-id="{{ message.id }}">
-                {% include "components/avatar.html" with agent=True %}
+                {% include "components/agent_avatar.html" %}
                 <div class="ay-msg-agent__body">
                   {% if message.content_blocks %}
                     <div class="ay-msg-agent__content">
@@ -111,6 +112,7 @@
   </section>
 </div>
 
+<script src="{% static 'js/ayron-avatar.js' %}"></script>
 <script>
 (function () {
   const eventsUrl = "{% url 'chat:events' conversation_id=conversation.id %}";
@@ -119,6 +121,10 @@
   let eventSource = null;
   let streamContainer = null;
   let currentTextEl = null;
+  let caretEl = null;
+  let isStreaming = false;
+
+  const AGENT_AVATAR_HTML = '<div class="ay-agent-avatar ay-agent-avatar--active"><canvas class="ay-agent-avatar__canvas" aria-hidden="true"></canvas></div>';
 
   const statusEl = document.getElementById("chat-status");
   const inputEl = document.getElementById("chat-input");
@@ -153,8 +159,49 @@
     statusEl.className = "ay-badge ay-badge--" + tone;
   }
 
+  function mountAgentAvatar(root, active) {
+    if (!root || !window.AyronAgentAvatar) return;
+    window.AyronAgentAvatar.mount(root, { active: !!active });
+  }
+
+  function stopAgentAvatar(root) {
+    if (!root || !window.AyronAgentAvatar) return;
+    window.AyronAgentAvatar.stop(root);
+  }
+
+  function ensureCaret(textEl) {
+    if (!textEl || !isStreaming) return;
+    if (!caretEl) {
+      caretEl = document.createElement("span");
+      caretEl.className = "ay-msg-agent__caret";
+      caretEl.setAttribute("aria-hidden", "true");
+    }
+    textEl.appendChild(caretEl);
+  }
+
+  function removeCaret() {
+    if (caretEl) caretEl.remove();
+  }
+
+  function showThinking() {
+    agentStreamEl.innerHTML =
+      '<div class="ay-msg-agent ay-msg-agent--thinking">' +
+        AGENT_AVATAR_HTML +
+      "</div>";
+    mountAgentAvatar(agentStreamEl.querySelector(".ay-agent-avatar"), true);
+    scrollToBottom();
+  }
+
+  function hideThinking() {
+    const thinking = agentStreamEl.querySelector(".ay-msg-agent--thinking");
+    if (thinking) thinking.remove();
+  }
+
   function finalizeStreamBubble() {
     if (!streamContainer) return;
+    stopAgentAvatar(streamContainer.querySelector(".ay-agent-avatar"));
+    removeCaret();
+    isStreaming = false;
     chatThreadEl.insertBefore(streamContainer, agentStreamEl);
     streamContainer = null;
     currentTextEl = null;
@@ -170,11 +217,14 @@
     streamContainer.className = "ay-msg-agent";
     streamContainer.dataset.messageId = messageId;
     streamContainer.innerHTML =
-      '<span class="ay-avatar ay-avatar--agent">A</span>' +
+      AGENT_AVATAR_HTML +
       '<div class="ay-msg-agent__body">' +
         '<div class="ay-msg-agent__content"></div>' +
         '<div class="ay-msg-agent__tools"></div>' +
       '</div>';
+    hideThinking();
+    mountAgentAvatar(streamContainer.querySelector(".ay-agent-avatar"), true);
+    isStreaming = true;
     agentStreamEl.appendChild(streamContainer);
     scrollToBottom();
     return streamContainer;
@@ -373,9 +423,11 @@
       contentEl.appendChild(currentTextEl);
     }
     currentTextEl.textContent += content;
+    ensureCaret(currentTextEl);
   }
 
   function appendTableBlock(bubble, table) {
+    removeCaret();
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
     if (currentTextEl && !currentTextEl.textContent) {
       currentTextEl.remove();
@@ -425,6 +477,7 @@
       appendTableBlock(bubble, event);
     } else if (event.type === "error") {
       finalizeStreamBubble();
+      hideThinking();
       const alert = document.createElement("div");
       alert.className = "ay-alert ay-alert--error";
       alert.textContent = event.message || "Ocurrió un error.";
@@ -433,6 +486,7 @@
       closeStream();
     } else if (event.type === "done") {
       finalizeStreamBubble();
+      hideThinking();
       setConversationStatus("active");
       closeStream();
     }
@@ -471,6 +525,7 @@
             }
           });
           setConversationStatus("processing");
+          if (!streamContainer) showThinking();
           openStream();
         } else {
           lastAppliedSeq = data.last_sequence;
@@ -493,7 +548,9 @@
 
     inputEl.value = "";
     finalizeStreamBubble();
-    agentStreamEl.innerHTML = "";
+    hideThinking();
+    isStreaming = false;
+    showThinking();
     setConversationStatus("processing");
     closeStream();
     openStream();
@@ -502,6 +559,7 @@
 
   scrollToBottom();
   initToolTraces(chatThreadEl);
+  window.AyronAgentAvatar.mountAll(chatThreadEl);
   loadEvents();
 })();
 </script>
