@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from apps.agent.events import persist_event
 from apps.chat.models import AgentEvent, Conversation, Message
+from apps.chat.views import serialize_agent_event
 
 User = get_user_model()
 
@@ -165,11 +166,88 @@ class TestEventsReplay:
         assert data["events"][0]["seq"] == 1
         assert data["events"][0]["content"] == "B"
 
+    def test_events_replay_localizes_stale_tool_labels(self, client, user, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "list_tables",
+                "tool_label": "List tables",
+                "tool_subtitle": "Chinook database",
+                "tool_call_id": "call_1",
+                "input": {},
+            },
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:events", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+        data = response.json()
+
+        assert data["events"][0]["tool_label"] == "Listar tablas"
+        assert data["events"][0]["tool_subtitle"] == "Base Chinook"
+
+    def test_serialize_agent_event_localizes_tool_events(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        event = AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_label": "Run query",
+                "input": {"sql": 'SELECT * FROM "Artist" LIMIT 5'},
+                "tool_call_id": "call_2",
+            },
+            sequence_number=0,
+        )
+
+        data = serialize_agent_event(event)
+
+        assert data["tool_label"] == "Buscando datos"
+        assert data["tool_subtitle"] == 'SELECT * FROM "Artist" LIMIT 5'
+
     def test_events_other_user_gets_404(self, client, other_user, conversation):
         client.force_login(other_user)
         url = reverse("chat:events", kwargs={"conversation_id": conversation.id})
         response = client.get(url)
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestConversationDetail:
+    def test_detail_does_not_render_messages_as_alerts(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Hola",
+        )
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Hola, ¿en qué te ayudo?",
+        )
+
+        client.force_login(user)
+        url = reverse("chat:detail", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "user @" not in content
+        assert "assistant @" not in content
+        assert "Hola, ¿en qué te ayudo?" in content
 
 
 @pytest.mark.django_db

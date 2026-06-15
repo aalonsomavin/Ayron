@@ -45,7 +45,7 @@
 
     <div id="chat-messages" class="ay-chat__messages">
       <div class="ay-chat__thread">
-        {% for message in messages %}
+        {% for message in chat_messages %}
           {% if message.content %}
             {% if message.role == "user" %}
               <div class="ay-msg-user" data-message-id="{{ message.id }}">
@@ -112,6 +112,15 @@
   const agentStreamEl = document.getElementById("agent-stream");
   const chatThreadEl = agentStreamEl.parentElement;
   const activeMessageId = {{ active_message_id|default:"null" }};
+  const TOOL_LABELS = {{ tool_labels_json|safe }};
+
+  function resolveToolLabel(event) {
+    return event.tool_label || TOOL_LABELS[event.tool] || event.tool || "Herramienta";
+  }
+
+  function resolveToolSubtitle(event) {
+    return event.tool_subtitle || "";
+  }
 
   function scrollToBottom() {
     if (!messagesEl) return;
@@ -156,17 +165,101 @@
     return streamContainer;
   }
 
-  function appendToolCard(tools, title, subtitle, toolCallId) {
-    const card = document.createElement("div");
-    card.className = "ay-card ay-card--compact";
-    if (toolCallId) card.dataset.toolCallId = toolCallId;
-    card.innerHTML =
-      '<div class="ay-card__header"><div><div class="ay-card__title"></div><div class="ay-card__subtitle"></div></div></div>' +
-      '<div class="ay-card__body"></div>';
-    card.querySelector(".ay-card__title").textContent = title;
-    if (subtitle) card.querySelector(".ay-card__subtitle").textContent = subtitle;
-    tools.appendChild(card);
-    return card;
+  function ensureToolTrace(toolsEl) {
+    let trace = toolsEl.querySelector(".ay-tool-trace");
+    if (!trace) {
+      trace = document.createElement("div");
+      trace.className = "ay-tool-trace is-collapsed";
+      trace.innerHTML =
+        '<button type="button" class="ay-tool-trace__toggle" aria-expanded="false">' +
+          '<span class="ay-tool-trace__summary"></span>' +
+          '<svg class="ay-tool-trace__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>' +
+        '</button>' +
+        '<ul class="ay-tool-trace__list"></ul>';
+      trace.querySelector(".ay-tool-trace__toggle").addEventListener("click", function () {
+        const collapsed = trace.classList.toggle("is-collapsed");
+        this.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      });
+      toolsEl.appendChild(trace);
+    }
+    return trace;
+  }
+
+  function buildTraceSummary(items, runningCount) {
+    if (!items.length) return "";
+    if (items.length === 1) {
+      const text = items[0].dataset.label || "Herramienta";
+      return runningCount ? text + "…" : text;
+    }
+
+    const counts = {};
+    items.forEach(function (item) {
+      const tool = item.dataset.tool || item.dataset.label || "unknown";
+      counts[tool] = (counts[tool] || 0) + 1;
+    });
+
+    const parts = [];
+    if (counts.list_tables) parts.push("listó tablas");
+    if (counts.describe_table) {
+      const n = counts.describe_table;
+      parts.push("describió " + n + (n === 1 ? " tabla" : " tablas"));
+    }
+    if (counts.run_sql_query) {
+      const n = counts.run_sql_query;
+      parts.push("buscó datos " + n + (n === 1 ? " vez" : " veces"));
+    }
+    if (counts.plan || counts.write_todos) parts.push("planificó pasos");
+
+    const unknown = items.length - Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
+    if (unknown > 0) {
+      parts.push("usó " + unknown + (unknown === 1 ? " herramienta" : " herramientas"));
+    }
+
+    let text = parts.length ? parts.join(", ") : "Usó " + items.length + (items.length === 1 ? " herramienta" : " herramientas");
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+    return runningCount ? text.replace(/…?$/, "") + "…" : text;
+  }
+
+  function updateTraceSummary(trace) {
+    const items = trace.querySelectorAll(".ay-tool-trace__item");
+    const runningCount = trace.querySelectorAll(".ay-tool-trace__item.is-running").length;
+    const summary = trace.querySelector(".ay-tool-trace__summary");
+
+    if (!items.length) {
+      trace.hidden = true;
+      return;
+    }
+
+    trace.hidden = false;
+    summary.textContent = buildTraceSummary(items, runningCount);
+  }
+
+  function appendTraceItem(trace, label, detail, toolCallId, running, toolName) {
+    const li = document.createElement("li");
+    li.className = "ay-tool-trace__item" + (running ? " is-running" : "");
+    if (toolCallId) li.dataset.toolCallId = toolCallId;
+    li.dataset.label = label;
+    if (toolName) li.dataset.tool = toolName;
+    if (detail) li.dataset.detail = detail;
+    li.innerHTML =
+      '<span class="ay-tool-trace__verb"></span>' +
+      (detail ? '<span class="ay-tool-trace__detail"></span>' : "");
+    li.querySelector(".ay-tool-trace__verb").textContent = label;
+    if (detail) li.querySelector(".ay-tool-trace__detail").textContent = detail;
+    trace.querySelector(".ay-tool-trace__list").appendChild(li);
+    updateTraceSummary(trace);
+    return li;
+  }
+
+  function findTraceItem(trace, toolCallId) {
+    if (toolCallId) {
+      const item = trace.querySelector('[data-tool-call-id="' + toolCallId + '"]');
+      if (item) return item;
+    }
+    const running = trace.querySelector(".ay-tool-trace__item.is-running");
+    if (running) return running;
+    const items = trace.querySelectorAll(".ay-tool-trace__item");
+    return items.length ? items[items.length - 1] : null;
   }
 
   function applyEvent(event) {
@@ -181,30 +274,37 @@
       bubble.querySelector(".stream-content").textContent = streamText;
     } else if (event.type === "plan" && bubble) {
       const tools = bubble.querySelector(".ay-msg-agent__tools");
+      const trace = ensureToolTrace(tools);
       const todos = Array.isArray(event.todos) ? event.todos : [];
-      const card = appendToolCard(tools, "Plan", todos.map(function (t) { return t.content || t; }).join(", "));
-      card.querySelector(".ay-card__body").textContent = "Working through the steps above.";
+      appendTraceItem(
+        trace,
+        event.tool_label || "Planificar",
+        todos.map(function (t) { return t.content || t; }).join(", "),
+        event.tool_call_id,
+        false,
+        "write_todos"
+      );
     } else if (event.type === "tool_start" && bubble) {
       const tools = bubble.querySelector(".ay-msg-agent__tools");
-      appendToolCard(tools, event.tool || "Tool", "Running…", event.tool_call_id || event.tool);
+      const trace = ensureToolTrace(tools);
+      const title = resolveToolLabel(event);
+      const subtitle = resolveToolSubtitle(event);
+      appendTraceItem(trace, title, subtitle, event.tool_call_id || event.tool, true, event.tool);
     } else if (event.type === "tool_end" && bubble) {
       const tools = bubble.querySelector(".ay-msg-agent__tools");
-      const selector = event.tool_call_id
-        ? '[data-tool-call-id="' + event.tool_call_id + '"]'
-        : "[data-tool-call-id]";
-      let card = tools.querySelector(selector);
-      if (!card) {
-        const cards = tools.querySelectorAll("[data-tool-call-id]");
-        card = cards.length ? cards[cards.length - 1] : null;
+      const trace = ensureToolTrace(tools);
+      let item = findTraceItem(trace, event.tool_call_id);
+      if (!item) {
+        const title = resolveToolLabel(event);
+        item = appendTraceItem(trace, title, "", event.tool_call_id, false, event.tool);
       }
-      if (!card) card = appendToolCard(tools, event.tool || "Tool", "", event.tool_call_id);
-      card.querySelector(".ay-card__subtitle").textContent = "Complete";
-      card.querySelector(".ay-card__body").textContent = event.output_summary || "Done";
+      item.classList.remove("is-running");
+      updateTraceSummary(trace);
     } else if (event.type === "error") {
       finalizeStreamBubble();
       const alert = document.createElement("div");
       alert.className = "ay-alert ay-alert--error";
-      alert.textContent = event.message || "An error occurred.";
+      alert.textContent = event.message || "Ocurrió un error.";
       agentStreamEl.appendChild(alert);
       setConversationStatus("failed");
       closeStream();

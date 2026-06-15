@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.agent.events import get_redis_client
+from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_display
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
 
@@ -22,6 +23,20 @@ def serialize_agent_event(event: AgentEvent) -> dict:
     }
     if event.message_id:
         data["message_id"] = event.message_id
+
+    if event.event_type in (
+        AgentEvent.EventType.TOOL_START,
+        AgentEvent.EventType.TOOL_END,
+    ):
+        tool_name = data.get("tool")
+        if tool_name:
+            tool_input = data.get("input") if event.event_type == AgentEvent.EventType.TOOL_START else None
+            data.update(get_tool_display(tool_name, tool_input))
+
+    if event.event_type == AgentEvent.EventType.PLAN:
+        data.setdefault("tool_label", PLAN_TOOL_LABEL)
+        data.setdefault("tool", "write_todos")
+
     return data
 
 
@@ -63,16 +78,17 @@ def conversation_new(request):
 @require_GET
 def conversation_detail(request, conversation_id):
     conversation = _get_conversation(request, conversation_id)
-    messages = conversation.messages.select_related().order_by("created_at")
+    chat_messages = conversation.messages.select_related().order_by("created_at")
     return render(
         request,
         "chat/detail.html",
         {
             "conversation": conversation,
-            "messages": messages,
+            "chat_messages": chat_messages,
             "conversations": _sidebar_conversations(request),
             "last_sequence": _conversation_last_sequence(conversation),
             "active_message_id": _active_message_id(conversation),
+            "tool_labels_json": json.dumps(TOOL_LABELS),
         },
     )
 

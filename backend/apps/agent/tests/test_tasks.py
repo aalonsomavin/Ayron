@@ -145,6 +145,20 @@ class TestRunAgentConversation:
             AgentEvent.EventType.DONE,
         ]
 
+        tool_start = AgentEvent.objects.get(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.TOOL_START,
+        )
+        assert tool_start.payload["tool"] == "list_tables"
+        assert tool_start.payload["tool_label"] == "Listar tablas"
+        assert tool_start.payload["tool_subtitle"] == "Base Chinook"
+
+        tool_end = AgentEvent.objects.get(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.TOOL_END,
+        )
+        assert tool_end.payload["tool_label"] == "Listar tablas"
+
     def test_run_agent_conversation_marks_failed_on_error(self, conversation_with_messages):
         conversation, user_message, assistant_message = conversation_with_messages
         mock_agent = MagicMock()
@@ -269,6 +283,45 @@ class TestStreamEventHandler:
 
         assert len(emitted) == 1
         assert emitted[0]["event_type"] == AgentEvent.EventType.PLAN
+        assert emitted[0]["payload"]["tool_label"] == "Planificar"
         assert emitted[0]["payload"]["todos"] == [
             {"content": "List tables", "status": "pending"}
         ]
+
+    def test_sql_tool_start_includes_display_fields(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_sql",
+                                "name": "run_sql_query",
+                                "args": '{"sql": "SELECT * FROM \\"Artist\\" LIMIT 5"}',
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        assert len(emitted) == 1
+        assert emitted[0]["event_type"] == AgentEvent.EventType.TOOL_START
+        assert emitted[0]["payload"]["tool_label"] == "Buscando datos"
+        assert emitted[0]["payload"]["tool_subtitle"] == 'SELECT * FROM "Artist" LIMIT 5'

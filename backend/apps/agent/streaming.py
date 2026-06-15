@@ -3,6 +3,7 @@ from collections.abc import Callable
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
+from apps.agent.tools.display import PLAN_TOOL_LABEL, get_tool_display
 from apps.chat.models import AgentEvent, Conversation, Message
 
 PLAN_TOOLS = {"write_todos"}
@@ -113,7 +114,11 @@ class StreamEventHandler:
         self.persist(
             conversation=self.conversation,
             event_type=AgentEvent.EventType.TOOL_END,
-            payload={"tool": name, "output_summary": summary},
+            payload={
+                "tool": name,
+                "output_summary": summary,
+                **get_tool_display(name),
+            },
             message=self.message,
         )
 
@@ -123,7 +128,12 @@ class StreamEventHandler:
             self.persist(
                 conversation=self.conversation,
                 event_type=AgentEvent.EventType.PLAN,
-                payload={"todos": todos, "tool_call_id": tool_call_id},
+                payload={
+                    "todos": todos,
+                    "tool_call_id": tool_call_id,
+                    "tool": "write_todos",
+                    "tool_label": PLAN_TOOL_LABEL,
+                },
                 message=self.message,
             )
             return
@@ -131,7 +141,12 @@ class StreamEventHandler:
         self.persist(
             conversation=self.conversation,
             event_type=AgentEvent.EventType.TOOL_START,
-            payload={"tool": name, "input": tool_input, "tool_call_id": tool_call_id},
+            payload={
+                "tool": name,
+                "input": tool_input,
+                "tool_call_id": tool_call_id,
+                **get_tool_display(name, tool_input),
+            },
             message=self.message,
         )
 
