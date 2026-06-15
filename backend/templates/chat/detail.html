@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}{{ conversation.title|default:"Chat" }} — Ayron{% endblock %}
+
+{% block content %}
+<div class="ay-shell">
+  <aside class="ay-sidebar">
+    <div class="ay-sidebar__section" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <span class="ay-sidebar__label" style="margin:0;">History</span>
+      <form method="post" action="{% url 'chat:new' %}">
+        {% csrf_token %}
+        {% include "components/button.html" with variant="ghost" size="sm" type="submit" label="New" left_icon="plus" %}
+      </form>
+    </div>
+    <ul class="ay-sidebar__list" style="padding:8px 12px;">
+      {% for item in conversations %}
+        <li>
+          <a
+            href="{% url 'chat:detail' conversation_id=item.id %}"
+            class="ay-sidebar__link{% if item.id == conversation.id %} ay-sidebar__link--active{% endif %}"
+          >
+            {{ item.title|default:"Untitled" }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </aside>
+
+  <section class="ay-chat">
+    <header class="ay-chat__header">
+      <div style="min-width:0;">
+        <div class="ay-chat__title">{{ conversation.title|default:"New conversation" }}</div>
+        <div class="ay-chat__subtitle">Ask Ayron anything about the Chinook music store</div>
+      </div>
+      <div style="margin-left:auto;">
+        {% if conversation.status == "processing" %}
+          {% include "components/badge.html" with id="chat-status" label=conversation.status tone="warning" dot=True %}
+        {% elif conversation.status == "failed" %}
+          {% include "components/badge.html" with id="chat-status" label=conversation.status tone="danger" %}
+        {% else %}
+          {% include "components/badge.html" with id="chat-status" label=conversation.status tone="success" %}
+        {% endif %}
+      </div>
+    </header>
+
+    <div id="chat-messages" class="ay-chat__messages">
+      <div class="ay-chat__thread">
+        {% for message in messages %}
+          {% if message.content %}
+            {% if message.role == "user" %}
+              <div class="ay-msg-user" data-message-id="{{ message.id }}">
+                <div class="ay-msg-user__bubble">{{ message.content }}</div>
+              </div>
+            {% else %}
+              <div class="ay-msg-agent" data-message-id="{{ message.id }}">
+                {% include "components/avatar.html" with agent=True %}
+                <div class="ay-msg-agent__body">{{ message.content }}</div>
+              </div>
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        <div id="agent-stream"></div>
+      </div>
+    </div>
+
+    <footer class="ay-composer">
+      <div class="ay-composer__inner">
+        <form
+          id="chat-composer"
+          method="post"
+          action="{% url 'chat:send' conversation_id=conversation.id %}"
+          hx-post="{% url 'chat:send' conversation_id=conversation.id %}"
+          hx-swap="none"
+        >
+          {% csrf_token %}
+          <div class="ay-composer__box">
+            <input
+              type="text"
+              name="content"
+              id="chat-input"
+              class="ay-composer__input"
+              placeholder="Ask about artists, albums, sales…"
+              autocomplete="off"
+              {% if conversation.status == "processing" %}disabled{% endif %}
+            />
+            {% if conversation.status == "processing" %}
+              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Ask" left_icon="sparkles" disabled="disabled" %}
+            {% else %}
+              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Ask" left_icon="sparkles" %}
+            {% endif %}
+          </div>
+        </form>
+        <p class="ay-composer__hint">Ayron queries the Chinook demo database. Always verify critical figures.</p>
+      </div>
+    </footer>
+  </section>
+</div>
+
+<script>
+(function () {
+  const eventsUrl = "{% url 'chat:events' conversation_id=conversation.id %}";
+  const streamUrl = "{% url 'chat:stream' conversation_id=conversation.id %}";
+  let lastAppliedSeq = -1;
+  let eventSource = null;
+  let streamText = "";
+  let streamContainer = null;
+
+  const statusEl = document.getElementById("chat-status");
+  const inputEl = document.getElementById("chat-input");
+  const sendEl = document.getElementById("chat-send");
+  const messagesEl = document.getElementById("chat-messages");
+  const agentStreamEl = document.getElementById("agent-stream");
+  const chatThreadEl = agentStreamEl.parentElement;
+  const activeMessageId = {{ active_message_id|default:"null" }};
+
+  function scrollToBottom() {
+    if (!messagesEl) return;
+    requestAnimationFrame(function () {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+  }
+
+  function setConversationStatus(status) {
+    inputEl.disabled = status === "processing";
+    sendEl.disabled = status === "processing";
+    if (!statusEl) return;
+    statusEl.textContent = status;
+    const tone = status === "processing" ? "warning" : status === "failed" ? "danger" : "success";
+    statusEl.className = "ay-badge ay-badge--" + tone;
+  }
+
+  function finalizeStreamBubble() {
+    if (!streamContainer) return;
+    chatThreadEl.insertBefore(streamContainer, agentStreamEl);
+    streamContainer = null;
+    streamText = "";
+  }
+
+  function ensureStreamBubble(messageId) {
+    if (streamContainer && streamContainer.dataset.messageId === String(messageId)) {
+      return streamContainer;
+    }
+    finalizeStreamBubble();
+    streamText = "";
+    streamContainer = document.createElement("div");
+    streamContainer.className = "ay-msg-agent";
+    streamContainer.dataset.messageId = messageId;
+    streamContainer.innerHTML =
+      '<span class="ay-avatar ay-avatar--agent">A</span>' +
+      '<div class="ay-msg-agent__body">' +
+        '<div class="stream-content"></div>' +
+        '<div class="ay-msg-agent__tools"></div>' +
+      '</div>';
+    agentStreamEl.appendChild(streamContainer);
+    scrollToBottom();
+    return streamContainer;
+  }
+
+  function appendToolCard(tools, title, subtitle, toolCallId) {
+    const card = document.createElement("div");
+    card.className = "ay-card ay-card--compact";
+    if (toolCallId) card.dataset.toolCallId = toolCallId;
+    card.innerHTML =
+      '<div class="ay-card__header"><div><div class="ay-card__title"></div><div class="ay-card__subtitle"></div></div></div>' +
+      '<div class="ay-card__body"></div>';
+    card.querySelector(".ay-card__title").textContent = title;
+    if (subtitle) card.querySelector(".ay-card__subtitle").textContent = subtitle;
+    tools.appendChild(card);
+    return card;
+  }
+
+  function applyEvent(event) {
+    if (event.seq <= lastAppliedSeq) return;
+    lastAppliedSeq = event.seq;
+
+    const messageId = event.message_id || activeMessageId;
+    const bubble = messageId ? ensureStreamBubble(messageId) : null;
+
+    if (event.type === "token" && bubble) {
+      streamText += event.content || "";
+      bubble.querySelector(".stream-content").textContent = streamText;
+    } else if (event.type === "plan" && bubble) {
+      const tools = bubble.querySelector(".ay-msg-agent__tools");
+      const todos = Array.isArray(event.todos) ? event.todos : [];
+      const card = appendToolCard(tools, "Plan", todos.map(function (t) { return t.content || t; }).join(", "));
+      card.querySelector(".ay-card__body").textContent = "Working through the steps above.";
+    } else if (event.type === "tool_start" && bubble) {
+      const tools = bubble.querySelector(".ay-msg-agent__tools");
+      appendToolCard(tools, event.tool || "Tool", "Running…", event.tool_call_id || event.tool);
+    } else if (event.type === "tool_end" && bubble) {
+      const tools = bubble.querySelector(".ay-msg-agent__tools");
+      const selector = event.tool_call_id
+        ? '[data-tool-call-id="' + event.tool_call_id + '"]'
+        : "[data-tool-call-id]";
+      let card = tools.querySelector(selector);
+      if (!card) {
+        const cards = tools.querySelectorAll("[data-tool-call-id]");
+        card = cards.length ? cards[cards.length - 1] : null;
+      }
+      if (!card) card = appendToolCard(tools, event.tool || "Tool", "", event.tool_call_id);
+      card.querySelector(".ay-card__subtitle").textContent = "Complete";
+      card.querySelector(".ay-card__body").textContent = event.output_summary || "Done";
+    } else if (event.type === "error") {
+      finalizeStreamBubble();
+      const alert = document.createElement("div");
+      alert.className = "ay-alert ay-alert--error";
+      alert.textContent = event.message || "An error occurred.";
+      agentStreamEl.appendChild(alert);
+      setConversationStatus("failed");
+      closeStream();
+    } else if (event.type === "done") {
+      finalizeStreamBubble();
+      setConversationStatus("active");
+      closeStream();
+    }
+
+    scrollToBottom();
+  }
+
+  function closeStream() {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+  }
+
+  function openStream() {
+    closeStream();
+    eventSource = new EventSource(streamUrl + "?after=" + lastAppliedSeq);
+    ["token", "plan", "tool_start", "tool_end", "error", "done"].forEach(function (type) {
+      eventSource.addEventListener(type, function (e) {
+        applyEvent(JSON.parse(e.data));
+      });
+    });
+    eventSource.onerror = function () {
+      closeStream();
+    };
+  }
+
+  function loadEvents() {
+    return fetch(eventsUrl)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.status === "processing" && activeMessageId) {
+          data.events.forEach(function (event) {
+            if (event.message_id === activeMessageId) {
+              applyEvent(event);
+            }
+          });
+          setConversationStatus("processing");
+          openStream();
+        } else {
+          lastAppliedSeq = data.last_sequence;
+          setConversationStatus(data.status === "failed" ? "failed" : "active");
+        }
+        scrollToBottom();
+      });
+  }
+
+  document.getElementById("chat-composer").addEventListener("htmx:afterRequest", function (e) {
+    if (!e.detail.successful) return;
+    const content = inputEl.value.trim();
+    if (!content) return;
+
+    const row = document.createElement("div");
+    row.className = "ay-msg-user";
+    row.innerHTML = '<div class="ay-msg-user__bubble"></div>';
+    row.querySelector(".ay-msg-user__bubble").textContent = content;
+    chatThreadEl.insertBefore(row, agentStreamEl);
+
+    inputEl.value = "";
+    finalizeStreamBubble();
+    agentStreamEl.innerHTML = "";
+    setConversationStatus("processing");
+    closeStream();
+    openStream();
+    scrollToBottom();
+  });
+
+  scrollToBottom();
+  loadEvents();
+})();
+</script>
+{% endblock %}

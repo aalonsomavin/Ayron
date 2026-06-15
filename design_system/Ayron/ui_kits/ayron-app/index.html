@@ -1,0 +1,643 @@
+<!-- @dsCard group="Ayron App" viewport="1280x800" subtitle="Interactive product kit — chat, dashboard, sources, automations" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayron — Product UI Kit</title>
+<link rel="stylesheet" href="../../styles.css">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--ay-bg-subtle);font-family:var(--ay-font-sans);color:var(--ay-text);-webkit-font-smoothing:antialiased}
+  #root{height:100%}
+  ::selection{background:var(--ay-selection-bg)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--ay-neutral-300);border-radius:8px;border:3px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:var(--ay-neutral-400);background-clip:content-box}
+  input{font-family:inherit}
+  @keyframes ay-blink{0%,100%{opacity:1}50%{opacity:.2}}
+  @keyframes ay-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ============================ ICONS (Lucide path data) ============================ */
+const PATHS = {
+  message:  '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  dashboard:'<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+  zap:      '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  search:   '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  plus:     '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  send:     '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  sparkles: '<path d="M9.94 14.66 12 21l2.06-6.34L21 12l-6.94-2.66L12 3l-2.06 6.34L3 12z"/>',
+  check:    '<path d="M20 6 9 17l-5-5"/>',
+  clock:    '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  play:     '<polygon points="6 3 20 12 6 21 6 3"/>',
+  chevright:'<path d="m9 18 6-6-6-6"/>',
+  chevdown: '<path d="m6 9 6 6 6-6"/>',
+  refresh:  '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  arrowup:  '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  arrowdown:'<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  table:    '<path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/>',
+  link:     '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  dots:     '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  filter:   '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  trending: '<path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  bell:     '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+  filetext: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
+  sheet:    '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  copy:     '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  expand:   '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  close:    '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+};
+function Icon({ name, size = 18, stroke = 2, style = {} }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: "block", flex: "none", ...style }}
+      dangerouslySetInnerHTML={{ __html: PATHS[name] || "" }} />
+  );
+}
+
+/* ============================ PRIMITIVES ============================ */
+function Button({ children, variant="primary", size="md", leftIcon, rightIcon, onClick, disabled, style={} }) {
+  const [h,setH]=useState(false),[a,setA]=useState(false);
+  const S={sm:{height:30,padding:"0 10px",font:13},md:{height:36,padding:"0 14px",font:14},lg:{height:42,padding:"0 18px",font:14.5}}[size];
+  const V={
+    primary:{background:disabled?"var(--ay-neutral-200)":h?"#000":"var(--ay-primary)",color:disabled?"var(--ay-text-disabled)":"#fff",border:"1px solid transparent"},
+    secondary:{background:h&&!disabled?"var(--ay-surface-hover)":"var(--ay-surface)",color:"var(--ay-text)",border:"1px solid var(--ay-border-strong)",boxShadow:"var(--ay-shadow-xs)"},
+    ghost:{background:h&&!disabled?"var(--ay-surface-hover)":"transparent",color:"var(--ay-text)",border:"1px solid transparent"},
+    danger:{background:h?"var(--ay-danger-700)":"var(--ay-danger-500)",color:"#fff",border:"1px solid transparent"},
+  }[variant];
+  return <button onClick={onClick} disabled={disabled}
+    onMouseEnter={()=>setH(true)} onMouseLeave={()=>{setH(false);setA(false)}}
+    onMouseDown={()=>setA(true)} onMouseUp={()=>setA(false)}
+    style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,height:S.height,padding:S.padding,
+      fontFamily:"var(--ay-font-sans)",fontSize:S.font,fontWeight:500,letterSpacing:"-0.005em",borderRadius:"var(--ay-radius-md)",
+      cursor:disabled?"not-allowed":"pointer",transform:a&&!disabled?"translateY(0.5px)":"none",whiteSpace:"nowrap",
+      transition:"background .12s,box-shadow .12s",...V,...style}}>
+    {leftIcon&&<Icon name={leftIcon} size={16}/>}{children}{rightIcon&&<Icon name={rightIcon} size={16}/>}
+  </button>;
+}
+function Badge({ children, tone="neutral", dot, style={} }) {
+  const P={neutral:["var(--ay-neutral-700)","var(--ay-neutral-100)"],success:["var(--ay-success-700)","var(--ay-success-50)"],
+    warning:["var(--ay-warning-700)","var(--ay-warning-50)"],danger:["var(--ay-danger-700)","var(--ay-danger-50)"],
+    accent:["var(--ay-blue-700)","var(--ay-blue-50)"]}[tone];
+  const D={success:"var(--ay-success-500)",warning:"var(--ay-warning-500)",danger:"var(--ay-danger-500)",neutral:"var(--ay-neutral-400)",accent:"var(--ay-blue-500)"}[tone];
+  return <span style={{display:"inline-flex",alignItems:"center",gap:5,height:20,padding:"0 8px",fontSize:12,fontWeight:500,
+    borderRadius:"var(--ay-radius-full)",color:P[0],background:P[1],...style}}>
+    {dot&&<span style={{width:6,height:6,borderRadius:"50%",background:D}}/>}{children}</span>;
+}
+function Switch({ on, onChange }) {
+  return <button role="switch" aria-checked={on} onClick={onChange}
+    style={{position:"relative",width:38,height:21,border:"none",borderRadius:"999px",cursor:"pointer",padding:0,
+      background:on?"var(--ay-ink)":"var(--ay-neutral-300)",transition:"background .18s"}}>
+    <span style={{position:"absolute",top:2,left:on?19:2,width:17,height:17,borderRadius:"50%",background:"#fff",
+      boxShadow:"var(--ay-shadow-sm)",transition:"left .18s cubic-bezier(.16,1,.3,1)"}}/></button>;
+}
+function Avatar({ name="", agent, size=30, status }) {
+  const ini=name.split(" ").filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("");
+  return <span style={{position:"relative",display:"inline-flex",flex:"none"}}>
+    <span style={{width:size,height:size,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",
+      background:agent?"var(--ay-ink)":"var(--ay-neutral-150)",color:agent?"#fff":"var(--ay-neutral-700)",
+      border:"1px solid var(--ay-border)",fontSize:agent?Math.round(size*.5):Math.round(size*.38),fontWeight:600,letterSpacing:"-0.02em"}}>
+      {agent?"A":(ini||"?")}</span>
+    {status&&<span style={{position:"absolute",right:-1,bottom:-1,width:9,height:9,borderRadius:"50%",border:"2px solid #fff",
+      background:status==="online"?"var(--ay-success-500)":status==="busy"?"var(--ay-warning-500)":"var(--ay-neutral-400)"}}/>}
+  </span>;
+}
+function Card({ children, style={}, ...rest }) {
+  return <div style={{background:"var(--ay-surface)",border:"1px solid var(--ay-border)",borderRadius:"var(--ay-radius-lg)",...style}} {...rest}>{children}</div>;
+}
+
+/* ============================ DATA ============================ */
+const SOURCES = [
+  { name:"Production Postgres", type:"PostgreSQL", status:"connected", rows:"4.2M", sync:"3 min ago", color:"#336791" },
+  { name:"Snowflake — Analytics", type:"Snowflake", status:"connected", rows:"128M", sync:"12 min ago", color:"#29b5e8" },
+  { name:"Stripe", type:"Payments API", status:"connected", rows:"892K", sync:"1 hr ago", color:"#635bff" },
+  { name:"Google Analytics 4", type:"GA4", status:"syncing", rows:"2.1M", sync:"now", color:"#e8710a" },
+  { name:"HubSpot CRM", type:"CRM", status:"connected", rows:"54K", sync:"6 hr ago", color:"#ff7a59" },
+  { name:"Marketing S3 bucket", type:"S3 / CSV", status:"error", rows:"—", sync:"failed", color:"#d97706" },
+];
+const AVAILABLE = ["BigQuery","Redshift","MySQL","MongoDB","Salesforce","Segment","Amplitude","Shopify","Airtable","Looker","Kafka","Databricks"];
+const AUTOMATIONS = [
+  { name:"Daily revenue digest", desc:"Posts yesterday's revenue + top regions to #finance", schedule:"Every day · 8:00 AM", last:"Today, 8:00 AM", on:true, channel:"Slack" },
+  { name:"Churn risk alert", desc:"Flags accounts with usage down >30% week-over-week", schedule:"Every Monday · 9:00 AM", last:"Jun 9, 9:00 AM", on:true, channel:"Email" },
+  { name:"Anomaly watch — signups", desc:"Notifies when signups deviate 2σ from forecast", schedule:"Hourly", last:"42 min ago", on:false, channel:"Slack" },
+  { name:"Weekly KPI snapshot", desc:"Exports the executive dashboard to PDF", schedule:"Every Friday · 5:00 PM", last:"Jun 13, 5:00 PM", on:true, channel:"Drive" },
+];
+const REV_BARS = [42,48,45,52,60,58,67,72,69,78,84,92];
+const REGION_ROWS = [
+  { r:"EMEA", v:"$486,200", d:"+18.2%", up:true },
+  { r:"North America", v:"$412,840", d:"+9.4%", up:true },
+  { r:"APAC", v:"$248,910", d:"+22.7%", up:true },
+  { r:"LATAM", v:"$136,970", d:"-3.1%", up:false },
+];
+const DOC_FILE   = { id:"doc1",   kind:"doc",   name:"Q2 Revenue Report",  ext:"DOCX", meta:"Document · 4 pages" };
+const SHEET_FILE = { id:"sheet1", kind:"sheet", name:"Regional Breakdown", ext:"XLSX", meta:"Spreadsheet · 1 sheet" };
+const SHEET_HEADER = ["Region","Revenue","Orders","AOV","MoM %"];
+const SHEET_ROWS = [
+  ["EMEA","486,200","5,632","$86.32","+18.2%"],
+  ["North America","412,840","4,981","$82.88","+9.4%"],
+  ["APAC","248,910","2,884","$86.31","+22.7%"],
+  ["LATAM","136,970","1,712","$80.01","-3.1%"],
+  ["Total","1,284,920","15,209","$84.48","+12.4%"],
+];
+
+/* ============================ SIDEBAR ============================ */
+function Sidebar({ active, setActive }) {
+  const nav=[["chat","Chat","message"],["dashboard","Dashboard","dashboard"],["sources","Sources","database"],["automations","Automations","zap"]];
+  return <aside style={{width:256,flex:"none",background:"var(--ay-bg)",borderRight:"1px solid var(--ay-border)",
+    display:"flex",flexDirection:"column",height:"100%"}}>
+    <div style={{padding:"18px 18px 14px",display:"flex",alignItems:"center",gap:10}}>
+      <span style={{width:28,height:28,borderRadius:8,background:"var(--ay-ink)",display:"inline-flex",alignItems:"center",
+        justifyContent:"center",color:"#fff",fontWeight:700,fontSize:16,letterSpacing:"-0.04em"}}>A</span>
+      <span style={{fontSize:17,fontWeight:600,letterSpacing:"-0.03em"}}>Ayron</span>
+      <span style={{marginLeft:"auto",color:"var(--ay-text-subtle)"}}><Icon name="chevdown" size={16}/></span>
+    </div>
+    <div style={{padding:"4px 12px 0"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,height:34,padding:"0 10px",borderRadius:"var(--ay-radius-md)",
+        border:"1px solid var(--ay-border)",color:"var(--ay-text-subtle)",fontSize:13,background:"var(--ay-bg-subtle)"}}>
+        <Icon name="search" size={15}/><span>Search</span>
+        <span style={{marginLeft:"auto",fontFamily:"var(--ay-font-mono)",fontSize:11,opacity:.8}}>⌘K</span>
+      </div>
+    </div>
+    <nav style={{padding:"12px 12px",display:"flex",flexDirection:"column",gap:2}}>
+      {nav.map(([k,label,ic])=>{
+        const on=active===k;
+        return <button key={k} onClick={()=>setActive(k)} style={{display:"flex",alignItems:"center",gap:10,height:36,padding:"0 10px",
+          border:"none",borderRadius:"var(--ay-radius-md)",cursor:"pointer",fontSize:14,fontWeight:on?600:500,fontFamily:"inherit",
+          color:on?"var(--ay-text)":"var(--ay-text-muted)",background:on?"var(--ay-surface-hover)":"transparent",textAlign:"left"}}>
+          <Icon name={ic} size={17} stroke={on?2.2:1.9}/>{label}</button>;
+      })}
+    </nav>
+    <div style={{marginTop:"auto",padding:12,borderTop:"1px solid var(--ay-border)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"6px 8px"}}>
+        <Avatar name="Dana Lee" status="online" size={30}/>
+        <div style={{lineHeight:1.2}}>
+          <div style={{fontSize:13,fontWeight:600}}>Dana Lee</div>
+          <div style={{fontSize:12,color:"var(--ay-text-subtle)"}}>Acme Analytics</div>
+        </div>
+        <span style={{marginLeft:"auto",color:"var(--ay-text-subtle)"}}><Icon name="settings" size={16}/></span>
+      </div>
+    </div>
+  </aside>;
+}
+
+/* ============================ TOPBAR ============================ */
+function TopBar({ title, sub, children }) {
+  return <header style={{height:60,flex:"none",borderBottom:"1px solid var(--ay-border)",background:"var(--ay-bg)",
+    display:"flex",alignItems:"center",gap:14,padding:"0 24px"}}>
+    <div style={{minWidth:0}}><div style={{fontSize:16,fontWeight:600,letterSpacing:"-0.01em",whiteSpace:"nowrap"}}>{title}</div>
+      {sub&&<div style={{fontSize:12.5,color:"var(--ay-text-muted)",whiteSpace:"nowrap"}}>{sub}</div>}</div>
+    <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{children}</div>
+  </header>;
+}
+
+/* ============================ CHAT ============================ */
+function MiniBars() {
+  return <div style={{display:"flex",alignItems:"flex-end",gap:6,height:96,padding:"8px 2px 0"}}>
+    {REV_BARS.map((v,i)=><div key={i} style={{flex:1,height:`${v}%`,background:i>=10?"var(--ay-chart-1)":"var(--ay-neutral-200)",
+      borderRadius:"3px 3px 0 0"}}/>)}
+  </div>;
+}
+function ChatScreen() {
+  const seed=[
+    { who:"user", text:"How did revenue do last month, and what drove it?" },
+    { who:"agent", text:"Revenue was $1.28M in May, up 12.4% vs April — the strongest month this year. Growth was led by EMEA (+18.2%) and APAC (+22.7%).", chart:true },
+    { who:"user", text:"Break it down by region." },
+    { who:"agent", text:"Here's the regional split for May:", table:true },
+    { who:"user", text:"Put together a full Q2 revenue report I can share with the team." },
+    { who:"agent", text:"Done. I wrote up a Q2 report with the key findings and attached the underlying numbers as a spreadsheet. Open either on the right to review, edit, or download.", files:[DOC_FILE,SHEET_FILE] },
+  ];
+  const [msgs,setMsgs]=useState(seed);
+  const [val,setVal]=useState("");
+  const [thinking,setThinking]=useState(false);
+  const [openDoc,setOpenDoc]=useState(DOC_FILE);
+  const [expanded,setExpanded]=useState(false);
+  const scroller=useRef(null);
+  useEffect(()=>{ if(scroller.current) scroller.current.scrollTop=scroller.current.scrollHeight; },[msgs,thinking]);
+  const send=(q)=>{
+    const text=(q??val).trim(); if(!text) return;
+    setMsgs(m=>[...m,{who:"user",text}]); setVal(""); setThinking(true);
+    const wantsFile=/report|spreadsheet|excel|export|\bdoc\b|document|write.?up|summary/i.test(text);
+    setTimeout(()=>{ setThinking(false);
+      if(wantsFile){
+        setMsgs(m=>[...m,{who:"agent",text:"Here you go — I generated a written report and a spreadsheet with the supporting data. Open either on the right.",files:[DOC_FILE,SHEET_FILE]}]);
+        setOpenDoc(DOC_FILE); setExpanded(false);
+      } else {
+        setMsgs(m=>[...m,{who:"agent",text:"I pulled the latest figures across your connected sources. EMEA continues to lead, and the APAC trend is accelerating — want me to set up a weekly digest for this?",follow:true}]);
+      }
+    },1100);
+  };
+  const suggestions=["Generate a Q2 report","Which products grew fastest?","Forecast next month"];
+  const mw=openDoc?"none":760, pad=openDoc?"0 24px":"0 28px";
+  return <div style={{display:"flex",height:"100%"}}>
+    <div style={{flex:1,minWidth:0,display:expanded&&openDoc?"none":"flex",flexDirection:"column",height:"100%",background:"var(--ay-bg)"}}>
+      <div ref={scroller} style={{flex:1,overflowY:"auto",padding:"28px 0"}}>
+        <div style={{maxWidth:mw,margin:"0 auto",padding:pad,display:"flex",flexDirection:"column",gap:22}}>
+          {msgs.map((m,i)=><Message key={i} m={m} onPick={send} onOpenDoc={d=>{setOpenDoc(d);setExpanded(false)}} activeId={openDoc&&openDoc.id}/>)}
+          {thinking&&<div style={{display:"flex",gap:12,animation:"ay-fade .2s"}}>
+            <Avatar agent size={30}/>
+            <div style={{display:"flex",alignItems:"center",gap:5,height:30}}>
+              {[0,1,2].map(i=><span key={i} style={{width:6,height:6,borderRadius:"50%",background:"var(--ay-neutral-400)",
+                animation:`ay-blink 1s ${i*0.15}s infinite`}}/>)}
+            </div></div>}
+        </div>
+      </div>
+      <div style={{flex:"none",padding:"0 0 22px"}}>
+        <div style={{maxWidth:mw,margin:"0 auto",padding:pad}}>
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+            {suggestions.map(s=><button key={s} onClick={()=>send(s)} style={{height:30,padding:"0 12px",borderRadius:"var(--ay-radius-full)",
+              border:"1px solid var(--ay-border-strong)",background:"var(--ay-surface)",color:"var(--ay-text-muted)",fontSize:13,
+              fontFamily:"inherit",cursor:"pointer",boxShadow:"var(--ay-shadow-xs)"}}>{s}</button>)}
+          </div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:10,background:"var(--ay-surface)",border:"1px solid var(--ay-border-strong)",
+            borderRadius:"var(--ay-radius-lg)",padding:"10px 10px 10px 14px",boxShadow:"var(--ay-shadow-sm)"}}>
+            <input value={val} onChange={e=>setVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")send()}}
+              placeholder="Ask Ayron about your data…" style={{flex:1,border:"none",outline:"none",background:"transparent",
+              fontSize:15,color:"var(--ay-text)",height:30}}/>
+            <Button leftIcon="sparkles" onClick={()=>send()}>Ask</Button>
+          </div>
+          <div style={{textAlign:"center",fontSize:12,color:"var(--ay-text-subtle)",marginTop:10}}>
+            Ayron queries your connected sources. Always verify critical figures.</div>
+        </div>
+      </div>
+    </div>
+    {openDoc&&<ArtifactPanel doc={openDoc} expanded={expanded}
+      onToggleExpand={()=>setExpanded(e=>!e)} onClose={()=>{setOpenDoc(null);setExpanded(false)}}/>}
+  </div>;
+}
+function Message({ m, onPick, onOpenDoc, activeId }) {
+  if(m.who==="user") return <div style={{display:"flex",justifyContent:"flex-end",animation:"ay-fade .2s"}}>
+    <div style={{maxWidth:"78%",background:"var(--ay-ink)",color:"#fff",padding:"11px 15px",borderRadius:"16px 16px 4px 16px",
+      fontSize:14.5,lineHeight:1.5}}>{m.text}</div></div>;
+  return <div style={{display:"flex",gap:12,animation:"ay-fade .2s"}}>
+    <Avatar agent size={30}/>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontSize:14.5,lineHeight:1.55,color:"var(--ay-text)"}}>{m.text}</div>
+      {m.chart&&<Card style={{marginTop:12,padding:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
+          <span style={{fontSize:13,fontWeight:600,whiteSpace:"nowrap"}}>Monthly revenue</span>
+          <span style={{fontFamily:"var(--ay-font-mono)",fontSize:13,fontWeight:600}}>$1,284,920</span></div>
+        <div style={{fontSize:12,color:"var(--ay-success-700)",marginBottom:4}}>▲ 12.4% vs April</div>
+        <MiniBars/>
+        <div style={{display:"flex",justifyContent:"space-between",fontFamily:"var(--ay-font-mono)",fontSize:10,
+          color:"var(--ay-text-subtle)",marginTop:6}}><span>Jun '25</span><span>May '26</span></div>
+      </Card>}
+      {m.table&&<Card style={{marginTop:12,overflow:"hidden"}}>
+        {REGION_ROWS.map((r,i)=><div key={r.r} style={{display:"flex",alignItems:"center",padding:"11px 16px",
+          borderTop:i?"1px solid var(--ay-border-subtle)":"none"}}>
+          <span style={{flex:1,fontSize:14,fontWeight:500}}>{r.r}</span>
+          <span style={{fontFamily:"var(--ay-font-mono)",fontSize:13,marginRight:16}}>{r.v}</span>
+          <span style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:13,fontWeight:500,width:64,justifyContent:"flex-end",
+            color:r.up?"var(--ay-success-700)":"var(--ay-danger-700)"}}>
+            <Icon name={r.up?"arrowup":"arrowdown"} size={13}/>{r.d}</span></div>)}
+      </Card>}
+      {m.follow&&<div style={{display:"flex",gap:8,marginTop:12}}>
+        <Button size="sm" variant="secondary" leftIcon="zap" onClick={()=>onPick&&onPick("Set up a weekly digest")}>Create automation</Button>
+        <Button size="sm" variant="ghost" leftIcon="table">View query</Button>
+      </div>}
+      {m.files&&<div style={{display:"flex",flexDirection:"column",gap:8,marginTop:12}}>
+        {m.files.map(f=><FileCard key={f.id} f={f} active={f.id===activeId} onOpen={onOpenDoc}/>)}
+      </div>}
+    </div>
+  </div>;
+}
+
+/* ============================ ARTIFACT PANEL ============================ */
+function FileCard({ f, active, onOpen }) {
+  const [h,setH]=useState(false);
+  const sheet=f.kind==="sheet";
+  return <button onClick={()=>onOpen(f)} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{display:"flex",alignItems:"center",gap:12,width:"100%",maxWidth:380,textAlign:"left",cursor:"pointer",
+      padding:"11px 12px",borderRadius:"var(--ay-radius-md)",fontFamily:"inherit",
+      border:`1px solid ${active?"var(--ay-ink)":"var(--ay-border-strong)"}`,
+      background:active?"var(--ay-bg-subtle)":h?"var(--ay-surface-hover)":"var(--ay-surface)",
+      boxShadow:active?"none":"var(--ay-shadow-xs)",transition:"background .12s,border-color .12s"}}>
+    <span style={{width:38,height:38,borderRadius:"var(--ay-radius-md)",flex:"none",display:"inline-flex",alignItems:"center",
+      justifyContent:"center",background:sheet?"var(--ay-success-50)":"var(--ay-blue-50)",
+      color:sheet?"var(--ay-success-700)":"var(--ay-blue-700)"}}><Icon name={sheet?"sheet":"filetext"} size={19}/></span>
+    <span style={{minWidth:0,flex:1}}>
+      <span style={{display:"block",fontSize:14,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f.name}</span>
+      <span style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--ay-text-subtle)",marginTop:1}}>
+        <span style={{fontFamily:"var(--ay-font-mono)",fontWeight:500,letterSpacing:"0.02em"}}>{f.ext}</span>· {f.meta.split("· ")[1]}</span>
+    </span>
+    <span style={{flex:"none",color:"var(--ay-text-subtle)"}}><Icon name="chevright" size={16}/></span>
+  </button>;
+}
+function PanelBtn({ icon, onClick, title }) {
+  const [h,setH]=useState(false);
+  return <button onClick={onClick} title={title} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",border:"none",
+      borderRadius:"var(--ay-radius-sm)",background:h?"var(--ay-surface-hover)":"transparent",
+      color:"var(--ay-text-muted)",cursor:"pointer"}}><Icon name={icon} size={16}/></button>;
+}
+function DocView() {
+  const h2={fontSize:17,fontWeight:600,letterSpacing:"-0.01em",margin:"28px 0 8px"};
+  const p={fontSize:14.5,lineHeight:1.7,color:"var(--ay-text)",margin:"0 0 8px"};
+  const li={fontSize:14.5,lineHeight:1.6,marginBottom:6};
+  return <div style={{flex:1,overflowY:"auto",padding:"28px 0 56px"}}>
+    <div style={{width:"100%",maxWidth:640,margin:"0 auto",background:"var(--ay-surface)",border:"1px solid var(--ay-border)",
+      borderRadius:"var(--ay-radius-md)",boxShadow:"var(--ay-shadow-sm)",padding:"48px 54px"}}>
+      <div style={{fontSize:11,fontWeight:600,letterSpacing:"0.07em",textTransform:"uppercase",color:"var(--ay-blue-600)"}}>Quarterly report</div>
+      <h1 style={{fontSize:30,fontWeight:700,letterSpacing:"-0.025em",margin:"8px 0 6px",lineHeight:1.12}}>Q2 Revenue Report</h1>
+      <div style={{fontSize:13,color:"var(--ay-text-subtle)",paddingBottom:22,marginBottom:4,borderBottom:"1px solid var(--ay-border)"}}>
+        Generated by Ayron · June 15, 2026 · Acme Analytics</div>
+      <h2 style={h2}>Summary</h2>
+      <p style={p}>Q2 closed at <strong>$1.28M</strong> in revenue, up <strong>12.4%</strong> versus Q1 and the strongest quarter on record. Growth was broad-based but led by EMEA and APAC, while LATAM softened slightly on FX headwinds.</p>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,margin:"18px 0 6px"}}>
+        {[["Total revenue","$1.28M","+12.4%",true],["Orders","15,209","+8.1%",true],["Avg. order value","$84.48","+2.3%",true]].map((k,i)=>
+          <div key={i} style={{border:"1px solid var(--ay-border)",borderRadius:"var(--ay-radius-md)",padding:"12px 14px"}}>
+            <div style={{fontSize:12,color:"var(--ay-text-muted)"}}>{k[0]}</div>
+            <div style={{fontFamily:"var(--ay-font-mono)",fontSize:19,fontWeight:600,marginTop:3}}>{k[1]}</div>
+            <div style={{fontSize:12,fontWeight:500,color:"var(--ay-success-700)",marginTop:2}}>▲ {k[2]}</div></div>)}
+      </div>
+      <h2 style={h2}>Revenue by region</h2>
+      <div style={{border:"1px solid var(--ay-border)",borderRadius:"var(--ay-radius-md)",overflow:"hidden",margin:"4px 0"}}>
+        {REGION_ROWS.map((r,i)=><div key={r.r} style={{display:"flex",padding:"10px 14px",fontSize:14,
+          borderTop:i?"1px solid var(--ay-border-subtle)":"none"}}>
+          <span style={{flex:1,fontWeight:500}}>{r.r}</span>
+          <span style={{fontFamily:"var(--ay-font-mono)",fontSize:13,marginRight:14}}>{r.v}</span>
+          <span style={{width:56,textAlign:"right",fontSize:13,fontWeight:500,color:r.up?"var(--ay-success-700)":"var(--ay-danger-700)"}}>{r.d}</span></div>)}
+      </div>
+      <h2 style={h2}>Highlights</h2>
+      <ul style={{margin:"0 0 4px",paddingLeft:20,color:"var(--ay-text)"}}>
+        <li style={li}>EMEA grew <strong>+18.2%</strong>, contributing 38% of total revenue.</li>
+        <li style={li}>APAC was the fastest-growing region at <strong>+22.7%</strong>, driven by new Enterprise logos.</li>
+        <li style={li}>Enterprise plan revenue rose <strong>+31%</strong> QoQ, now 15% of the book.</li>
+      </ul>
+      <h2 style={h2}>Recommended actions</h2>
+      <ul style={{margin:0,paddingLeft:20,color:"var(--ay-text)"}}>
+        <li style={li}>Reallocate marketing spend toward APAC to compound momentum.</li>
+        <li style={li}>Investigate LATAM softness — likely FX, confirm against Stripe settlement data.</li>
+        <li style={li}>Set a weekly automated digest so this view stays current for the team.</li>
+      </ul>
+    </div>
+  </div>;
+}
+function SheetView() {
+  const cols=["A","B","C","D","E"];
+  const GT="38px 158px repeat(4,1fr)";
+  const cellBase={padding:"7px 10px",fontSize:13,borderRight:"1px solid var(--ay-border-subtle)",
+    borderBottom:"1px solid var(--ay-border-subtle)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
+  const hdrCell={...cellBase,background:"var(--ay-neutral-100)",color:"var(--ay-text-subtle)",fontFamily:"var(--ay-font-mono)",
+    fontSize:11,fontWeight:500,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"};
+  return <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",background:"var(--ay-surface)"}}>
+    {/* formula bar */}
+    <div style={{flex:"none",display:"flex",alignItems:"center",height:34,borderBottom:"1px solid var(--ay-border)",background:"var(--ay-bg)"}}>
+      <div style={{width:62,textAlign:"center",fontFamily:"var(--ay-font-mono)",fontSize:12,color:"var(--ay-text-muted)",
+        borderRight:"1px solid var(--ay-border)",lineHeight:"34px"}}>B2</div>
+      <div style={{padding:"0 6px",color:"var(--ay-text-subtle)",fontStyle:"italic",fontSize:12,borderRight:"1px solid var(--ay-border)",lineHeight:"34px"}}>fx</div>
+      <div style={{padding:"0 12px",fontFamily:"var(--ay-font-mono)",fontSize:12.5,color:"var(--ay-text)"}}>486200</div>
+    </div>
+    {/* grid */}
+    <div style={{flex:1,overflow:"auto"}}>
+      <div style={{display:"grid",gridTemplateColumns:GT,minWidth:540,borderTop:"1px solid var(--ay-border-subtle)",borderLeft:"1px solid var(--ay-border-subtle)"}}>
+        <div style={hdrCell}></div>
+        {cols.map(c=><div key={c} style={hdrCell}>{c}</div>)}
+        {/* header row (row 1) */}
+        <div style={hdrCell}>1</div>
+        {SHEET_HEADER.map((c,j)=><div key={j} style={{...cellBase,fontWeight:600,textAlign:j===0?"left":"right",background:"var(--ay-bg-subtle)"}}>{c}</div>)}
+        {/* data rows */}
+        {SHEET_ROWS.map((row,ri)=>{
+          const total=ri===SHEET_ROWS.length-1;
+          return <React.Fragment key={ri}>
+            <div style={hdrCell}>{ri+2}</div>
+            {row.map((cell,ci)=>{
+              const sel=ri===0&&ci===1;
+              const neg=ci===4&&cell.startsWith("-");
+              return <div key={ci} style={{...cellBase,
+                textAlign:ci===0?"left":"right",
+                fontFamily:ci===0?"var(--ay-font-sans)":"var(--ay-font-mono)",
+                fontWeight:total?600:ci===4?500:400,
+                color:ci===4?(neg?"var(--ay-danger-700)":"var(--ay-success-700)"):"var(--ay-text)",
+                background:total?"var(--ay-bg-subtle)":"var(--ay-surface)",
+                boxShadow:sel?"inset 0 0 0 2px var(--ay-accent)":"none"}}>{cell}</div>;
+            })}
+          </React.Fragment>;
+        })}
+      </div>
+    </div>
+    {/* sheet tabs */}
+    <div style={{flex:"none",display:"flex",alignItems:"center",height:34,borderTop:"1px solid var(--ay-border)",
+      background:"var(--ay-bg-subtle)",padding:"0 8px",gap:2}}>
+      <span style={{height:24,padding:"0 12px",display:"inline-flex",alignItems:"center",fontSize:12.5,fontWeight:600,
+        background:"var(--ay-surface)",border:"1px solid var(--ay-border)",borderRadius:"var(--ay-radius-sm)"}}>Revenue</span>
+      <span style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",
+        color:"var(--ay-text-subtle)",cursor:"pointer"}}><Icon name="plus" size={14}/></span>
+    </div>
+  </div>;
+}
+function ArtifactPanel({ doc, expanded, onToggleExpand, onClose }) {
+  const sheet=doc.kind==="sheet";
+  return <div style={{flex:expanded?1:"0 0 520px",maxWidth:expanded?"none":"52%",minWidth:0,borderLeft:"1px solid var(--ay-border)",
+    display:"flex",flexDirection:"column",height:"100%",background:"var(--ay-bg-subtle)",animation:"ay-fade .18s"}}>
+    <div style={{flex:"none",height:56,display:"flex",alignItems:"center",gap:12,padding:"0 14px 0 16px",
+      borderBottom:"1px solid var(--ay-border)",background:"var(--ay-bg)"}}>
+      <span style={{width:32,height:32,borderRadius:8,flex:"none",display:"inline-flex",alignItems:"center",justifyContent:"center",
+        background:sheet?"var(--ay-success-50)":"var(--ay-blue-50)",color:sheet?"var(--ay-success-700)":"var(--ay-blue-700)"}}>
+        <Icon name={sheet?"sheet":"filetext"} size={17}/></span>
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{doc.name}</div>
+        <div style={{fontSize:11.5,color:"var(--ay-text-subtle)"}}><span style={{fontFamily:"var(--ay-font-mono)"}}>{doc.ext}</span> · {doc.meta.split("· ")[1]}</div></div>
+      <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:2}}>
+        <PanelBtn icon="copy" title="Copy"/>
+        <PanelBtn icon="download" title="Download"/>
+        <span style={{width:1,height:20,background:"var(--ay-border)",margin:"0 4px"}}/>
+        <PanelBtn icon="expand" title={expanded?"Collapse":"Expand"} onClick={onToggleExpand}/>
+        <PanelBtn icon="close" title="Close" onClick={onClose}/>
+      </span>
+    </div>
+    {sheet?<SheetView/>:<DocView/>}
+  </div>;
+}
+
+/* ============================ DASHBOARD ============================ */
+function Metric({ label, value, delta, up, spark }) {
+  return <Card style={{padding:18}}>
+    <div style={{fontSize:13,color:"var(--ay-text-muted)"}}>{label}</div>
+    <div style={{fontFamily:"var(--ay-font-mono)",fontSize:26,fontWeight:600,letterSpacing:"-0.01em",marginTop:6}}>{value}</div>
+    <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4,fontSize:13,fontWeight:500,
+      color:up?"var(--ay-success-700)":"var(--ay-danger-700)"}}>
+      <Icon name={up?"arrowup":"arrowdown"} size={13}/>{delta}<span style={{color:"var(--ay-text-subtle)",fontWeight:400}}>vs last month</span></div>
+  </Card>;
+}
+function LineChart() {
+  const pts=[28,32,30,38,42,40,48,52,49,58,64,72];
+  const w=560,h=150,max=80;
+  const path=pts.map((p,i)=>`${i?'L':'M'}${(i/(pts.length-1))*w},${h-(p/max)*h}`).join(" ");
+  const area=`${path} L${w},${h} L0,${h} Z`;
+  return <svg viewBox={`0 0 ${w} ${h}`} width="100%" height="150" preserveAspectRatio="none">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor="var(--ay-blue-500)" stopOpacity="0.16"/><stop offset="100%" stopColor="var(--ay-blue-500)" stopOpacity="0"/>
+    </linearGradient></defs>
+    {[0,.5,1].map(f=><line key={f} x1="0" y1={h*f} x2={w} y2={h*f} stroke="var(--ay-border-subtle)" strokeWidth="1"/>)}
+    <path d={area} fill="url(#g)"/>
+    <path d={path} fill="none" stroke="var(--ay-blue-500)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>;
+}
+function DashboardScreen() {
+  return <div style={{padding:24,overflowY:"auto",height:"100%"}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:14}}>
+      <Metric label="Revenue" value="$1.28M" delta="12.4%" up/>
+      <Metric label="Active users" value="48,210" delta="8.1%" up/>
+      <Metric label="Avg. order value" value="$86.40" delta="2.3%" up/>
+      <Metric label="Churn rate" value="3.2%" delta="0.6%" up={false}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1.6fr 1fr",gap:14}}>
+      <Card style={{padding:18}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div><div style={{fontSize:15,fontWeight:600,whiteSpace:"nowrap"}}>Revenue trend</div>
+            <div style={{fontSize:12.5,color:"var(--ay-text-muted)"}}>Last 12 months</div></div>
+          <Badge tone="accent">Live</Badge>
+        </div>
+        <LineChart/>
+      </Card>
+      <Card style={{padding:18}}>
+        <div style={{fontSize:15,fontWeight:600,marginBottom:14,whiteSpace:"nowrap"}}>Revenue by region</div>
+        {REGION_ROWS.map((r,i)=>{
+          const pct=[100,85,51,28][i];
+          return <div key={r.r} style={{marginBottom:13}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5}}>
+              <span style={{fontWeight:500,whiteSpace:"nowrap"}}>{r.r}</span>
+              <span style={{fontFamily:"var(--ay-font-mono)",color:"var(--ay-text-muted)"}}>{r.v}</span></div>
+            <div style={{height:7,borderRadius:"999px",background:"var(--ay-bg-muted)",overflow:"hidden"}}>
+              <div style={{width:`${pct}%`,height:"100%",borderRadius:"999px",
+                background:`var(--ay-chart-${i+1})`}}/></div></div>;
+        })}
+      </Card>
+    </div>
+    <Card style={{marginTop:14,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",padding:"14px 18px",borderBottom:"1px solid var(--ay-border)"}}>
+        <span style={{fontSize:15,fontWeight:600,whiteSpace:"nowrap"}}>Top products</span>
+        <span style={{marginLeft:"auto"}}><Button size="sm" variant="ghost" leftIcon="filter">Filter</Button></span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"9px 18px",fontSize:11.5,
+        textTransform:"uppercase",letterSpacing:"0.04em",color:"var(--ay-text-subtle)",fontWeight:500,background:"var(--ay-bg-subtle)"}}>
+        <span>Product</span><span style={{textAlign:"right"}}>Units</span><span style={{textAlign:"right"}}>Revenue</span><span style={{textAlign:"right"}}>Δ MoM</span></div>
+      {[["Pro plan","3,204","$284,200","+14.2%",true],["Team plan","1,890","$226,800","+9.8%",true],
+        ["Enterprise","142","$198,400","+31.0%",true],["Add-on: Storage","2,410","$48,200","-2.4%",false]].map((row,i)=>
+        <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"12px 18px",fontSize:14,
+          borderTop:"1px solid var(--ay-border-subtle)",alignItems:"center"}}>
+          <span style={{fontWeight:500}}>{row[0]}</span>
+          <span style={{textAlign:"right",fontFamily:"var(--ay-font-mono)",fontSize:13}}>{row[1]}</span>
+          <span style={{textAlign:"right",fontFamily:"var(--ay-font-mono)",fontSize:13}}>{row[2]}</span>
+          <span style={{textAlign:"right",fontSize:13,fontWeight:500,color:row[4]?"var(--ay-success-700)":"var(--ay-danger-700)"}}>{row[3]}</span></div>)}
+    </Card>
+  </div>;
+}
+
+/* ============================ SOURCES ============================ */
+function SourceLogo({ s, size=36 }) {
+  return <span style={{width:size,height:size,borderRadius:"var(--ay-radius-md)",flex:"none",display:"inline-flex",
+    alignItems:"center",justifyContent:"center",background:s.color+"14",color:s.color,border:`1px solid ${s.color}28`}}>
+    <Icon name="database" size={18}/></span>;
+}
+function SourcesScreen() {
+  const statusMap={connected:["success","Connected"],syncing:["warning","Syncing"],error:["danger","Error"]};
+  return <div style={{padding:24,overflowY:"auto",height:"100%"}}>
+    <Card style={{overflow:"hidden",marginBottom:24}}>
+      <div style={{display:"flex",alignItems:"center",padding:"14px 18px",borderBottom:"1px solid var(--ay-border)"}}>
+        <span style={{fontSize:15,fontWeight:600,whiteSpace:"nowrap"}}>Connected sources</span>
+        <Badge tone="neutral" style={{marginLeft:8}}>{SOURCES.length}</Badge>
+      </div>
+      {SOURCES.map((s,i)=>{
+        const [tone,label]=statusMap[s.status];
+        return <div key={s.name} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",
+          borderTop:i?"1px solid var(--ay-border-subtle)":"none"}}>
+          <SourceLogo s={s}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+            <div style={{fontSize:12.5,color:"var(--ay-text-muted)",whiteSpace:"nowrap"}}>{s.type} · {s.rows} rows</div></div>
+          <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:18}}>
+            <span style={{fontSize:12.5,color:"var(--ay-text-subtle)",fontFamily:"var(--ay-font-mono)"}}>{s.sync}</span>
+            <Badge tone={tone} dot>{label}</Badge>
+            <span style={{color:"var(--ay-text-subtle)",cursor:"pointer"}}><Icon name="dots" size={18}/></span></div>
+        </div>;
+      })}
+    </Card>
+    <div style={{fontSize:15,fontWeight:600,marginBottom:4}}>Add a source</div>
+    <div style={{fontSize:13,color:"var(--ay-text-muted)",marginBottom:14}}>Connect a database, warehouse, or SaaS tool. Ayron handles the schema.</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+      {AVAILABLE.map(n=><Card key={n} className="hovercard" style={{padding:14,display:"flex",alignItems:"center",gap:11,cursor:"pointer"}}>
+        <span style={{width:30,height:30,borderRadius:8,background:"var(--ay-bg-muted)",display:"inline-flex",alignItems:"center",
+          justifyContent:"center",color:"var(--ay-text-muted)",flex:"none"}}><Icon name="database" size={16}/></span>
+        <span style={{fontSize:13.5,fontWeight:500}}>{n}</span>
+        <span style={{marginLeft:"auto",color:"var(--ay-text-subtle)"}}><Icon name="plus" size={16}/></span>
+      </Card>)}
+    </div>
+  </div>;
+}
+
+/* ============================ AUTOMATIONS ============================ */
+function AutomationsScreen() {
+  const [items,setItems]=useState(AUTOMATIONS);
+  const toggle=i=>setItems(it=>it.map((a,j)=>j===i?{...a,on:!a.on}:a));
+  return <div style={{padding:24,overflowY:"auto",height:"100%"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {items.map((a,i)=><Card key={a.name} style={{padding:"16px 18px"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:14}}>
+          <span style={{width:38,height:38,borderRadius:"var(--ay-radius-md)",flex:"none",display:"inline-flex",alignItems:"center",
+            justifyContent:"center",background:a.on?"var(--ay-blue-50)":"var(--ay-bg-muted)",
+            color:a.on?"var(--ay-blue-600)":"var(--ay-text-subtle)"}}><Icon name="zap" size={18}/></span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:14.5,fontWeight:600,whiteSpace:"nowrap"}}>{a.name}</span>
+              <Badge tone="neutral">{a.channel}</Badge></div>
+            <div style={{fontSize:13,color:"var(--ay-text-muted)",marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.desc}</div>
+            <div style={{display:"flex",gap:16,marginTop:9,fontSize:12.5,color:"var(--ay-text-subtle)"}}>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Icon name="clock" size={13}/>{a.schedule}</span>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Icon name="check" size={13}/>Last run {a.last}</span></div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:14,flex:"none"}}>
+            <span style={{fontSize:12.5,color:a.on?"var(--ay-success-700)":"var(--ay-text-subtle)",fontWeight:500,width:46}}>
+              {a.on?"Active":"Paused"}</span>
+            <Switch on={a.on} onChange={()=>toggle(i)}/></div>
+        </div>
+      </Card>)}
+    </div>
+  </div>;
+}
+
+/* ============================ APP ============================ */
+const TITLES={
+  chat:["Chat","Ask Ayron anything about your data"],
+  dashboard:["Dashboard","Revenue overview · updated 3 min ago"],
+  sources:["Sources","Manage your connected data sources"],
+  automations:["Automations","Scheduled workflows and alerts"],
+};
+function App() {
+  const [active,setActive]=useState("chat");
+  const action={
+    chat:<Button variant="secondary" size="sm" leftIcon="plus">New chat</Button>,
+    dashboard:<><Button variant="ghost" size="sm" leftIcon="refresh">Refresh</Button><Button size="sm" leftIcon="arrowdown">Export</Button></>,
+    sources:<Button size="sm" leftIcon="plus">Connect a source</Button>,
+    automations:<Button size="sm" leftIcon="plus">New automation</Button>,
+  }[active];
+  const Screen={chat:ChatScreen,dashboard:DashboardScreen,sources:SourcesScreen,automations:AutomationsScreen}[active];
+  return <div style={{display:"flex",height:"100%",background:"var(--ay-bg-subtle)"}}>
+    <Sidebar active={active} setActive={setActive}/>
+    <main style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",height:"100%",
+      background:active==="chat"?"var(--ay-bg)":"var(--ay-bg-subtle)"}}>
+      <TopBar title={TITLES[active][0]} sub={TITLES[active][1]}>{action}</TopBar>
+      <div style={{flex:1,minHeight:0}}><Screen/></div>
+    </main>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

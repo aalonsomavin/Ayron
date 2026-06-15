@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x160" subtitle="Semantic surface & text tokens in use" name="Surfaces & text" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;padding:24px 28px;background:var(--ay-bg);font-family:var(--ay-font-sans);color:var(--ay-text);display:flex;gap:14px}
+.panel{flex:1;border-radius:var(--ay-radius-lg);border:1px solid var(--ay-border);padding:16px}
+.t{font-family:var(--ay-font-mono);font-size:10px;color:var(--ay-text-subtle);margin-bottom:10px}</style>
+</head><body>
+<div class="panel" style="background:var(--ay-bg)">
+  <div class="t">--ay-bg / surface</div>
+  <div style="font-size:15px;color:var(--ay-text)">Text — primary</div>
+  <div style="font-size:14px;color:var(--ay-text-muted)">Text — muted</div>
+  <div style="font-size:13px;color:var(--ay-text-subtle)">Text — subtle</div>
+  <div style="font-size:13px;color:var(--ay-text-link)">Text — link</div>
+</div>
+<div class="panel" style="background:var(--ay-bg-subtle)">
+  <div class="t">--ay-bg-subtle</div>
+  <div style="font-size:14px;color:var(--ay-text)">Sunken app surface</div>
+  <div style="margin-top:10px;background:var(--ay-surface);border:1px solid var(--ay-border);border-radius:var(--ay-radius-md);padding:8px 10px;font-size:13px">Card on sunken bg</div>
+</div>
+<div class="panel" style="background:var(--ay-ink);border-color:var(--ay-ink)">
+  <div class="t" style="color:var(--ay-neutral-400)">--ay-ink / inverse</div>
+  <div style="font-size:14px;color:var(--ay-text-inverse)">Inverse text</div>
+  <div style="margin-top:10px;background:#fff;color:var(--ay-ink);border-radius:var(--ay-radius-sm);padding:6px 12px;font-size:13px;font-weight:600;display:inline-block">Primary button</div>
+</div>
+</body></html>

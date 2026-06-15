@@ -8,6 +8,12 @@ env = environ.Env(
     ALLOWED_HOSTS=(list, []),
     SECRET_KEY=(str, ""),
     DATABASE_URL=(str, "sqlite:///db.sqlite3"),
+    REDIS_URL=(str, "redis://localhost:6379/0"),
+    CELERY_BROKER_URL=(str, ""),
+    CELERY_RESULT_BACKEND=(str, ""),
+    OPENAI_API_KEY=(str, ""),
+    DEFAULT_LLM_MODEL=(str, "openai:gpt-4o"),
+    DEMO_DB_URL=(str, ""),
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -26,6 +32,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "apps.core",
     "apps.accounts",
+    "apps.chat",
+    "apps.agent",
 ]
 
 MIDDLEWARE = [
@@ -81,6 +89,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "core:home"
 LOGOUT_REDIRECT_URL = "accounts:login"
+
+REDIS_URL = env("REDIS_URL")
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/1")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+
+OPENAI_API_KEY = env("OPENAI_API_KEY")
+DEFAULT_LLM_MODEL = env("DEFAULT_LLM_MODEL")
+DEMO_DB_URL = env("DEMO_DB_URL")
 
 LOGGING = {
     "version": 1,

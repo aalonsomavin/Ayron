@@ -1,0 +1,123 @@
+<!-- @dsCard group="Components" viewport="700x640" subtitle="Buttons, inputs, badges, tabs, switch, avatars, card" name="Core components" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<style>
+  body{margin:0;padding:28px 32px;background:var(--ay-bg);font-family:var(--ay-font-sans);color:var(--ay-text)}
+  .sec{margin-bottom:26px}
+  .lbl{font-family:var(--ay-font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--ay-text-subtle);margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  /* button */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 14px;font-size:14px;font-weight:500;letter-spacing:-0.005em;border-radius:var(--ay-radius-md);border:1px solid transparent;cursor:pointer}
+  .btn-pri{background:var(--ay-primary);color:#fff}
+  .btn-sec{background:var(--ay-surface);color:var(--ay-text);border-color:var(--ay-border-strong);box-shadow:var(--ay-shadow-xs)}
+  .btn-ghost{background:transparent;color:var(--ay-text)}
+  .btn-danger{background:var(--ay-danger-500);color:#fff}
+  .btn-sm{height:30px;padding:0 10px;font-size:13px}
+  .btn-lg{height:44px;padding:0 20px;font-size:15px}
+  .btn[disabled]{background:var(--ay-neutral-200);color:var(--ay-text-disabled);cursor:not-allowed;border-color:transparent}
+  /* input */
+  .inp{display:flex;align-items:center;gap:8px;height:38px;padding:0 12px;background:var(--ay-surface);border:1px solid var(--ay-border-strong);border-radius:var(--ay-radius-md);font-size:14px;color:var(--ay-text-subtle);min-width:200px}
+  .inp-focus{border-color:var(--ay-accent);box-shadow:var(--ay-shadow-focus);color:var(--ay-text)}
+  .inp-err{border-color:var(--ay-danger-500);box-shadow:0 0 0 3px rgba(220,38,38,.18)}
+  /* badge */
+  .bdg{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;font-size:12px;font-weight:500;border-radius:var(--ay-radius-full);border:1px solid transparent}
+  .dot{width:6px;height:6px;border-radius:50%}
+  /* tabs */
+  .tabs{display:flex;gap:18px;border-bottom:1px solid var(--ay-border)}
+  .tab{padding:0 2px 10px;margin-bottom:-1px;font-size:14px;font-weight:500;color:var(--ay-text-muted);border-bottom:2px solid transparent;display:inline-flex;gap:6px;align-items:center}
+  .tab-on{color:var(--ay-text);font-weight:600;border-bottom-color:var(--ay-ink)}
+  .cnt{font-family:var(--ay-font-mono);font-size:11px;background:var(--ay-bg-muted);border-radius:var(--ay-radius-full);padding:1px 6px;color:var(--ay-text-subtle)}
+  /* switch */
+  .sw{position:relative;width:40px;height:22px;border-radius:var(--ay-radius-full);flex:none}
+  .sw-on{background:var(--ay-ink)}.sw-off{background:var(--ay-neutral-300)}
+  .knob{position:absolute;top:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--ay-shadow-sm)}
+  /* avatar */
+  .av{width:32px;height:32px;border-radius:var(--ay-radius-full);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:1px solid var(--ay-border);position:relative}
+  .av-agent{background:var(--ay-ink);color:#fff;font-size:16px}
+  .av-user{background:var(--ay-neutral-150);color:var(--ay-neutral-700)}
+  .av-status{position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;border:2px solid var(--ay-surface)}
+  /* card sample */
+  .card{background:var(--ay-surface);border:1px solid var(--ay-border);border-radius:var(--ay-radius-lg);padding:18px;max-width:300px}
+</style>
+</head><body>
+
+<div class="sec">
+  <div class="lbl">Button — variants</div>
+  <div class="row">
+    <button class="btn btn-pri">Ask Ayron</button>
+    <button class="btn btn-sec">Connect a source</button>
+    <button class="btn btn-ghost">Cancel</button>
+    <button class="btn btn-danger">Delete</button>
+    <a class="btn btn-ghost" style="color:var(--ay-text-link);padding:0">View docs</a>
+    <button class="btn btn-pri" disabled>Disabled</button>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button class="btn btn-pri btn-sm">Small</button>
+    <button class="btn btn-pri">Medium</button>
+    <button class="btn btn-pri btn-lg">Large</button>
+  </div>
+</div>
+
+<div class="sec">
+  <div class="lbl">Input</div>
+  <div class="row">
+    <div class="inp">Search sources</div>
+    <div class="inp inp-focus">analytics_db</div>
+    <div class="inp inp-err">required field</div>
+  </div>
+</div>
+
+<div class="sec">
+  <div class="lbl">Badge</div>
+  <div class="row">
+    <span class="bdg" style="background:var(--ay-success-50);color:var(--ay-success-700)"><span class="dot" style="background:var(--ay-success-500)"></span>Connected</span>
+    <span class="bdg" style="background:var(--ay-warning-50);color:var(--ay-warning-700)"><span class="dot" style="background:var(--ay-warning-500)"></span>Syncing</span>
+    <span class="bdg" style="background:var(--ay-danger-50);color:var(--ay-danger-700)">Failed</span>
+    <span class="bdg" style="background:var(--ay-blue-50);color:var(--ay-blue-700)">Beta</span>
+    <span class="bdg" style="background:transparent;color:var(--ay-neutral-700);border-color:var(--ay-border-strong)">Postgres</span>
+    <span class="bdg" style="background:var(--ay-ink);color:#fff">Pro</span>
+  </div>
+</div>
+
+<div class="row" style="align-items:flex-start;gap:40px">
+  <div class="sec" style="margin-bottom:0">
+    <div class="lbl">Tabs</div>
+    <div class="tabs">
+      <span class="tab tab-on">Sources <span class="cnt">6</span></span>
+      <span class="tab">Automations <span class="cnt">3</span></span>
+      <span class="tab">Activity</span>
+    </div>
+  </div>
+  <div class="sec" style="margin-bottom:0">
+    <div class="lbl">Switch</div>
+    <div class="row">
+      <span class="sw sw-on"><span class="knob" style="left:20px"></span></span>
+      <span class="sw sw-off"><span class="knob" style="left:2px"></span></span>
+    </div>
+  </div>
+  <div class="sec" style="margin-bottom:0">
+    <div class="lbl">Avatar</div>
+    <div class="row">
+      <span class="av av-agent">A</span>
+      <span class="av av-user">DL<span class="av-status" style="background:var(--ay-success-500)"></span></span>
+      <span class="av av-user">MR<span class="av-status" style="background:var(--ay-warning-500)"></span></span>
+    </div>
+  </div>
+</div>
+
+<div class="sec" style="margin-top:26px">
+  <div class="lbl">Card</div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:16px;font-weight:600;letter-spacing:-0.01em">Revenue</div>
+        <div style="font-size:13px;color:var(--ay-text-muted);margin-top:2px">Last 30 days</div>
+      </div>
+      <button class="btn btn-ghost btn-sm">Export</button>
+    </div>
+    <div style="font-family:var(--ay-font-mono);font-size:30px;font-weight:600;margin-top:14px">$1,284,920</div>
+    <div style="font-size:13px;color:var(--ay-success-700);margin-top:2px">▲ 12.4% vs last month</div>
+  </div>
+</div>
+
+</body></html>

@@ -1,0 +1,31 @@
+/* ============================================================
+   AYRON — EFFECTS: radii, borders, shadows, motion
+   Shadows are very subtle; borders do most of the separation work.
+   ============================================================ */
+:root {
+  /* Radii — base ~8px (Cursor-adjacent) */
+  --ay-radius-xs:   4px;
+  --ay-radius-sm:   6px;
+  --ay-radius-md:   8px;
+  --ay-radius-lg:   12px;
+  --ay-radius-xl:   16px;
+  --ay-radius-2xl:  22px;
+  --ay-radius-full: 9999px;
+
+  /* Border widths */
+  --ay-border-width: 1px;
+
+  /* Shadows — soft, low-contrast. Layering reads through borders. */
+  --ay-shadow-xs: 0 1px 2px rgba(16, 16, 20, 0.05);
+  --ay-shadow-sm: 0 1px 2px rgba(16, 16, 20, 0.04), 0 1px 3px rgba(16, 16, 20, 0.06);
+  --ay-shadow-md: 0 2px 4px rgba(16, 16, 20, 0.04), 0 6px 16px rgba(16, 16, 20, 0.08);
+  --ay-shadow-lg: 0 8px 16px rgba(16, 16, 20, 0.06), 0 16px 40px rgba(16, 16, 20, 0.12);
+  --ay-shadow-focus: 0 0 0 3px rgba(59, 110, 246, 0.30);
+
+  /* Motion */
+  --ay-ease:        cubic-bezier(0.4, 0, 0.2, 1);
+  --ay-ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ay-dur-fast:    120ms;
+  --ay-dur-normal:  180ms;
+  --ay-dur-slow:    280ms;
+}

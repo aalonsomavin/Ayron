@@ -1,3 +1,14 @@
+x-web-env: &web-env
+  DJANGO_SETTINGS_MODULE: config.settings.dev
+  DATABASE_URL: postgres://django:django@db:5432/django
+  SECRET_KEY: dev-secret-key-change-in-production
+  DEBUG: "1"
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  DEMO_DB_URL: ${DEMO_DB_URL:-}
+
 services:
   web:
     build:
@@ -8,13 +19,27 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.dev
-      - DATABASE_URL=postgres://django:django@db:5432/django
-      - SECRET_KEY=dev-secret-key-change-in-production
-      - DEBUG=1
+      <<: *web-env
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    volumes:
+      - ./backend:/app
+    environment:
+      <<: *web-env
+    command: celery -A config worker -l info
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   db:
     image: postgres:16-alpine
@@ -30,6 +55,14 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
   tailwind:
     build:
       context: .
@@ -37,6 +70,7 @@ services:
     volumes:
       - ./backend:/app/../backend
       - ./frontend/src:/app/src
+      - ./design_system:/design_system
       - ./backend/static/css:/output
     command: npm run dev:docker
 

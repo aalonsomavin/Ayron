@@ -1,40 +1,37 @@
 {% extends "base.html" %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Log in — Ayron{% endblock %}
 
 {% block content %}
-<div class="flex justify-center items-center min-h-[60vh]">
-  <div class="card w-full max-w-md bg-base-100 shadow-xl">
-    <div class="card-body">
-      <h2 class="card-title justify-center">Login</h2>
-      <form method="post" action="{% url 'accounts:login' %}" class="space-y-4">
+<div style="display:flex;justify-content:center;align-items:center;min-height:calc(100vh - 120px);padding:24px;">
+  <div class="ay-card" style="width:100%;max-width:400px;">
+    <div class="ay-card__header">
+      <div>
+        <div class="ay-card__title" style="font-size:18px;">Log in</div>
+        <div class="ay-card__subtitle">Sign in to continue to Ayron</div>
+      </div>
+    </div>
+    <div class="ay-card__body">
+      <form method="post" action="{% url 'accounts:login' %}" style="display:flex;flex-direction:column;gap:16px;">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
-        <div class="form-control">
-          <label class="label" for="id_username">
-            <span class="label-text">Username</span>
-          </label>
-          <input type="text" name="username" id="id_username" required autofocus
-                 class="input input-bordered w-full"
-                 placeholder="Enter username">
+        <div>
+          <label for="id_username" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;">Username</label>
+          {% include "components/input.html" with id="id_username" name="username" placeholder="Enter username" autocomplete="username" autofocus="autofocus" required="required" %}
         </div>
-        <div class="form-control">
-          <label class="label" for="id_password">
-            <span class="label-text">Password</span>
-          </label>
-          <input type="password" name="password" id="id_password" required
-                 class="input input-bordered w-full"
-                 placeholder="Enter password">
+        <div>
+          <label for="id_password" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;">Password</label>
+          {% include "components/input.html" with id="id_password" name="password" type="password" placeholder="Enter password" autocomplete="current-password" required="required" %}
         </div>
         {% if form.non_field_errors %}
-          <div class="alert alert-error">
+          <div class="ay-alert ay-alert--error">
             {% for error in form.non_field_errors %}
               <span>{{ error }}</span>
             {% endfor %}
           </div>
         {% endif %}
-        <div class="card-actions justify-end pt-2">
-          <button type="submit" class="btn btn-primary">Login</button>
+        <div style="display:flex;justify-content:flex-end;padding-top:4px;">
+          {% include "components/button.html" with variant="primary" type="submit" label="Log in" %}
         </div>
       </form>
     </div>

@@ -1,0 +1,24 @@
+/* ============================================================
+   AYRON — SPACING & LAYOUT
+   4px base grid.
+   ============================================================ */
+:root {
+  --ay-space-0:  0px;
+  --ay-space-1:  4px;
+  --ay-space-2:  8px;
+  --ay-space-3:  12px;
+  --ay-space-4:  16px;
+  --ay-space-5:  20px;
+  --ay-space-6:  24px;
+  --ay-space-8:  32px;
+  --ay-space-10: 40px;
+  --ay-space-12: 48px;
+  --ay-space-16: 64px;
+  --ay-space-20: 80px;
+  --ay-space-24: 96px;
+
+  /* Common layout widths */
+  --ay-container:    1200px;
+  --ay-sidebar:      256px;
+  --ay-content-max:  720px;
+}

@@ -1,0 +1,12 @@
+<button
+  type="{{ type|default:'button' }}"
+  class="ay-btn{% if size %} ay-btn--{{ size }}{% endif %}{% if variant %} ay-btn--{{ variant }}{% else %} ay-btn--primary{% endif %}{% if class %} {{ class }}{% endif %}"
+  {% if disabled %}disabled{% endif %}
+  {% if id %}id="{{ id }}"{% endif %}
+  {% if name %}name="{{ name }}"{% endif %}
+  {% if form_id %}form="{{ form_id }}"{% endif %}
+>
+  {% if left_icon %}{% include "components/icon.html" with name=left_icon size=16 %}{% endif %}
+  {{ label }}
+  {% if right_icon %}{% include "components/icon.html" with name=right_icon size=16 %}{% endif %}
+</button>

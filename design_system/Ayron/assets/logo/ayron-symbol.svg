@@ -1,0 +1,7 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ayron symbol">
+  <rect width="96" height="96" rx="22" fill="#131316"></rect>
+  
+  <path d="M30 68 L48 30 L66 68" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M38 54 L58 54" stroke="#ffffff" stroke-width="6" stroke-linecap="round"></path>
+  <circle cx="48" cy="30" r="5.5" fill="#131316" stroke="#ffffff" stroke-width="4"></circle>
+</svg>

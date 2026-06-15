@@ -1,0 +1,16 @@
+<div class="ay-input-wrap{% if disabled %} ay-input-wrap--disabled{% endif %}{% if class %} {{ class }}{% endif %}">
+  {% if leading %}{% include "components/icon.html" with name=leading size=16 %}{% endif %}
+  <input
+    type="{{ type|default:'text' }}"
+    class="ay-input"
+    {% if id %}id="{{ id }}"{% endif %}
+    {% if name %}name="{{ name }}"{% endif %}
+    {% if value %}value="{{ value }}"{% endif %}
+    {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+    {% if disabled %}disabled{% endif %}
+    {% if required %}required{% endif %}
+    {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+    {% if autofocus %}autofocus{% endif %}
+  />
+  {% if trailing %}{{ trailing }}{% endif %}
+</div>

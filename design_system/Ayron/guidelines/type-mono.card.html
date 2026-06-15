@@ -1,0 +1,15 @@
+<!-- @dsCard group="Type" viewport="700x200" subtitle="Geist Mono — metrics, SQL, code" name="Mono / data" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;padding:28px 32px;background:var(--ay-bg);font-family:var(--ay-font-sans);color:var(--ay-text)}
+.mono{font-family:var(--ay-font-mono);font-size:var(--ay-text-mono)}
+.block{background:var(--ay-surface-sunken);border:1px solid var(--ay-border);border-radius:var(--ay-radius-md);padding:14px 16px;color:var(--ay-text)}
+.kw{color:var(--ay-blue-600)}.num{color:var(--ay-text)}.mut{color:var(--ay-text-subtle)}</style>
+</head><body>
+<div style="display:flex;gap:28px;align-items:center;margin-bottom:16px">
+  <div><div style="font-size:32px;font-weight:600" class="mono">$1,284,920</div><div style="font-size:12px;color:var(--ay-text-muted)">Total revenue</div></div>
+  <div><div style="font-size:32px;font-weight:600" class="mono">12.4%</div><div style="font-size:12px;color:var(--ay-success-700)">▲ vs last month</div></div>
+  <div><div style="font-size:32px;font-weight:600" class="mono">48,210</div><div style="font-size:12px;color:var(--ay-text-muted)">Active users</div></div>
+</div>
+<div class="block mono"><span class="kw">SELECT</span> region, <span class="kw">SUM</span>(revenue) <span class="mut">--</span> <span class="mut">last 90 days</span><br><span class="kw">FROM</span> orders <span class="kw">GROUP BY</span> region <span class="kw">ORDER BY</span> 2 <span class="kw">DESC</span>;</div>
+</body></html>

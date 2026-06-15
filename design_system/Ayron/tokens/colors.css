@@ -1,0 +1,92 @@
+/* ============================================================
+   AYRON — COLORS  (light mode)
+   Monochrome ink primary (Cursor-adjacent) + neutral grays.
+   A single restrained blue is reserved for focus / selection /
+   data-viz primary. A small categorical palette powers charts.
+   ============================================================ */
+:root {
+  /* ---- Neutral scale (near-true gray, faint cool cast) ---- */
+  --ay-neutral-0:   #ffffff;
+  --ay-neutral-50:  #fafafa;
+  --ay-neutral-100: #f4f4f5;
+  --ay-neutral-150: #ededee;
+  --ay-neutral-200: #e6e6e8;
+  --ay-neutral-300: #d6d6da;
+  --ay-neutral-400: #b0b0b6;
+  --ay-neutral-500: #8a8a92;
+  --ay-neutral-600: #62626b;
+  --ay-neutral-700: #44444c;
+  --ay-neutral-800: #2a2a30;
+  --ay-neutral-900: #18181b;
+  --ay-neutral-950: #0a0a0b;
+
+  /* ---- Ink (the "accent" — primary actions are near-black) ---- */
+  --ay-ink:         #131316;
+  --ay-ink-hover:   #000000;
+  --ay-ink-soft:    #2a2a30;
+
+  /* ---- Brand blue (focus rings, selection, primary chart series) ---- */
+  --ay-blue-50:   #eef3ff;
+  --ay-blue-100:  #dde7ff;
+  --ay-blue-300:  #9db8fb;
+  --ay-blue-500:  #3b6ef6;
+  --ay-blue-600:  #2f5fe0;
+  --ay-blue-700:  #2348b0;
+
+  /* ---- Semantic ---- */
+  --ay-success-50:  #e9f7ef;
+  --ay-success-500: #16a34a;
+  --ay-success-700: #15803d;
+  --ay-warning-50:  #fdf3e7;
+  --ay-warning-500: #d97706;
+  --ay-warning-700: #b45309;
+  --ay-danger-50:   #fdecec;
+  --ay-danger-500:  #dc2626;
+  --ay-danger-700:  #b91c1c;
+  --ay-info-50:     #eef3ff;
+  --ay-info-500:    #2563eb;
+
+  /* ---- Data-viz categorical palette ---- */
+  --ay-chart-1: #3b6ef6; /* blue   */
+  --ay-chart-2: #16a34a; /* green  */
+  --ay-chart-3: #d97706; /* amber  */
+  --ay-chart-4: #8b5cf6; /* violet */
+  --ay-chart-5: #e1568f; /* pink   */
+  --ay-chart-6: #0d9aa8; /* teal   */
+  --ay-chart-7: #6b7280; /* gray   */
+  --ay-chart-8: #db5a3c; /* clay   */
+
+  /* ============================================================
+     SEMANTIC ALIASES — use these in product code, not raw scale.
+     ============================================================ */
+  /* Surfaces */
+  --ay-bg:            var(--ay-neutral-0);
+  --ay-bg-subtle:     var(--ay-neutral-50);
+  --ay-bg-muted:      var(--ay-neutral-100);
+  --ay-surface:       var(--ay-neutral-0);
+  --ay-surface-sunken:var(--ay-neutral-50);
+  --ay-surface-hover: var(--ay-neutral-100);
+  --ay-overlay:       rgba(10, 10, 11, 0.45);
+
+  /* Text */
+  --ay-text:          var(--ay-neutral-900);
+  --ay-text-muted:    var(--ay-neutral-600);
+  --ay-text-subtle:   var(--ay-neutral-500);
+  --ay-text-disabled: var(--ay-neutral-400);
+  --ay-text-inverse:  var(--ay-neutral-0);
+  --ay-text-link:     var(--ay-blue-600);
+
+  /* Borders */
+  --ay-border:        var(--ay-neutral-200);
+  --ay-border-strong: var(--ay-neutral-300);
+  --ay-border-subtle: var(--ay-neutral-150);
+
+  /* Interactive — primary = ink, accent = blue */
+  --ay-primary:        var(--ay-ink);
+  --ay-primary-hover:  var(--ay-ink-hover);
+  --ay-primary-text:   var(--ay-neutral-0);
+  --ay-accent:         var(--ay-blue-500);
+  --ay-accent-hover:   var(--ay-blue-600);
+  --ay-focus-ring:     var(--ay-blue-500);
+  --ay-selection-bg:   var(--ay-blue-50);
+}

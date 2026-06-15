@@ -1,0 +1,4 @@
+<span{% if id %} id="{{ id }}"{% endif %} class="ay-badge{% if tone %} ay-badge--{{ tone }}{% endif %}{% if class %} {{ class }}{% endif %}">
+  {% if dot %}<span class="ay-badge__dot"></span>{% endif %}
+  {{ label }}
+</span>

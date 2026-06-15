@@ -1,0 +1,127 @@
+import logging
+import time
+
+from celery import shared_task
+from openai import OpenAIError
+
+from apps.agent.events import persist_event
+from apps.agent.runner import create_agent
+from apps.agent.streaming import StreamEventHandler
+from apps.chat.models import AgentEvent, Conversation, Message
+
+logger = logging.getLogger(__name__)
+
+MAX_LLM_RETRIES = 3
+LLM_RETRY_MESSAGE = (
+    "The language model service returned a temporary error. Please try sending your message again."
+)
+
+
+def format_agent_error(exc: Exception) -> str:
+    if isinstance(exc, OpenAIError):
+        return LLM_RETRY_MESSAGE
+    return str(exc)
+
+
+def is_recoverable_agent_error(exc: Exception) -> bool:
+    return isinstance(exc, OpenAIError)
+
+
+def stream_agent_response(agent, agent_messages, handler) -> None:
+    for chunk in agent.stream(
+        {"messages": agent_messages},
+        stream_mode=["messages"],
+        version="v2",
+    ):
+        handler.handle_chunk(chunk)
+
+
+def build_agent_messages(conversation: Conversation, exclude_message_id: int) -> list[dict]:
+    messages = []
+    for message in conversation.messages.order_by("created_at"):
+        if message.id == exclude_message_id:
+            continue
+        if message.role == Message.Role.ASSISTANT and not message.content:
+            continue
+        role = "user" if message.role == Message.Role.USER else "assistant"
+        messages.append({"role": role, "content": message.content})
+    return messages
+
+
+@shared_task(bind=True)
+def run_agent_conversation(self, conversation_id, user_message_id, assistant_message_id):
+    conversation = Conversation.objects.get(id=conversation_id)
+    assistant_message = Message.objects.get(
+        id=assistant_message_id,
+        conversation=conversation,
+    )
+
+    handler = StreamEventHandler(
+        conversation=conversation,
+        message=assistant_message,
+        persist_fn=persist_event,
+    )
+
+    try:
+        agent = create_agent()
+        agent_messages = build_agent_messages(
+            conversation,
+            exclude_message_id=assistant_message.id,
+        )
+
+        for attempt in range(1, MAX_LLM_RETRIES + 1):
+            try:
+                stream_agent_response(agent, agent_messages, handler)
+                break
+            except OpenAIError:
+                can_retry = (
+                    attempt < MAX_LLM_RETRIES
+                    and not handler.get_content()
+                    and not handler.started_tool_calls
+                )
+                if not can_retry:
+                    raise
+                logger.warning(
+                    "Transient OpenAI error, retrying agent stream",
+                    extra={
+                        "conversation_id": str(conversation_id),
+                        "attempt": attempt,
+                        "task_id": self.request.id,
+                    },
+                )
+                time.sleep(min(2**attempt, 10))
+
+        assistant_message.content = handler.get_content()
+        assistant_message.save(update_fields=["content"])
+
+        persist_event(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.DONE,
+            payload={},
+            message=assistant_message,
+        )
+
+        conversation.status = Conversation.Status.ACTIVE
+        conversation.save(update_fields=["status", "updated_at"])
+    except Exception as exc:
+        logger.exception(
+            "Agent conversation failed",
+            extra={
+                "conversation_id": str(conversation_id),
+                "user_message_id": user_message_id,
+                "assistant_message_id": assistant_message_id,
+                "task_id": self.request.id,
+            },
+        )
+        persist_event(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.ERROR,
+            payload={
+                "message": format_agent_error(exc),
+                "recoverable": is_recoverable_agent_error(exc),
+            },
+            message=assistant_message,
+        )
+        conversation.status = Conversation.Status.FAILED
+        conversation.save(update_fields=["status", "updated_at"])
+        raise

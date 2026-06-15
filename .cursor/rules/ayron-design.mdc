@@ -1,0 +1,46 @@
+---
+description: Ayron design system — brand, tokens, components, and product UI kit. Use whenever building or styling any Ayron interface.
+globs: ["**/*.tsx", "**/*.jsx", "**/*.ts", "**/*.js", "**/*.css", "**/*.html"]
+alwaysApply: false
+---
+
+# Ayron Design System
+
+Ayron is an AI agent for data analytics (connect data sources, chat with an
+analytics agent, build dashboards, create automations). Aesthetic: **clean,
+technical, dev-tool** — light mode, near-monochrome ink palette, geometric
+grotesque type (Geist), generous whitespace, hairline borders, very soft shadows.
+
+Design system root: `design_system/Ayron/`. Project skill: `.cursor/skills/ayron-design/SKILL.md`.
+
+## How to use this system
+- **Link the tokens once:** import or `<link>` `design_system/Ayron/styles.css`
+  (it `@import`s every token + the Geist / Geist Mono webfonts). Reference
+  everything through the `--ay-*` CSS custom properties — never hard-code hexes.
+- **Read first:** `design_system/Ayron/readme.md` (full guide), `tokens/*.css` (exact token names),
+  `components/core/*` (Button, Input, Badge, Card, Tabs, Switch, Avatar — each has
+  `.jsx` + `.d.ts` + `.prompt.md`), `components/icons/Icon.jsx` (Lucide-based set),
+  and `ui_kits/ayron-app/` (interactive product kit: chat with artifact panel,
+  dashboard, sources, automations).
+- Compose the existing components; don't re-implement Button/Card/etc.
+
+## Non-negotiables
+- **Light mode only.** Surfaces white / faint gray (`--ay-bg`, `--ay-bg-subtle`).
+- **Ink primary:** primary actions are near-black (`--ay-primary`) with white text.
+- **One restrained blue** (`--ay-accent`, `#3b6ef6`) only for focus rings,
+  selection, links, and the primary chart series — never large fills.
+  Semantic colors only in status contexts; charts use `--ay-chart-1..8`.
+- **Type:** Geist for UI, Geist Mono for data/metrics/SQL/code. Display & headings
+  track tight (-0.02em), weight 600–700. Body 15px / 1.5.
+- **Borders do the separation work** (1px `--ay-border`); shadows are soft and only
+  for floating/clickable layers. Radii ~8px (`--ay-radius-md`); pills/avatars full.
+- **Motion:** quick & restrained (120–180ms, `--ay-ease`). No bounce/spring.
+- **Copy:** sentence case everywhere, plain and direct, lead with a verb. Address
+  the user as "you". **No emoji** in product UI. Numbers are concrete (metric +
+  delta + window), shown in mono.
+
+## States
+- Hover: surfaces step one neutral darker; primary buttons → pure black.
+- Focus: 3px blue ring (`--ay-shadow-focus`) — always visible.
+- Selected: faint blue tint (`--ay-selection-bg`).
+- Disabled: `--ay-text-disabled`, no shadow.

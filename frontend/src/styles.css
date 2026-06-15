@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "../../design_system/Ayron/styles.css";
 
 @tailwind base;
 @tailwind components;
@@ -6,6 +6,602 @@
 
 @layer base {
   html {
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--ay-font-sans);
+    color: var(--ay-text);
+    background: var(--ay-bg-subtle);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .ay-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 36px;
+    padding: 0 14px;
+    font-family: var(--ay-font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.005em;
+    border-radius: var(--ay-radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--ay-dur-fast) var(--ay-ease),
+      color var(--ay-dur-fast) var(--ay-ease),
+      box-shadow var(--ay-dur-fast) var(--ay-ease);
+  }
+
+  .ay-btn:disabled {
+    cursor: not-allowed;
+    background: var(--ay-neutral-200);
+    color: var(--ay-text-disabled);
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .ay-btn--sm {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 13px;
+    gap: 6px;
+    border-radius: var(--ay-radius-sm);
+  }
+
+  .ay-btn--lg {
+    height: 44px;
+    padding: 0 20px;
+    font-size: 15px;
+    gap: 8px;
+  }
+
+  .ay-btn--primary:not(:disabled) {
+    background: var(--ay-primary);
+    color: var(--ay-primary-text);
+  }
+
+  .ay-btn--primary:not(:disabled):hover {
+    background: var(--ay-primary-hover);
+  }
+
+  .ay-btn--secondary:not(:disabled) {
+    background: var(--ay-surface);
+    color: var(--ay-text);
+    border-color: var(--ay-border-strong);
+    box-shadow: var(--ay-shadow-xs);
+  }
+
+  .ay-btn--secondary:not(:disabled):hover {
+    background: var(--ay-surface-hover);
+  }
+
+  .ay-btn--ghost:not(:disabled) {
+    background: transparent;
+    color: var(--ay-text);
+  }
+
+  .ay-btn--ghost:not(:disabled):hover {
+    background: var(--ay-surface-hover);
+  }
+
+  .ay-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 12px;
+    background: var(--ay-surface);
+    border: 1px solid var(--ay-border-strong);
+    border-radius: var(--ay-radius-md);
+    transition: border-color var(--ay-dur-fast) var(--ay-ease),
+      box-shadow var(--ay-dur-fast) var(--ay-ease);
+  }
+
+  .ay-input-wrap:focus-within {
+    border-color: var(--ay-accent);
+    box-shadow: var(--ay-shadow-focus);
+  }
+
+  .ay-input-wrap--disabled {
+    background: var(--ay-bg-muted);
+    cursor: not-allowed;
+  }
+
+  .ay-input-wrap--disabled:focus-within {
+    border-color: var(--ay-border-strong);
+    box-shadow: none;
+  }
+
+  .ay-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: var(--ay-font-sans);
+    font-size: 14px;
+    color: var(--ay-text);
+    height: 100%;
+    padding: 0;
+  }
+
+  .ay-input:disabled {
+    cursor: not-allowed;
+    color: var(--ay-text-disabled);
+  }
+
+  .ay-input::placeholder {
+    color: var(--ay-text-subtle);
+  }
+
+  .ay-card {
+    background: var(--ay-surface);
+    border: 1px solid var(--ay-border);
+    border-radius: var(--ay-radius-lg);
+    overflow: hidden;
+  }
+
+  .ay-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 16px 0;
+  }
+
+  .ay-card__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ay-text);
+    letter-spacing: -0.01em;
+  }
+
+  .ay-card__subtitle {
+    font-size: 12px;
+    color: var(--ay-text-muted);
+    margin-top: 2px;
+  }
+
+  .ay-card__body {
+    padding: 12px 16px 16px;
+    font-size: 13px;
+    color: var(--ay-text-muted);
+    line-height: 1.45;
+  }
+
+  .ay-card--compact .ay-card__body {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .ay-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 8px;
+    font-family: var(--ay-font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    border-radius: var(--ay-radius-full);
+    white-space: nowrap;
+    background: var(--ay-neutral-100);
+    color: var(--ay-neutral-700);
+  }
+
+  .ay-badge--accent {
+    background: var(--ay-blue-50);
+    color: var(--ay-blue-700);
+  }
+
+  .ay-badge--success {
+    background: var(--ay-success-50);
+    color: var(--ay-success-700);
+  }
+
+  .ay-badge--warning {
+    background: var(--ay-warning-50);
+    color: var(--ay-warning-700);
+  }
+
+  .ay-badge--danger {
+    background: var(--ay-danger-50);
+    color: var(--ay-danger-700);
+  }
+
+  .ay-badge__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.85;
+  }
+
+  .ay-avatar {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--ay-radius-full);
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--ay-neutral-150);
+    color: var(--ay-neutral-700);
+    border: 1px solid var(--ay-border);
+    font-family: var(--ay-font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    user-select: none;
+  }
+
+  .ay-avatar--agent {
+    background: var(--ay-ink);
+    color: #fff;
+    font-size: 15px;
+  }
+
+  .ay-icon {
+    display: inline-flex;
+    flex: none;
+    color: currentColor;
+  }
+
+  .ay-shell {
+    display: flex;
+    min-height: calc(100vh - 60px);
+    background: var(--ay-bg-subtle);
+  }
+
+  .ay-sidebar {
+    width: 256px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    background: var(--ay-bg);
+    border-right: 1px solid var(--ay-border);
+    height: calc(100vh - 60px);
+  }
+
+  .ay-sidebar__section {
+    padding: 12px;
+    border-bottom: 1px solid var(--ay-border);
+  }
+
+  .ay-sidebar__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ay-text-subtle);
+    margin-bottom: 8px;
+  }
+
+  .ay-sidebar__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .ay-sidebar__link {
+    display: block;
+    padding: 8px 10px;
+    border-radius: var(--ay-radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ay-text-muted);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background var(--ay-dur-fast) var(--ay-ease);
+  }
+
+  .ay-sidebar__link:hover {
+    background: var(--ay-surface-hover);
+    color: var(--ay-text);
+  }
+
+  .ay-sidebar__link--active {
+    background: var(--ay-surface-hover);
+    color: var(--ay-text);
+    font-weight: 600;
+  }
+
+  .ay-chat {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--ay-bg);
+    height: calc(100vh - 60px);
+  }
+
+  .ay-chat__header {
+    flex: none;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--ay-border);
+    background: var(--ay-bg);
+  }
+
+  .ay-chat__title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ay-chat__subtitle {
+    font-size: 12.5px;
+    color: var(--ay-text-muted);
+  }
+
+  .ay-chat__messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 0;
+  }
+
+  .ay-chat__thread {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .ay-msg-user {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .ay-msg-user__bubble {
+    max-width: 78%;
+    background: var(--ay-ink);
+    color: #fff;
+    padding: 11px 15px;
+    border-radius: 16px 16px 4px 16px;
+    font-size: 14.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .ay-msg-agent {
+    display: flex;
+    gap: 12px;
+  }
+
+  .ay-msg-agent__body {
+    flex: 1;
+    min-width: 0;
+    font-size: 14.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+
+  .ay-msg-agent__tools {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .ay-composer {
+    flex: none;
+    padding: 0 0 22px;
+  }
+
+  .ay-composer__inner {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  .ay-composer__box {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: var(--ay-surface);
+    border: 1px solid var(--ay-border-strong);
+    border-radius: var(--ay-radius-lg);
+    padding: 10px 10px 10px 14px;
+    box-shadow: var(--ay-shadow-sm);
+  }
+
+  .ay-composer__box:focus-within {
+    border-color: var(--ay-accent);
+    box-shadow: var(--ay-shadow-focus);
+  }
+
+  .ay-composer__input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: var(--ay-font-sans);
+    font-size: 15px;
+    color: var(--ay-text);
+    min-height: 30px;
+    padding: 4px 0;
+    resize: none;
+  }
+
+  .ay-composer__input:disabled {
+    cursor: not-allowed;
+    color: var(--ay-text-disabled);
+  }
+
+  .ay-composer__hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--ay-text-subtle);
+    margin-top: 10px;
+  }
+
+  .ay-alert {
+    padding: 12px 14px;
+    border-radius: var(--ay-radius-md);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .ay-alert--error {
+    background: var(--ay-danger-50);
+    color: var(--ay-danger-700);
+    border: 1px solid #f3c2c2;
+  }
+
+  .ay-topbar {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 24px;
+    background: var(--ay-bg);
+    border-bottom: 1px solid var(--ay-border);
+  }
+
+  .ay-topbar__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--ay-text);
+  }
+
+  .ay-topbar__mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--ay-ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.04em;
+  }
+
+  .ay-topbar__name {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+
+  .ay-topbar__nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 16px;
+  }
+
+  .ay-topbar__nav a {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ay-text-muted);
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: var(--ay-radius-md);
+    transition: background var(--ay-dur-fast) var(--ay-ease);
+  }
+
+  .ay-topbar__nav a:hover {
+    background: var(--ay-surface-hover);
+    color: var(--ay-text);
+  }
+
+  .ay-topbar__end {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--ay-text-muted);
+  }
+
+  .ay-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  .ay-page__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .ay-page__title {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .ay-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ay-list__item a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--ay-border);
+    border-radius: var(--ay-radius-lg);
+    background: var(--ay-surface);
+    text-decoration: none;
+    color: var(--ay-text);
+    transition: border-color var(--ay-dur-fast) var(--ay-ease),
+      box-shadow var(--ay-dur-fast) var(--ay-ease);
+  }
+
+  .ay-list__item a:hover {
+    border-color: var(--ay-border-strong);
+    box-shadow: var(--ay-shadow-xs);
+  }
+
+  .ay-list__meta {
+    font-size: 13px;
+    color: var(--ay-text-subtle);
+    flex: none;
+  }
+
+  .ay-empty {
+    font-size: 14px;
+    color: var(--ay-text-muted);
+    line-height: 1.5;
   }
 }

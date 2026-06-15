@@ -1,0 +1,14 @@
+<div class="ay-card{% if compact %} ay-card--compact{% endif %}{% if class %} {{ class }}{% endif %}"{% if id %} id="{{ id }}"{% endif %}{% if data_tool_call_id %} data-tool-call-id="{{ data_tool_call_id }}"{% endif %}>
+  {% if title or subtitle %}
+    <div class="ay-card__header">
+      <div>
+        {% if title %}<div class="ay-card__title">{{ title }}</div>{% endif %}
+        {% if subtitle %}<div class="ay-card__subtitle">{{ subtitle }}</div>{% endif %}
+      </div>
+    </div>
+  {% endif %}
+  {% if body %}
+    <div class="ay-card__body">{{ body }}</div>
+  {% endif %}
+  {% if slot %}{{ slot }}{% endif %}
+</div>

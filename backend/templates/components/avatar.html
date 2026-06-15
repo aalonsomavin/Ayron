@@ -1,0 +1,3 @@
+<span class="ay-avatar{% if agent %} ay-avatar--agent{% endif %}{% if class %} {{ class }}{% endif %}">
+  {% if agent %}A{% else %}{{ initials|default:"?" }}{% endif %}
+</span>

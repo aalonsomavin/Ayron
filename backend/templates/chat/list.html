@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Chat — Ayron{% endblock %}
+
+{% block content %}
+<div class="ay-page">
+  <div class="ay-page__header">
+    <h1 class="ay-page__title">Conversations</h1>
+    <form method="post" action="{% url 'chat:new' %}">
+      {% csrf_token %}
+      {% include "components/button.html" with variant="primary" size="sm" type="submit" label="New chat" left_icon="plus" %}
+    </form>
+  </div>
+
+  {% if conversations %}
+    <ul class="ay-list">
+      {% for item in conversations %}
+        <li class="ay-list__item">
+          <a href="{% url 'chat:detail' conversation_id=item.id %}">
+            <span>{{ item.title|default:"Untitled" }}</span>
+            <span class="ay-list__meta">{{ item.updated_at|date:"M j, H:i" }}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="ay-empty">No conversations yet. Start a new chat to ask questions about the Chinook music store database.</p>
+  {% endif %}
+</div>
+{% endblock %}

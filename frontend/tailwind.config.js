@@ -8,12 +8,10 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["Geist", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["Geist Mono", "ui-monospace", "monospace"],
       },
     },
   },
-  plugins: [require("daisyui")],
-  daisyui: {
-    themes: ["lofi", "black"],
-  },
+  plugins: [],
 };
