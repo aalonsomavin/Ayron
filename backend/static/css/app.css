@@ -1271,7 +1271,12 @@ body {
 .ay-msg-agent__content > .ay-data-table + .ay-msg-agent__text,
   .ay-msg-agent__content > .ay-msg-agent__text + .ay-data-table,
   .ay-msg-agent__content > .ay-data-table + .ay-data-table,
-  .ay-msg-agent__content > .ay-msg-agent__text + .ay-msg-agent__text {
+  .ay-msg-agent__content > .ay-msg-agent__text + .ay-msg-agent__text,
+  .ay-msg-agent__content > .ay-chart + .ay-msg-agent__text,
+  .ay-msg-agent__content > .ay-msg-agent__text + .ay-chart,
+  .ay-msg-agent__content > .ay-chart + .ay-chart,
+  .ay-msg-agent__content > .ay-data-table + .ay-chart,
+  .ay-msg-agent__content > .ay-chart + .ay-data-table {
   margin-top: 16px;
 }
 
@@ -1366,6 +1371,39 @@ body {
 }
 
 .ay-data-table__caption {
+  padding: 10px 16px 14px;
+  font-size: 12px;
+  color: var(--ay-text-muted);
+  border-top: 1px solid var(--ay-border-subtle);
+}
+
+.ay-chart {
+  white-space: normal;
+}
+
+.ay-chart__card {
+  overflow: hidden;
+}
+
+.ay-chart__title {
+  padding: 14px 16px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ay-text);
+}
+
+.ay-chart__plot {
+  position: relative;
+  height: 200px;
+  padding: 12px 16px 8px;
+}
+
+.ay-chart__canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.ay-chart__caption {
   padding: 10px 16px 14px;
   font-size: 12px;
   color: var(--ay-text-muted);

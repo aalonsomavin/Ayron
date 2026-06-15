@@ -320,6 +320,80 @@ class TestConversationDetail:
         assert blocks[1]["table"]["columns"] == ["Artist"]
         assert blocks[2]["content"] == "Después"
 
+    def test_content_blocks_interleave_text_and_chart(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Antes "},
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.CHART,
+            payload={
+                "chart_type": "bar",
+                "title": "Por región",
+                "labels": ["EMEA"],
+                "series": [{"name": "Ingresos", "values": [100]}],
+                "value_format": "number",
+                "point_count": 1,
+            },
+            sequence_number=1,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Después"},
+            sequence_number=2,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert [block["type"] for block in blocks] == ["text", "chart", "text"]
+        assert blocks[1]["chart"]["labels"] == ["EMEA"]
+        assert blocks[1]["chart_id"].startswith("chart-")
+
+    def test_detail_renders_chart_events(self, client, user, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Aquí está el gráfico:",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.CHART,
+            payload={
+                "chart_type": "bar",
+                "title": "Ingresos por región",
+                "labels": ["EMEA", "APAC"],
+                "series": [{"name": "Ingresos", "values": [100, 200]}],
+                "value_format": "number",
+                "point_count": 2,
+            },
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:detail", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "ay-chart" in content
+        assert "Ingresos por región" in content
+        assert "chart.umd.min.js" in content
+        assert "ayron-chart.js" in content
+        assert 'type="application/json"' in content
+
     def test_detail_renders_blocks_in_event_order(self, client, user, conversation):
         assistant_message = Message.objects.create(
             conversation=conversation,

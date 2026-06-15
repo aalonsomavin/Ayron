@@ -3,12 +3,19 @@ from collections.abc import Callable
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
+from apps.agent.tools.chart import (
+    pop_chart_display,
+    prepare_chart_for_render,
+    validate_chart_input,
+)
 from apps.agent.tools.display import PLAN_TOOL_LABEL, get_tool_display
 from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
 
 PLAN_TOOLS = {"write_todos"}
-DISPLAY_TOOLS = {"show_data_table"}
+DISPLAY_TOOLS = {"show_data_table", "show_chart"}
+TABLE_DISPLAY_TOOL = "show_data_table"
+CHART_DISPLAY_TOOL = "show_chart"
 OUTPUT_SUMMARY_MAX_LEN = 500
 
 
@@ -63,6 +70,7 @@ class StreamEventHandler:
         self.started_tool_calls: set[str] = set()
         self.completed_tool_calls: set[str] = set()
         self.pending_table_displays: dict[str, dict] = {}
+        self.pending_chart_displays: dict[str, dict] = {}
         self.tool_call_inputs: dict[str, dict] = {}
 
     def get_content(self) -> str:
@@ -98,8 +106,7 @@ class StreamEventHandler:
             return
 
         tool_input = self._record_tool_input(tool_call_id, parse_tool_input(tool_chunk.get("args")))
-        if name == "show_data_table":
-            self._stage_table_display(tool_input, tool_call_id)
+        self._stage_display_tool(name, tool_input, tool_call_id)
 
         if tool_call_id in self.started_tool_calls:
             return
@@ -114,8 +121,7 @@ class StreamEventHandler:
             return
 
         tool_input = self._record_tool_input(tool_call_id, parse_tool_input(tool_call.get("args")))
-        if name == "show_data_table":
-            self._stage_table_display(tool_input, tool_call_id)
+        self._stage_display_tool(name, tool_input, tool_call_id)
 
         if tool_call_id in self.started_tool_calls:
             return
@@ -167,22 +173,35 @@ class StreamEventHandler:
         )
 
     def _handle_display_tool_result(self, name: str, output: str, tool_call_id: str | None) -> None:
-        result = self._resolve_table_display_result(output, tool_call_id)
-
-        if result.get("ok") and result.get("rows"):
-            self.persist(
-                conversation=self.conversation,
-                event_type=AgentEvent.EventType.TABLE,
-                payload=prepare_table_for_render(result),
-                message=self.message,
-            )
+        if name == TABLE_DISPLAY_TOOL:
+            result = self._resolve_table_display_result(output, tool_call_id)
+            if result.get("ok") and result.get("rows"):
+                self.persist(
+                    conversation=self.conversation,
+                    event_type=AgentEvent.EventType.TABLE,
+                    payload=prepare_table_for_render(result),
+                    message=self.message,
+                )
+            output_summary = "Tabla mostrada" if result.get("ok") else "Error al mostrar tabla"
+        elif name == CHART_DISPLAY_TOOL:
+            result = self._resolve_chart_display_result(output, tool_call_id)
+            if result.get("ok") and result.get("labels"):
+                self.persist(
+                    conversation=self.conversation,
+                    event_type=AgentEvent.EventType.CHART,
+                    payload=prepare_chart_for_render(result),
+                    message=self.message,
+                )
+            output_summary = "Gráfico mostrado" if result.get("ok") else "Error al mostrar gráfico"
+        else:
+            return
 
         self.persist(
             conversation=self.conversation,
             event_type=AgentEvent.EventType.TOOL_END,
             payload={
                 "tool": name,
-                "output_summary": "Tabla mostrada" if result.get("ok") else "Error al mostrar tabla",
+                "output_summary": output_summary,
                 "tool_call_id": tool_call_id,
                 **get_tool_display(name),
             },
@@ -221,6 +240,40 @@ class StreamEventHandler:
             return parsed
         return {"ok": False}
 
+    def _resolve_chart_display_result(
+        self,
+        output: str,
+        tool_call_id: str | None,
+    ) -> dict:
+        registry_result = pop_chart_display(tool_call_id)
+        if registry_result:
+            return registry_result
+
+        if tool_call_id and tool_call_id in self.pending_chart_displays:
+            return self.pending_chart_displays.pop(tool_call_id)
+
+        if tool_call_id and tool_call_id in self.tool_call_inputs:
+            try:
+                tool_input = self.tool_call_inputs.pop(tool_call_id)
+                return validate_chart_input(
+                    tool_input.get("chart_type", ""),
+                    tool_input.get("labels", []),
+                    tool_input.get("series", []),
+                    tool_input.get("title", ""),
+                    tool_input.get("caption", ""),
+                    tool_input.get("value_format", "number"),
+                )
+            except ValueError:
+                pass
+
+        try:
+            parsed = json.loads(output)
+        except json.JSONDecodeError:
+            return {"ok": False}
+        if parsed.get("ok") and parsed.get("labels"):
+            return parsed
+        return {"ok": False}
+
     def _emit_tool_start(self, name: str, tool_input: dict, tool_call_id: str) -> None:
         if name in PLAN_TOOLS:
             todos = tool_input.get("todos", tool_input)
@@ -248,8 +301,13 @@ class StreamEventHandler:
             },
             message=self.message,
         )
-        if name == "show_data_table":
+        self._stage_display_tool(name, tool_input, tool_call_id)
+
+    def _stage_display_tool(self, name: str, tool_input: dict, tool_call_id: str) -> None:
+        if name == TABLE_DISPLAY_TOOL:
             self._stage_table_display(tool_input, tool_call_id)
+        elif name == CHART_DISPLAY_TOOL:
+            self._stage_chart_display(tool_input, tool_call_id)
 
     def _stage_table_display(self, tool_input: dict, tool_call_id: str) -> None:
         try:
@@ -262,6 +320,20 @@ class StreamEventHandler:
         except ValueError:
             return
         self.pending_table_displays[tool_call_id] = payload
+
+    def _stage_chart_display(self, tool_input: dict, tool_call_id: str) -> None:
+        try:
+            payload = validate_chart_input(
+                tool_input.get("chart_type", ""),
+                tool_input.get("labels", []),
+                tool_input.get("series", []),
+                tool_input.get("title", ""),
+                tool_input.get("caption", ""),
+                tool_input.get("value_format", "number"),
+            )
+        except ValueError:
+            return
+        self.pending_chart_displays[tool_call_id] = payload
 
     def _emit_token(self, content: str) -> None:
         self.content_parts.append(content)

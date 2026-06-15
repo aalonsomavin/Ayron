@@ -90,6 +90,20 @@ de la base; no inventes cifras.
   `fill` (columna principal). Ej.: `["narrow", "fill", "narrow"]`.
 - Si hay más de 25 filas: agrega con SQL, muestra un top-N con `show_data_table` \
   y menciona el total en el caption o en una frase de contexto (sin re-listar filas).
+
+- Usa `show_chart` para visualizar datos agregados (máx. **25 etiquetas**, **8 series**):
+  - `bar`: comparar categorías (top artistas, ventas por país).
+  - `line`: tendencias temporales (ingresos por mes).
+  - `pie`: partes de un total con ≤8 segmentos; una sola serie.
+- Pasa valores numéricos crudos en `series[].values` (no strings formateados). \
+  Usa `value_format` (`number`, `currency`, `percent`) para el formateo en el gráfico.
+- Etiquetas en español legible. Título opcional cuando el gráfico se entiende solo.
+- Tras `show_chart`, **no repitas los datos** en texto: prohibido listar valores, \
+  series o porcentajes que ya aparecen en el gráfico.
+- Tu texto posterior solo interpreta (tendencias, contexto, limitaciones). \
+  Si el gráfico responde sola, **termina sin mensaje de texto**.
+- Tabla vs gráfico: tabla para datos exactos con varias columnas; gráfico para \
+  comparaciones, tendencias o proporciones.
 """
 
 

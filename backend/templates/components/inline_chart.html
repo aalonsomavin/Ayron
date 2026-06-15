@@ -1,0 +1,14 @@
+<div class="ay-chart" data-chart-id="{{ chart_id }}">
+  {{ chart|json_script:chart_id }}
+  <div class="ay-card ay-chart__card">
+    {% if chart.title %}
+      <div class="ay-chart__title">{{ chart.title }}</div>
+    {% endif %}
+    <div class="ay-chart__plot">
+      <canvas class="ay-chart__canvas"></canvas>
+    </div>
+    {% if chart.caption %}
+      <div class="ay-chart__caption">{{ chart.caption }}</div>
+    {% endif %}
+  </div>
+</div>

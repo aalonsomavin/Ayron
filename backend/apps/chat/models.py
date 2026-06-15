@@ -61,6 +61,7 @@ class AgentEvent(models.Model):
         TOOL_END = "tool_end", "Tool End"
         PLAN = "plan", "Plan"
         TABLE = "table", "Table"
+        CHART = "chart", "Chart"
         ERROR = "error", "Error"
         DONE = "done", "Done"
 

@@ -7,6 +7,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.agent.events import get_redis_client
 from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_display
+from apps.agent.tools.chart import prepare_chart_for_render
 from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
@@ -71,6 +72,7 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
         event_type__in=(
             AgentEvent.EventType.TOKEN,
             AgentEvent.EventType.TABLE,
+            AgentEvent.EventType.CHART,
         ),
     ).order_by("sequence_number")
 
@@ -84,11 +86,20 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
                 blocks[-1]["content"] += chunk
             else:
                 blocks.append({"type": "text", "content": chunk})
-        else:
+        elif event.event_type == AgentEvent.EventType.TABLE:
             blocks.append(
                 {
                     "type": "table",
                     "table": prepare_table_for_render(event.payload),
+                }
+            )
+        else:
+            chart = prepare_chart_for_render(event.payload)
+            blocks.append(
+                {
+                    "type": "chart",
+                    "chart": chart,
+                    "chart_id": f"chart-{message.id}-{len(blocks)}",
                 }
             )
 

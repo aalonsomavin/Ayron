@@ -67,6 +67,8 @@ def build_trace_summary(items: list[dict]) -> str:
         parts.append(f"buscó datos {sql_count} {'vez' if sql_count == 1 else ' veces'}")
     if table_count := counts.get("show_data_table"):
         parts.append(f"mostró {table_count} {'tabla' if table_count == 1 else ' tablas'}")
+    if chart_count := counts.get("show_chart"):
+        parts.append(f"mostró {chart_count} {'gráfico' if chart_count == 1 else ' gráficos'}")
     if counts.get("plan") or counts.get("write_todos"):
         parts.append("planificó pasos")
 

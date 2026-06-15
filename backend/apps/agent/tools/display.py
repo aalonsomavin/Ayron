@@ -43,11 +43,26 @@ def _table_subtitle(tool_input: ToolInput) -> str:
     return ""
 
 
+def _chart_subtitle(tool_input: ToolInput) -> str:
+    if not tool_input:
+        return ""
+    chart_type = str(tool_input.get("chart_type", "")).strip().lower()
+    labels = tool_input.get("labels")
+    if not chart_type or not isinstance(labels, list):
+        return ""
+    count = len(labels)
+    type_labels = {"bar": "Barras", "line": "Línea", "pie": "Torta"}
+    type_label = type_labels.get(chart_type, chart_type)
+    point_word = "punto" if count == 1 else "puntos"
+    return f"{type_label} · {count} {point_word}"
+
+
 TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "list_tables": ("Listar tablas", lambda _: "Base Chinook"),
     "describe_table": ("Describir tabla", _sql_table_subtitle),
     "run_sql_query": ("Buscando datos", _sql_query_subtitle),
     "show_data_table": ("Mostrar tabla", _table_subtitle),
+    "show_chart": ("Mostrar gráfico", _chart_subtitle),
     "write_todos": ("Planificar", None),
 }
 

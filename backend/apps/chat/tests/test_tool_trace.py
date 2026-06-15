@@ -47,6 +47,13 @@ class TestToolTrace:
         assert trace["items"][0]["label"] == "Buscando datos"
         assert trace["items"][1]["tool"] == "show_data_table"
 
+    def test_build_trace_summary_includes_chart(self):
+        items = [
+            {"label": "Buscando datos", "tool": "run_sql_query"},
+            {"label": "Mostrar gráfico", "tool": "show_chart"},
+        ]
+        assert build_trace_summary(items) == "Buscó datos 1 vez, mostró 1 gráfico"
+
     def test_tool_trace_returns_none_without_events(self, conversation):
         assistant_message = Message.objects.create(
             conversation=conversation,

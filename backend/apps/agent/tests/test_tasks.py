@@ -516,3 +516,75 @@ class TestStreamEventHandler:
             item for item in emitted if item["event_type"] == AgentEvent.EventType.TABLE
         )
         assert table_event["payload"]["rows"] == [["AC/DC"]]
+
+    def test_show_chart_emits_chart_event(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_chart",
+                                "name": "show_chart",
+                                "args": json.dumps(
+                                    {
+                                        "chart_type": "bar",
+                                        "labels": ["EMEA", "APAC"],
+                                        "series": [
+                                            {"name": "Ingresos", "values": [100, 200]}
+                                        ],
+                                    }
+                                ),
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=json.dumps(
+                            {
+                                "ok": True,
+                                "displayed_to_user": True,
+                                "point_count": 2,
+                            }
+                        ),
+                        name="show_chart",
+                        tool_call_id="call_chart",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        chart_event = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.CHART
+        )
+        tool_end = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.TOOL_END
+        )
+        assert chart_event["payload"]["labels"] == ["EMEA", "APAC"]
+        assert chart_event["payload"]["datasets"][0]["data"] == [100.0, 200.0]
+        assert tool_end["payload"]["tool"] == "show_chart"
+        assert tool_end["payload"]["output_summary"] == "Gráfico mostrado"
