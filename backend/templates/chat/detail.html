@@ -28,57 +28,59 @@
   </aside>
 
   <section class="ay-chat">
-    <header class="ay-chat__header">
-      <div style="min-width:0;">
-        <div class="ay-chat__title">{{ conversation.title|default:"New conversation" }}</div>
-        <div class="ay-chat__subtitle">Ask Ayron anything about the Chinook music store</div>
-      </div>
-      <div style="margin-left:auto;">
-        {% if conversation.status == "processing" %}
-          {% include "components/badge.html" with id="chat-status" label=conversation.status tone="warning" dot=True %}
-        {% elif conversation.status == "failed" %}
-          {% include "components/badge.html" with id="chat-status" label=conversation.status tone="danger" %}
-        {% else %}
-          {% include "components/badge.html" with id="chat-status" label=conversation.status tone="success" %}
-        {% endif %}
-      </div>
-    </header>
-
     <div class="ay-chat__viewport">
       <div id="chat-messages" class="ay-chat__messages">
       <div class="ay-chat__thread">
-        {% for message in chat_messages %}
-          {% if message.role == "user" and message.content %}
-              <div class="ay-msg-user" data-message-id="{{ message.id }}">
-                <div class="ay-msg-user__bubble">{{ message.content }}</div>
+        {% for turn in chat_turns %}
+          <div class="ay-chat__turn{% if forloop.last %} ay-chat__turn--active{% endif %}">
+            <div class="ay-msg-user" data-message-id="{{ turn.user.id }}">
+              <div class="ay-msg-user__bubble">{{ turn.user.content }}</div>
+            </div>
+            <div class="ay-msg-user ay-msg-user--pin" hidden aria-hidden="true">
+              <div class="ay-msg-user__pin-inner">
+                {% include "components/avatar.html" with initials=user_initials class="ay-msg-user__pin-avatar" %}
+                <button type="button" class="ay-msg-user__pin-jump">
+                  <span class="ay-msg-user__bubble"></span>
+                </button>
+                <button type="button" class="ay-msg-user__pin-retry" aria-label="Reintentar">
+                  {% include "components/icon.html" with name="refresh" size=16 %}
+                </button>
               </div>
-          {% elif message.role == "assistant" %}
-            {% if message.content_blocks or message.tool_trace %}
-              <div class="ay-msg-agent" data-message-id="{{ message.id }}">
-                {% include "components/agent_avatar.html" %}
-                <div class="ay-msg-agent__body">
-                  {% if message.content_blocks %}
-                    <div class="ay-msg-agent__content">
-                      {% for block in message.content_blocks %}
-                        {% if block.type == "text" %}
-                          <div class="ay-msg-agent__text ay-markdown">{{ block.content }}</div>
-                        {% elif block.type == "table" %}
-                          {% include "components/data_table.html" with table=block.table %}
-                        {% elif block.type == "chart" %}
-                          {% include "components/inline_chart.html" with chart=block.chart chart_id=block.chart_id %}
-                        {% endif %}
-                      {% endfor %}
-                    </div>
-                  {% endif %}
-                  {% if message.tool_trace %}
-                    {% include "components/tool_trace.html" with trace=message.tool_trace %}
-                  {% endif %}
+            </div>
+            {% if turn.assistant %}
+              {% if turn.assistant.content_blocks or turn.assistant.tool_trace %}
+                <div class="ay-msg-agent" data-message-id="{{ turn.assistant.id }}">
+                  {% include "components/agent_avatar.html" %}
+                  <div class="ay-msg-agent__body">
+                    {% if turn.assistant.content_blocks %}
+                      <div class="ay-msg-agent__content">
+                        {% for block in turn.assistant.content_blocks %}
+                          {% if block.type == "text" %}
+                            <div class="ay-msg-agent__text ay-markdown">{{ block.content }}</div>
+                          {% elif block.type == "table" %}
+                            {% include "components/data_table.html" with table=block.table %}
+                          {% elif block.type == "chart" %}
+                            {% include "components/inline_chart.html" with chart=block.chart chart_id=block.chart_id %}
+                          {% endif %}
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    {% if turn.assistant.tool_trace %}
+                      {% include "components/tool_trace.html" with trace=turn.assistant.tool_trace %}
+                    {% endif %}
+                  </div>
                 </div>
-              </div>
+              {% endif %}
             {% endif %}
-          {% endif %}
+            {% if forloop.last %}
+              <div id="agent-stream"></div>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="ay-chat__turn ay-chat__turn--active">
+            <div id="agent-stream"></div>
+          </div>
         {% endfor %}
-        <div id="agent-stream"></div>
       </div>
       </div>
       <button type="button" id="chat-scroll-bottom" class="ay-chat__scroll-btn" aria-label="Scroll to bottom" aria-hidden="true">
@@ -142,6 +144,7 @@
   const SCROLL_THRESHOLD = 48;
 
   const AGENT_AVATAR_HTML = '<div class="ay-agent-avatar ay-agent-avatar--active"><canvas class="ay-agent-avatar__canvas" aria-hidden="true"></canvas></div>';
+  const USER_AVATAR_HTML = '<span class="ay-avatar ay-msg-user__pin-avatar">{{ user_initials|escapejs }}</span>';
 
   const statusEl = document.getElementById("chat-status");
   const inputEl = document.getElementById("chat-input");
@@ -149,7 +152,7 @@
   const messagesEl = document.getElementById("chat-messages");
   const scrollBtnEl = document.getElementById("chat-scroll-bottom");
   const agentStreamEl = document.getElementById("agent-stream");
-  const chatThreadEl = agentStreamEl.parentElement;
+  const chatThreadEl = agentStreamEl.closest(".ay-chat__thread");
   const activeMessageId = {{ active_message_id|default:"null" }};
   const TOOL_LABELS = {{ tool_labels_json|safe }};
 
@@ -172,13 +175,18 @@
     stickToBottom = nearBottom;
     scrollBtnEl.classList.toggle("is-visible", !nearBottom);
     scrollBtnEl.setAttribute("aria-hidden", nearBottom ? "true" : "false");
+    schedulePinnedUserMessages();
   }
 
-  function scrollToBottom(force) {
+  function scrollToBottom(force, smooth) {
     if (!messagesEl) return;
     if (!force && !stickToBottom) return;
     requestAnimationFrame(function () {
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (smooth) {
+        messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
+      } else {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
       if (force) {
         stickToBottom = true;
         if (scrollBtnEl) {
@@ -256,7 +264,7 @@
     }
     removeCaret();
     isStreaming = false;
-    chatThreadEl.insertBefore(streamContainer, agentStreamEl);
+    agentStreamEl.parentElement.insertBefore(streamContainer, agentStreamEl);
     if (window.AyronChart) window.AyronChart.mountAll(streamContainer);
     streamContainer = null;
     currentTextEl = null;
@@ -630,6 +638,140 @@
       });
   }
 
+  function beginNewTurn(userRow) {
+    chatThreadEl.querySelectorAll(".ay-chat__turn--active").forEach(function (turn) {
+      turn.classList.remove("ay-chat__turn--active");
+    });
+
+    const currentTurn = agentStreamEl.closest(".ay-chat__turn");
+    const hasUser = currentTurn && currentTurn.querySelector(".ay-msg-user");
+
+    if (currentTurn && !hasUser) {
+      currentTurn.classList.add("ay-chat__turn--active");
+      currentTurn.insertBefore(userRow, agentStreamEl);
+      return currentTurn;
+    }
+
+    const turn = document.createElement("div");
+    turn.className = "ay-chat__turn ay-chat__turn--active";
+    turn.appendChild(userRow);
+    turn.appendChild(agentStreamEl);
+    chatThreadEl.appendChild(turn);
+    return turn;
+  }
+
+  let pinnedUserRaf = 0;
+
+  function getPinSourceUser(pinEl) {
+    const userEl = pinEl.previousElementSibling;
+    return userEl && userEl.classList.contains("ay-msg-user") && !userEl.classList.contains("ay-msg-user--pin")
+      ? userEl
+      : null;
+  }
+
+  function getUserMessageText(userEl) {
+    const bubble = userEl && userEl.querySelector(".ay-msg-user__bubble");
+    return bubble ? bubble.textContent : "";
+  }
+
+  function scrollToUserMessage(userEl) {
+    if (!messagesEl || !userEl) return;
+    stickToBottom = false;
+    const targetScroll = messagesEl.scrollTop + userEl.getBoundingClientRect().top - messagesEl.getBoundingClientRect().top - 12;
+    messagesEl.scrollTo({ top: targetScroll, behavior: "smooth" });
+    updateScrollAffordance();
+  }
+
+  function retryUserMessage(userEl) {
+    if (!inputEl || !userEl) return;
+    inputEl.value = getUserMessageText(userEl);
+    inputEl.focus();
+  }
+
+  function getUserPin(userEl) {
+    const pin = userEl.nextElementSibling;
+    return pin && pin.classList.contains("ay-msg-user--pin") ? pin : null;
+  }
+
+  function updateUserMessageTruncation(userEl) {
+    const bubble = userEl.querySelector(".ay-msg-user__bubble");
+    if (!bubble) return;
+    userEl.classList.remove("is-long");
+    const styles = getComputedStyle(bubble);
+    const lineHeight = parseFloat(styles.lineHeight);
+    if (!lineHeight) return;
+    const paddingTop = parseFloat(styles.paddingTop);
+    const paddingBottom = parseFloat(styles.paddingBottom);
+    const contentHeight = bubble.scrollHeight - paddingTop - paddingBottom;
+    userEl.classList.toggle("is-long", contentHeight > lineHeight * 2 + 1);
+  }
+
+  function updateAllUserMessageTruncations() {
+    chatThreadEl.querySelectorAll(".ay-msg-user--pin").forEach(updateUserMessageTruncation);
+  }
+
+  function updatePinnedUserMessages() {
+    if (!messagesEl) return;
+    const viewportTop = messagesEl.getBoundingClientRect().top;
+    const userMsgs = chatThreadEl.querySelectorAll(".ay-msg-user:not(.ay-msg-user--pin)");
+    let active = null;
+
+    userMsgs.forEach(function (userEl) {
+      const pin = getUserPin(userEl);
+      if (!pin) return;
+      if (userEl.getBoundingClientRect().bottom <= viewportTop + 1) {
+        active = { userEl: userEl, pin: pin };
+      }
+    });
+
+    userMsgs.forEach(function (userEl) {
+      const pin = getUserPin(userEl);
+      if (!pin) return;
+      const isActive = active && active.pin === pin;
+      pin.classList.toggle("is-visible", isActive);
+      pin.hidden = !isActive;
+      pin.setAttribute("aria-hidden", isActive ? "false" : "true");
+    });
+
+    if (active) {
+      const sourceBubble = active.userEl.querySelector(".ay-msg-user__bubble");
+      const pinBubble = active.pin.querySelector(".ay-msg-user__pin-jump .ay-msg-user__bubble");
+      if (sourceBubble && pinBubble) {
+        pinBubble.textContent = sourceBubble.textContent;
+      }
+      updateUserMessageTruncation(active.pin);
+    }
+  }
+
+  function schedulePinnedUserMessages() {
+    if (pinnedUserRaf) return;
+    pinnedUserRaf = requestAnimationFrame(function () {
+      pinnedUserRaf = 0;
+      updatePinnedUserMessages();
+    });
+  }
+
+  function initStickyUserMessages() {
+    updatePinnedUserMessages();
+  }
+
+  chatThreadEl.addEventListener("click", function (e) {
+    const retryBtn = e.target.closest(".ay-msg-user__pin-retry");
+    if (retryBtn) {
+      const pin = retryBtn.closest(".ay-msg-user--pin");
+      const userEl = pin && getPinSourceUser(pin);
+      if (userEl) retryUserMessage(userEl);
+      return;
+    }
+
+    const jumpBtn = e.target.closest(".ay-msg-user__pin-jump");
+    if (jumpBtn) {
+      const pin = jumpBtn.closest(".ay-msg-user--pin");
+      const userEl = pin && getPinSourceUser(pin);
+      if (userEl) scrollToUserMessage(userEl);
+    }
+  });
+
   document.getElementById("chat-composer").addEventListener("htmx:afterRequest", function (e) {
     if (!e.detail.successful) return;
     const content = inputEl.value.trim();
@@ -639,7 +781,32 @@
     row.className = "ay-msg-user";
     row.innerHTML = '<div class="ay-msg-user__bubble"></div>';
     row.querySelector(".ay-msg-user__bubble").textContent = content;
-    chatThreadEl.insertBefore(row, agentStreamEl);
+
+    const pin = document.createElement("div");
+    pin.className = "ay-msg-user ay-msg-user--pin";
+    pin.hidden = true;
+    pin.setAttribute("aria-hidden", "true");
+    pin.innerHTML =
+      '<div class="ay-msg-user__pin-inner">' +
+        USER_AVATAR_HTML +
+        '<button type="button" class="ay-msg-user__pin-jump">' +
+          '<span class="ay-msg-user__bubble"></span>' +
+        '</button>' +
+        '<button type="button" class="ay-msg-user__pin-retry" aria-label="Reintentar">' +
+          '<span class="ay-icon" aria-hidden="true">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>' +
+              '<path d="M21 3v5h-5"/>' +
+              '<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>' +
+              '<path d="M8 16H3v5"/>' +
+            '</svg>' +
+          '</span>' +
+        '</button>' +
+      '</div>';
+
+    const turn = beginNewTurn(row);
+    row.insertAdjacentElement("afterend", pin);
+    schedulePinnedUserMessages();
 
     inputEl.value = "";
     finalizeStreamBubble();
@@ -654,7 +821,7 @@
 
   if (scrollBtnEl) {
     scrollBtnEl.addEventListener("click", function () {
-      scrollToBottom(true);
+      scrollToBottom(true, true);
     });
   }
 
@@ -662,7 +829,13 @@
     messagesEl.addEventListener("scroll", updateScrollAffordance, { passive: true });
   }
 
+  window.addEventListener("resize", function () {
+    updateAllUserMessageTruncations();
+    schedulePinnedUserMessages();
+  }, { passive: true });
+
   scrollToBottom(true);
+  initStickyUserMessages();
   initToolTraces(chatThreadEl);
   if (window.AyronMarkdown) window.AyronMarkdown.mountAll(chatThreadEl);
   window.AyronAgentAvatar.mountAll(chatThreadEl);

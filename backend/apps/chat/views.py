@@ -66,6 +66,16 @@ def _sidebar_conversations(request):
     return Conversation.objects.filter(user=request.user).order_by("-updated_at")[:50]
 
 
+def _user_initials(user) -> str:
+    name = user.get_full_name().strip() or user.get_username()
+    parts = [part for part in name.split() if part]
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[1][0]).upper()
+    if parts:
+        return parts[0][:2].upper()
+    return "?"
+
+
 def _content_blocks_for_message(message: Message) -> list[dict]:
     events = AgentEvent.objects.filter(
         message=message,
@@ -120,6 +130,24 @@ def _messages_with_content_blocks(conversation: Conversation) -> list[Message]:
     return messages
 
 
+def _chat_turns(messages: list[Message]) -> list[dict]:
+    turns: list[dict] = []
+    current: dict | None = None
+
+    for message in messages:
+        if message.role == Message.Role.USER and message.content:
+            if current is not None:
+                turns.append(current)
+            current = {"user": message, "assistant": None}
+        elif message.role == Message.Role.ASSISTANT and current is not None:
+            current["assistant"] = message
+
+    if current is not None:
+        turns.append(current)
+
+    return turns
+
+
 @require_GET
 def conversation_list(request):
     conversations = _sidebar_conversations(request)
@@ -142,10 +170,12 @@ def conversation_detail(request, conversation_id):
         {
             "conversation": conversation,
             "chat_messages": chat_messages,
+            "chat_turns": _chat_turns(chat_messages),
             "conversations": _sidebar_conversations(request),
             "last_sequence": _conversation_last_sequence(conversation),
             "active_message_id": _active_message_id(conversation),
             "tool_labels_json": json.dumps(TOOL_LABELS),
+            "user_initials": _user_initials(request.user),
         },
     )
 
