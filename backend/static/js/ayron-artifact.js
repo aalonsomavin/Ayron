@@ -83,7 +83,7 @@
     mainEl: null,
     openFile: null,
     expanded: false,
-    panelWidth: 520,
+    panelWidth: 680,
 
     init: function (options) {
       this.panelEl = options.panelEl;
@@ -202,6 +202,9 @@
         .then(function (html) {
           if (self.openFile && self.openFile.file_id === file.file_id) {
             body.innerHTML = html;
+            if (window.AyronDocPreview) {
+              window.AyronDocPreview.mount(body);
+            }
           }
         })
         .catch(function () {

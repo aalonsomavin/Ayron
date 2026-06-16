@@ -1,6 +1,7 @@
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 
+from apps.agent.tools.document import preview_html_for_file
 from apps.files.models import File
 from apps.files.services import open_file_stream
 
@@ -23,6 +24,7 @@ def file_download(request, file_id):
 
 def file_preview(request, file_id):
     file_obj = _get_user_file(request, file_id)
-    if not file_obj.preview_html:
+    preview_html = preview_html_for_file(file_obj.content_json, file_obj.preview_html)
+    if not preview_html:
         raise Http404("Preview not available")
-    return HttpResponse(file_obj.preview_html, content_type="text/html; charset=utf-8")
+    return HttpResponse(preview_html, content_type="text/html; charset=utf-8")

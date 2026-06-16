@@ -1,13 +1,31 @@
 import json
 import re
+from datetime import date
 from io import BytesIO
 from typing import Annotated
 
 from docx import Document
-from docx.shared import Pt
 from langchain_core.tools import InjectedToolCallId, tool
 
 from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.tools.document_style import (
+    CALLOUT_VARIANTS,
+    PAGE_HEIGHT_IN,
+    PAGE_MARGIN_IN,
+    PAGE_WIDTH_IN,
+    add_body_paragraph,
+    add_bullet_item,
+    add_callout,
+    add_document_header,
+    add_section_heading,
+    add_separator,
+    add_styled_table,
+    configure_document_footer,
+    configure_document_header,
+    configure_document_styles,
+    footer_attribution_text,
+    preview_px,
+)
 from apps.files.services import (
     get_file_for_conversation,
     save_generated_file,
@@ -23,6 +41,8 @@ MAX_SECTIONS = 20
 MAX_TABLE_ROWS = 50
 MAX_PARAGRAPHS_PER_SECTION = 20
 MAX_BULLETS_PER_SECTION = 30
+MAX_BLOCKS_PER_SECTION = 40
+MAX_CALLOUTS_PER_SECTION = 8
 
 AGENT_INSTRUCTION_AFTER_DOCUMENT = (
     "El documento ya está visible en el chat del usuario. "
@@ -46,6 +66,100 @@ def _sanitize_filename(name: str, fallback: str) -> str:
     return cleaned[:200]
 
 
+def _normalize_table(table: dict) -> dict:
+    if not isinstance(table, dict):
+        raise ValueError("table must be an object")
+    headers = table.get("headers") or []
+    rows = table.get("rows") or []
+    if not headers:
+        raise ValueError("table requires headers")
+    if len(rows) > MAX_TABLE_ROWS:
+        raise ValueError(f"table rows exceeds maximum of {MAX_TABLE_ROWS}")
+    return {
+        "headers": [str(h) for h in headers],
+        "rows": [[str(cell) for cell in row] for row in rows],
+    }
+
+
+def _normalize_blocks(section: dict) -> list[dict]:
+    raw_blocks = section.get("blocks")
+    if raw_blocks is not None:
+        if not isinstance(raw_blocks, list):
+            raise ValueError("blocks must be a list")
+        if len(raw_blocks) > MAX_BLOCKS_PER_SECTION:
+            raise ValueError(f"blocks exceeds maximum of {MAX_BLOCKS_PER_SECTION}")
+        normalized = []
+        callout_count = 0
+        for block in raw_blocks:
+            if not isinstance(block, dict):
+                raise ValueError("each block must be an object")
+            block_type = block.get("type")
+            if block_type == "paragraph":
+                text = str(block.get("text", "")).strip()
+                if text:
+                    normalized.append({"type": "paragraph", "text": text})
+            elif block_type == "bullets":
+                items = block.get("items") or []
+                if not isinstance(items, list):
+                    raise ValueError("bullets items must be a list")
+                if len(items) > MAX_BULLETS_PER_SECTION:
+                    raise ValueError(f"bullets exceeds maximum of {MAX_BULLETS_PER_SECTION}")
+                clean_items = [str(item) for item in items if str(item).strip()]
+                if clean_items:
+                    normalized.append({"type": "bullets", "items": clean_items})
+            elif block_type == "table":
+                normalized.append({"type": "table", **_normalize_table(block)})
+            elif block_type == "separator":
+                normalized.append({"type": "separator"})
+            elif block_type == "callout":
+                callout_count += 1
+                if callout_count > MAX_CALLOUTS_PER_SECTION:
+                    raise ValueError(f"callouts exceeds maximum of {MAX_CALLOUTS_PER_SECTION}")
+                variant = str(block.get("variant", "info")).strip().lower()
+                if variant not in CALLOUT_VARIANTS:
+                    raise ValueError(f"callout variant must be one of: {', '.join(CALLOUT_VARIANTS)}")
+                text = str(block.get("text", "")).strip()
+                if not text:
+                    raise ValueError("callout requires text")
+                normalized.append(
+                    {
+                        "type": "callout",
+                        "variant": variant,
+                        "title": str(block.get("title", "")).strip(),
+                        "text": text,
+                    }
+                )
+            else:
+                raise ValueError(
+                    "block type must be paragraph, bullets, table, separator, or callout"
+                )
+        return normalized
+
+    blocks = []
+    paragraphs = section.get("paragraphs") or []
+    bullets = section.get("bullets") or []
+    table = section.get("table")
+
+    if not isinstance(paragraphs, list):
+        raise ValueError("paragraphs must be a list")
+    if not isinstance(bullets, list):
+        raise ValueError("bullets must be a list")
+    if len(paragraphs) > MAX_PARAGRAPHS_PER_SECTION:
+        raise ValueError(f"paragraphs exceeds maximum of {MAX_PARAGRAPHS_PER_SECTION}")
+    if len(bullets) > MAX_BULLETS_PER_SECTION:
+        raise ValueError(f"bullets exceeds maximum of {MAX_BULLETS_PER_SECTION}")
+
+    for paragraph in paragraphs:
+        text = str(paragraph).strip()
+        if text:
+            blocks.append({"type": "paragraph", "text": text})
+    if bullets:
+        blocks.append({"type": "bullets", "items": [str(b) for b in bullets]})
+    if table is not None:
+        blocks.append({"type": "table", **_normalize_table(table)})
+    return blocks
+
+
 def validate_content_json(
     title: str,
     subtitle: str,
@@ -65,42 +179,8 @@ def validate_content_json(
         heading = str(section.get("heading", "")).strip()
         if not heading:
             raise ValueError("each section requires a heading")
-        paragraphs = section.get("paragraphs") or []
-        bullets = section.get("bullets") or []
-        table = section.get("table")
-
-        if not isinstance(paragraphs, list):
-            raise ValueError("paragraphs must be a list")
-        if not isinstance(bullets, list):
-            raise ValueError("bullets must be a list")
-        if len(paragraphs) > MAX_PARAGRAPHS_PER_SECTION:
-            raise ValueError(f"paragraphs exceeds maximum of {MAX_PARAGRAPHS_PER_SECTION}")
-        if len(bullets) > MAX_BULLETS_PER_SECTION:
-            raise ValueError(f"bullets exceeds maximum of {MAX_BULLETS_PER_SECTION}")
-
-        normalized_table = None
-        if table is not None:
-            if not isinstance(table, dict):
-                raise ValueError("table must be an object")
-            headers = table.get("headers") or []
-            rows = table.get("rows") or []
-            if not headers:
-                raise ValueError("table requires headers")
-            if len(rows) > MAX_TABLE_ROWS:
-                raise ValueError(f"table rows exceeds maximum of {MAX_TABLE_ROWS}")
-            normalized_table = {
-                "headers": [str(h) for h in headers],
-                "rows": [[str(cell) for cell in row] for row in rows],
-            }
-
-        normalized_sections.append(
-            {
-                "heading": heading,
-                "paragraphs": [str(p) for p in paragraphs],
-                "bullets": [str(b) for b in bullets],
-                "table": normalized_table,
-            }
-        )
+        blocks = _normalize_blocks(section)
+        normalized_sections.append({"heading": heading, "blocks": blocks})
 
     return {
         "title": str(title).strip(),
@@ -109,39 +189,39 @@ def validate_content_json(
     }
 
 
+def _render_block_docx(doc: Document, block: dict) -> None:
+    block_type = block["type"]
+    if block_type == "paragraph":
+        add_body_paragraph(doc, block["text"])
+    elif block_type == "bullets":
+        for item in block["items"]:
+            add_bullet_item(doc, item)
+    elif block_type == "table":
+        add_styled_table(doc, block["headers"], block["rows"])
+    elif block_type == "separator":
+        add_separator(doc)
+    elif block_type == "callout":
+        add_callout(
+            doc,
+            variant=block["variant"],
+            title=block.get("title", ""),
+            text=block["text"],
+        )
+
+
 def build_docx(content_json: dict) -> bytes:
     doc = Document()
-    title = content_json.get("title", "")
-    subtitle = content_json.get("subtitle", "")
+    generated_on = date.today()
+    configure_document_styles(doc)
+    configure_document_header(doc)
+    configure_document_footer(doc, generated_on)
 
-    title_para = doc.add_heading(title, level=0)
-    for run in title_para.runs:
-        run.font.size = Pt(24)
-
-    if subtitle:
-        sub = doc.add_paragraph(subtitle)
-        for run in sub.runs:
-            run.font.size = Pt(12)
+    add_document_header(doc, content_json.get("title", ""), content_json.get("subtitle", ""))
 
     for section in content_json.get("sections", []):
-        doc.add_heading(section.get("heading", ""), level=1)
-        for paragraph in section.get("paragraphs", []):
-            doc.add_paragraph(paragraph)
-        for bullet in section.get("bullets", []):
-            doc.add_paragraph(bullet, style="List Bullet")
-        table_data = section.get("table")
-        if table_data:
-            headers = table_data.get("headers", [])
-            rows = table_data.get("rows", [])
-            if headers:
-                table = doc.add_table(rows=1 + len(rows), cols=len(headers))
-                table.style = "Table Grid"
-                for col_idx, header in enumerate(headers):
-                    table.rows[0].cells[col_idx].text = header
-                for row_idx, row in enumerate(rows):
-                    for col_idx, cell in enumerate(row):
-                        if col_idx < len(headers):
-                            table.rows[row_idx + 1].cells[col_idx].text = cell
+        add_section_heading(doc, section.get("heading", ""))
+        for block in section.get("blocks", []):
+            _render_block_docx(doc, block)
 
     buffer = BytesIO()
     doc.save(buffer)
@@ -155,50 +235,90 @@ def _render_table_html(table_data: dict) -> str:
         return ""
     head_cells = "".join(f"<th>{esc(h)}</th>" for h in headers)
     body_rows = []
-    for row in rows:
-        cells = "".join(
-            f"<td>{esc(cell)}</td>" for cell in row[: len(headers)]
-        )
-        while len(row) < len(headers):
-            pass
+    for row_idx, row in enumerate(rows):
+        row_class = "ay-doc-preview__table-row--alt" if row_idx % 2 else ""
         padded = list(row[: len(headers)])
         while len(padded) < len(headers):
             padded.append("")
         cells = "".join(f"<td>{esc(cell)}</td>" for cell in padded)
-        body_rows.append(f"<tr>{cells}</tr>")
+        cls_attr = f' class="{row_class}"' if row_class else ""
+        body_rows.append(f"<tr{cls_attr}>{cells}</tr>")
     return (
         f'<table class="ay-doc-preview__table"><thead><tr>{head_cells}</tr></thead>'
         f"<tbody>{''.join(body_rows)}</tbody></table>"
     )
 
 
+def _render_callout_html(block: dict) -> str:
+    variant = block.get("variant", "info")
+    title = esc(block.get("title") or CALLOUT_VARIANTS.get(variant, {}).get("label", "Nota"))
+    text = esc(block.get("text", ""))
+    return (
+        f'<div class="ay-doc-preview__callout ay-doc-preview__callout--{esc(variant)}">'
+        f'<div class="ay-doc-preview__callout-title">{title}</div>'
+        f'<div class="ay-doc-preview__callout-text">{text}</div>'
+        f"</div>"
+    )
+
+
+def _render_document_header_html(title: str, subtitle: str) -> str:
+    parts = [
+        '<header class="ay-doc-preview__doc-header">',
+        f'<h1 class="ay-doc-preview__doc-header-title">{title}</h1>',
+    ]
+    if subtitle:
+        parts.append(f'<p class="ay-doc-preview__doc-header-subtitle">{subtitle}</p>')
+    parts.append("</header>")
+    parts.append('<div class="ay-doc-preview__doc-header-rule" role="presentation"></div>')
+    return "".join(parts)
+
+
+def _render_block_html(block: dict) -> str:
+    block_type = block["type"]
+    if block_type == "paragraph":
+        return f'<p class="ay-doc-preview__p">{esc(block["text"])}</p>'
+    if block_type == "bullets":
+        items = "".join(f"<li>{esc(item)}</li>" for item in block["items"])
+        return f'<ul class="ay-doc-preview__ul">{items}</ul>'
+    if block_type == "table":
+        return _render_table_html(block)
+    if block_type == "separator":
+        return '<div class="ay-doc-preview__separator" role="presentation"></div>'
+    if block_type == "callout":
+        return _render_callout_html(block)
+    return ""
+
+
 def build_preview_html(content_json: dict) -> str:
     title = esc(content_json.get("title", ""))
     subtitle = esc(content_json.get("subtitle", ""))
+    generated_on = date.today()
     parts = [
-        '<div class="ay-doc-preview__page">',
-        f'<div class="ay-doc-preview__kicker">Documento</div>',
-        f'<h1 class="ay-doc-preview__title">{title}</h1>',
+        (
+            '<div class="ay-doc-preview"'
+            f' data-page-width-px="{preview_px(PAGE_WIDTH_IN)}"'
+            f' data-page-height-px="{preview_px(PAGE_HEIGHT_IN)}"'
+            f' data-page-margin-px="{preview_px(PAGE_MARGIN_IN)}"'
+            f' data-footer-attribution="{esc(footer_attribution_text(generated_on))}">'
+        ),
+        '<div class="ay-doc-preview__source">',
+        _render_document_header_html(title, subtitle),
     ]
-    if subtitle:
-        parts.append(f'<div class="ay-doc-preview__subtitle">{subtitle}</div>')
-    parts.append('<div class="ay-doc-preview__divider"></div>')
 
     for section in content_json.get("sections", []):
         heading = esc(section.get("heading", ""))
         parts.append(f'<h2 class="ay-doc-preview__heading">{heading}</h2>')
-        for paragraph in section.get("paragraphs", []):
-            parts.append(f'<p class="ay-doc-preview__p">{esc(paragraph)}</p>')
-        bullets = section.get("bullets", [])
-        if bullets:
-            items = "".join(f"<li>{esc(b)}</li>" for b in bullets)
-            parts.append(f'<ul class="ay-doc-preview__ul">{items}</ul>')
-        table_data = section.get("table")
-        if table_data:
-            parts.append(_render_table_html(table_data))
+        for block in section.get("blocks", []):
+            parts.append(_render_block_html(block))
 
-    parts.append("</div>")
+    parts.extend(["</div>", '<div class="ay-doc-preview__pages"></div>', "</div>"])
     return "".join(parts)
+
+
+def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
+    if content_json and content_json.get("sections") is not None:
+        return build_preview_html(content_json)
+    return preview_html or ""
 
 
 def _merge_content_json(existing: dict, title, subtitle, sections) -> dict:
@@ -246,7 +366,10 @@ def create_document(
     """Create a Word document (.docx) for the user in the chat.
 
     Use when the user asks for a report, memo, or exportable written document.
-    Provide structured sections with headings, paragraphs, bullets, and optional tables.
+    Set `title` to a descriptive document name for the header (not a generic label).
+    Use `subtitle` for one line of context under the title (period, scope, audience).
+    Each section supports blocks: paragraph, bullets, table, separator, callout.
+    Callout variants: info, success, warning, danger.
     The document appears in the chat; do not repeat its content in your text response.
 
     To modify an existing document later, use update_document with the same file_id.
@@ -327,6 +450,7 @@ def update_document(
     """Update an existing Word document by file_id.
 
     Provide only the fields you want to change. sections replaces all sections when provided.
+    Use a descriptive `title` for the document header when updating the document name.
     """
     conversation = get_agent_conversation()
     if conversation is None:

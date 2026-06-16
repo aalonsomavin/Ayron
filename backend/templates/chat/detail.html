@@ -37,7 +37,7 @@
             <div class="ay-msg-user" data-message-id="{{ turn.user.id }}">
               <div class="ay-msg-user__bubble">{{ turn.user.content }}</div>
             </div>
-            <div class="ay-msg-user ay-msg-user--pin" hidden aria-hidden="true">
+            <div class="ay-msg-user ay-msg-user--pin" aria-hidden="true">
               <div class="ay-msg-user__pin-inner">
                 {% include "components/avatar.html" with initials=user_initials class="ay-msg-user__pin-avatar" %}
                 <button type="button" class="ay-msg-user__pin-jump">
@@ -167,6 +167,7 @@
 <script src="{% static 'js/ayron-avatar.js' %}"></script>
 <script src="{% static 'js/ayron-chart.js' %}"></script>
 <script src="{% static 'js/ayron-markdown.js' %}"></script>
+<script src="{% static 'js/ayron-doc-preview.js' %}"></script>
 <script src="{% static 'js/ayron-artifact.js' %}"></script>
 <script>
 (function () {
@@ -761,6 +762,8 @@
   function updatePinnedUserMessages() {
     if (!messagesEl) return;
     const viewportTop = messagesEl.getBoundingClientRect().top;
+    const scrollTopBefore = messagesEl.scrollTop;
+    const scrollHeightBefore = messagesEl.scrollHeight;
     const userMsgs = chatThreadEl.querySelectorAll(".ay-msg-user:not(.ay-msg-user--pin)");
     let active = null;
 
@@ -777,9 +780,13 @@
       if (!pin) return;
       const isActive = active && active.pin === pin;
       pin.classList.toggle("is-visible", isActive);
-      pin.hidden = !isActive;
       pin.setAttribute("aria-hidden", isActive ? "false" : "true");
     });
+
+    const collapsedBy = scrollHeightBefore - messagesEl.scrollHeight;
+    if (collapsedBy > 0) {
+      messagesEl.scrollTop = Math.max(0, scrollTopBefore - collapsedBy);
+    }
 
     if (active) {
       const sourceBubble = active.userEl.querySelector(".ay-msg-user__bubble");
@@ -832,7 +839,6 @@
 
     const pin = document.createElement("div");
     pin.className = "ay-msg-user ay-msg-user--pin";
-    pin.hidden = true;
     pin.setAttribute("aria-hidden", "true");
     pin.innerHTML =
       '<div class="ay-msg-user__pin-inner">' +

@@ -49,31 +49,49 @@ El system prompt incluye un índice de archivos de la conversación con `file_id
 
 ## Esquema de contenido
 
-Pasa contenido estructurado con estos campos:
+Pasa contenido estructurado con `title`, `subtitle`, `filename` opcional y `sections`.
+Cada sección tiene un `heading` y contenido en `blocks` (recomendado) o en campos legacy
+(`paragraphs`, `bullets`, `table`).
 
 ```json
 {
-  "title": "Título del documento",
-  "subtitle": "Subtítulo opcional",
-  "filename": "nombre-opcional.docx",
+  "title": "Informe de ventas",
+  "subtitle": "Mayo 2026 · EMEA",
   "sections": [
     {
-      "heading": "Encabezado de sección",
-      "paragraphs": ["Párrafo de texto."],
-      "bullets": ["Viñeta uno", "Viñeta dos"],
-      "table": {
-        "headers": ["Columna A", "Columna B"],
-        "rows": [["valor 1", "valor 2"]]
-      }
+      "heading": "Resumen ejecutivo",
+      "blocks": [
+        {"type": "paragraph", "text": "Las ventas crecieron un 12 % respecto al mes anterior."},
+        {"type": "callout", "variant": "info", "title": "Alcance", "text": "Datos de facturación Chinook, mayo 2026."},
+        {"type": "separator"},
+        {"type": "table", "headers": ["Región", "Ingresos"], "rows": [["EMEA", "$124.500"], ["LATAM", "$89.200"]]},
+        {"type": "bullets", "items": ["Mayor crecimiento en EMEA", "LATAM estable"]},
+        {"type": "callout", "variant": "warning", "text": "Los datos excluyen devoluciones pendientes."}
+      ]
     }
   ]
 }
 ```
 
-**Límites:** máx. 20 secciones, 20 párrafos por sección, 30 viñetas por sección, 50 filas por tabla.
+### Tipos de block
 
-**Renderizado:** título (Heading 0, 24pt), subtítulo (12pt), secciones (Heading 1), párrafos,
-viñetas con estilo `List Bullet`, tablas con estilo `Table Grid` y fila de encabezados.
+| type | Campos | Uso |
+|------|--------|-----|
+| `paragraph` | `text` | Párrafo de cuerpo |
+| `bullets` | `items` | Lista con viñetas |
+| `table` | `headers`, `rows` | Tabla de datos |
+| `separator` | — | Línea divisoria entre bloques |
+| `callout` | `variant`, `text`, `title?` | Destacado visual |
+
+Variantes de callout: `info`, `success`, `warning`, `danger`.
+
+**Límites:** máx. 20 secciones, 40 blocks por sección, 50 filas por tabla, 8 callouts por sección.
+
+**Estilo Ayron (aplicado automáticamente):** encabezado del documento con `title`
+(descriptivo) y `subtitle` opcional, separador bajo el encabezado, footer con
+«Generado con Ayron · fecha» y paginación «N de M», fuente Geist, tablas con encabezado gris y filas alternadas,
+callouts con borde lateral de color y fondo suave, separadores hairline. El agente
+no configura la marca manualmente.
 
 ## Flujo de trabajo
 
@@ -104,19 +122,21 @@ Principios adaptados para documentos profesionales generados con las tools de Ay
 
 ### Estructura
 
-- **Título claro** en `title`; contexto breve en `subtitle` (fecha, alcance, destinatario).
+- **Título descriptivo** en `title` — nombre claro del documento (ej. «Informe de ventas EMEA — Mayo 2026», no «Informe»).
+  Aparece como encabezado del documento con un separador debajo; no hace falta repetirlo en `sections`.
+- **Contexto breve** en `subtitle` (fecha, alcance, destinatario, periodo).
 - **Secciones con `heading` descriptivos** — una idea por sección (Resumen ejecutivo,
   Hallazgos, Recomendaciones, Anexos, etc.).
 - Orden lógico: contexto → datos/hallazgos → conclusiones → próximos pasos.
 - Para memos: Para / De / Fecha / Asunto puede ir en `subtitle` o en la primera sección.
 
-### Párrafos y viñetas
+### Párrafos, viñetas y blocks
 
-- Párrafos concisos en `paragraphs`; evita bloques enormes.
-- Usa el campo `bullets` para listas — **nunca** insertes caracteres `•`, `-` o `\u2022`
-  manualmente en párrafos; el backend aplica el estilo de viñeta correcto.
-- No uses `\n` dentro de un párrafo para simular saltos de línea; divide en varios
-  elementos de `paragraphs` o en viñetas separadas.
+- Prefiere `blocks` para controlar el orden exacto (párrafo → callout → tabla → separador).
+- Párrafos concisos; evita bloques enormes.
+- Usa `{"type": "bullets", "items": [...]}` — **nunca** insertes `•`, `-` o `\u2022` en párrafos.
+- Usa `{"type": "separator"}` entre bloques temáticos dentro de una sección.
+- Usa callouts para contexto (`info`), logros (`success`), advertencias (`warning`) o riesgos (`danger`).
 
 ### Tablas
 
@@ -132,9 +152,8 @@ Principios adaptados para documentos profesionales generados con las tools de Ay
 ### Tipografía y tono
 
 - Escribe en **español**, tono claro y profesional.
-- Usa comillas tipográficas cuando corresponda (« » o " ") en el texto del documento.
-- Negrita o énfasis solo vía redacción clara — las tools no aplican estilos inline
-  (negrita, cursiva, color) dentro de párrafos.
+- El documento usa tipografía Geist alineada con Ayron; no intentes forzar fuentes manualmente.
+- Usa comillas tipográficas cuando corresponda (« » o " ").
 
 ### Tipos de documento
 

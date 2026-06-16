@@ -49,6 +49,30 @@ def sample_content():
         "sections": [
             {
                 "heading": "Resumen",
+                "blocks": [
+                    {"type": "paragraph", "text": "Las ventas subieron."},
+                    {"type": "callout", "variant": "info", "text": "Datos de mayo 2026."},
+                    {"type": "separator"},
+                    {"type": "bullets", "items": ["Punto A"]},
+                    {
+                        "type": "table",
+                        "headers": ["Región", "Total"],
+                        "rows": [["EMEA", "$100k"]],
+                    },
+                ],
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def legacy_sample_content():
+    return {
+        "title": "Informe legacy",
+        "subtitle": "",
+        "sections": [
+            {
+                "heading": "Resumen",
                 "paragraphs": ["Las ventas subieron."],
                 "bullets": ["Punto A"],
                 "table": {"headers": ["Región", "Total"], "rows": [["EMEA", "$100k"]]},
@@ -67,6 +91,16 @@ class TestDocumentTool:
         )
         assert result["title"] == "Informe de ventas"
         assert len(result["sections"]) == 1
+        assert result["sections"][0]["blocks"][1]["type"] == "callout"
+
+    def test_validate_legacy_content_json(self, legacy_sample_content):
+        result = validate_content_json(
+            legacy_sample_content["title"],
+            legacy_sample_content["subtitle"],
+            legacy_sample_content["sections"],
+        )
+        block_types = [block["type"] for block in result["sections"][0]["blocks"]]
+        assert block_types == ["paragraph", "bullets", "table"]
 
     def test_build_docx_returns_bytes(self, sample_content):
         content = validate_content_json(
@@ -87,7 +121,18 @@ class TestDocumentTool:
         )
         html = build_preview_html(content)
         assert "Informe de ventas" in html
-        assert "ay-doc-preview__page" in html
+        assert "ay-doc-preview__doc-header" in html
+        assert "ay-doc-preview__doc-header-rule" in html
+        assert "ay-doc-preview" in html
+        assert "ay-doc-preview__source" in html
+        assert "ay-doc-preview__pages" in html
+        assert 'data-page-width-px="816"' in html
+        assert 'data-page-height-px="1056"' in html
+        assert 'data-page-margin-px="96"' in html
+        assert "ay-doc-preview__callout" in html
+        assert "ay-doc-preview__separator" in html
+        assert "Generado con Ayron" in html
+        assert "data-footer-attribution=" in html
 
     def test_create_document(self, user, conversation, sample_content):
         set_agent_context(conversation, user)
