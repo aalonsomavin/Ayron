@@ -64,6 +64,7 @@ CALLOUT_VARIANTS = {
 PAGE_WIDTH_IN = 8.5
 PAGE_HEIGHT_IN = 11.0
 PAGE_MARGIN_IN = 1.0
+CONTENT_WIDTH_IN = PAGE_WIDTH_IN - (2 * PAGE_MARGIN_IN)
 PREVIEW_DPI = 96
 SECTION_SPACE_BEFORE = Pt(18)
 SECTION_SPACE_AFTER = Pt(8)
@@ -157,7 +158,7 @@ def configure_document_footer(doc, generated_on: date | None = None):
     border.append(top)
     p_pr.append(border)
 
-    table = footer.add_table(rows=1, cols=2)
+    table = footer.add_table(rows=1, cols=2, width=Inches(CONTENT_WIDTH_IN))
     table.autofit = False
     left_cell = table.rows[0].cells[0]
     right_cell = table.rows[0].cells[1]
