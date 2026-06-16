@@ -7,6 +7,13 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libharfbuzz-subset0 \
+    libjpeg62-turbo \
+    libopenjp2-7 \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .

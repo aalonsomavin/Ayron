@@ -4,7 +4,8 @@ description: >-
   Create, read, edit, or export Word documents (.docx) in the chat. Use when the
   user mentions informe, memo, carta, plantilla, report, letter, resumen exportable,
   documento Word, or .docx — or asks for a polished written deliverable to download.
-  Also use when updating an existing document in the conversation. Do NOT use for PDFs,
+  Also use when updating an existing document in the conversation. For reports with
+  charts, tables, or PDF export, use the html-reports skill instead. Do NOT use for PDFs,
   spreadsheets, Google Docs, or chat-only answers that do not need a downloadable file.
 ---
 
@@ -29,7 +30,8 @@ Activa esta skill cuando el usuario pida:
 No uses esta skill para:
 
 - Respuestas cortas solo en el chat
-- Tablas o gráficos interactivos del chat (`show_data_table`, `show_chart`)
+- Tablas o gráficos interactivos del chat (`show_data_table`, `show_chart`) — usa
+  `html-reports` si el usuario quiere un informe exportable con esos elementos
 - PDFs, Excel, Google Docs u otros formatos
 - Edición XML, cambios rastreados, comentarios Word, imágenes incrustadas,
   índice (TOC), encabezados/pies de página o saltos de página — **no están soportados**
@@ -113,8 +115,10 @@ no configura la marca manualmente.
 ### Combinar con datos
 
 Flujo típico: primero consulta datos (SQL, tablas, gráficos), luego sintetiza en el documento.
-Los gráficos y tablas del chat no se incrustan automáticamente en el Word; resume los hallazgos
-en texto o tablas dentro de `sections`.
+Los gráficos y tablas del chat no se incrustan automáticamente en el Word. Si el
+usuario necesita gráficos o exportación PDF, usa la skill `html-reports` con
+`create_html_report`. Para Word, resume los hallazgos en texto o tablas simples
+dentro de `sections`.
 
 ## Calidad y formato
 

@@ -26,6 +26,7 @@ from apps.agent.tools.document_style import (
     footer_attribution_text,
     preview_px,
 )
+from apps.agent.tools.report_content import validate_docx_content_json
 from apps.files.services import (
     get_file_for_conversation,
     save_generated_file,
@@ -36,13 +37,6 @@ from apps.files.services import (
 from apps.files.services import escape_preview_text as esc
 
 _DOCUMENT_DISPLAY_REGISTRY: dict[str, dict] = {}
-
-MAX_SECTIONS = 20
-MAX_TABLE_ROWS = 50
-MAX_PARAGRAPHS_PER_SECTION = 20
-MAX_BULLETS_PER_SECTION = 30
-MAX_BLOCKS_PER_SECTION = 40
-MAX_CALLOUTS_PER_SECTION = 8
 
 AGENT_INSTRUCTION_AFTER_DOCUMENT = (
     "El documento ya está visible en el chat del usuario. "
@@ -66,127 +60,12 @@ def _sanitize_filename(name: str, fallback: str) -> str:
     return cleaned[:200]
 
 
-def _normalize_table(table: dict) -> dict:
-    if not isinstance(table, dict):
-        raise ValueError("table must be an object")
-    headers = table.get("headers") or []
-    rows = table.get("rows") or []
-    if not headers:
-        raise ValueError("table requires headers")
-    if len(rows) > MAX_TABLE_ROWS:
-        raise ValueError(f"table rows exceeds maximum of {MAX_TABLE_ROWS}")
-    return {
-        "headers": [str(h) for h in headers],
-        "rows": [[str(cell) for cell in row] for row in rows],
-    }
-
-
-def _normalize_blocks(section: dict) -> list[dict]:
-    raw_blocks = section.get("blocks")
-    if raw_blocks is not None:
-        if not isinstance(raw_blocks, list):
-            raise ValueError("blocks must be a list")
-        if len(raw_blocks) > MAX_BLOCKS_PER_SECTION:
-            raise ValueError(f"blocks exceeds maximum of {MAX_BLOCKS_PER_SECTION}")
-        normalized = []
-        callout_count = 0
-        for block in raw_blocks:
-            if not isinstance(block, dict):
-                raise ValueError("each block must be an object")
-            block_type = block.get("type")
-            if block_type == "paragraph":
-                text = str(block.get("text", "")).strip()
-                if text:
-                    normalized.append({"type": "paragraph", "text": text})
-            elif block_type == "bullets":
-                items = block.get("items") or []
-                if not isinstance(items, list):
-                    raise ValueError("bullets items must be a list")
-                if len(items) > MAX_BULLETS_PER_SECTION:
-                    raise ValueError(f"bullets exceeds maximum of {MAX_BULLETS_PER_SECTION}")
-                clean_items = [str(item) for item in items if str(item).strip()]
-                if clean_items:
-                    normalized.append({"type": "bullets", "items": clean_items})
-            elif block_type == "table":
-                normalized.append({"type": "table", **_normalize_table(block)})
-            elif block_type == "separator":
-                normalized.append({"type": "separator"})
-            elif block_type == "callout":
-                callout_count += 1
-                if callout_count > MAX_CALLOUTS_PER_SECTION:
-                    raise ValueError(f"callouts exceeds maximum of {MAX_CALLOUTS_PER_SECTION}")
-                variant = str(block.get("variant", "info")).strip().lower()
-                if variant not in CALLOUT_VARIANTS:
-                    raise ValueError(f"callout variant must be one of: {', '.join(CALLOUT_VARIANTS)}")
-                text = str(block.get("text", "")).strip()
-                if not text:
-                    raise ValueError("callout requires text")
-                normalized.append(
-                    {
-                        "type": "callout",
-                        "variant": variant,
-                        "title": str(block.get("title", "")).strip(),
-                        "text": text,
-                    }
-                )
-            else:
-                raise ValueError(
-                    "block type must be paragraph, bullets, table, separator, or callout"
-                )
-        return normalized
-
-    blocks = []
-    paragraphs = section.get("paragraphs") or []
-    bullets = section.get("bullets") or []
-    table = section.get("table")
-
-    if not isinstance(paragraphs, list):
-        raise ValueError("paragraphs must be a list")
-    if not isinstance(bullets, list):
-        raise ValueError("bullets must be a list")
-    if len(paragraphs) > MAX_PARAGRAPHS_PER_SECTION:
-        raise ValueError(f"paragraphs exceeds maximum of {MAX_PARAGRAPHS_PER_SECTION}")
-    if len(bullets) > MAX_BULLETS_PER_SECTION:
-        raise ValueError(f"bullets exceeds maximum of {MAX_BULLETS_PER_SECTION}")
-
-    for paragraph in paragraphs:
-        text = str(paragraph).strip()
-        if text:
-            blocks.append({"type": "paragraph", "text": text})
-    if bullets:
-        blocks.append({"type": "bullets", "items": [str(b) for b in bullets]})
-    if table is not None:
-        blocks.append({"type": "table", **_normalize_table(table)})
-    return blocks
-
-
 def validate_content_json(
     title: str,
     subtitle: str,
     sections: list,
 ) -> dict:
-    if not title or not str(title).strip():
-        raise ValueError("title is required")
-    if not isinstance(sections, list) or not sections:
-        raise ValueError("sections must be a non-empty list")
-    if len(sections) > MAX_SECTIONS:
-        raise ValueError(f"sections exceeds maximum of {MAX_SECTIONS}")
-
-    normalized_sections = []
-    for section in sections:
-        if not isinstance(section, dict):
-            raise ValueError("each section must be an object")
-        heading = str(section.get("heading", "")).strip()
-        if not heading:
-            raise ValueError("each section requires a heading")
-        blocks = _normalize_blocks(section)
-        normalized_sections.append({"heading": heading, "blocks": blocks})
-
-    return {
-        "title": str(title).strip(),
-        "subtitle": str(subtitle or "").strip(),
-        "sections": normalized_sections,
-    }
+    return validate_docx_content_json(title, subtitle, sections)
 
 
 def _render_block_docx(doc: Document, block: dict) -> None:
@@ -316,6 +195,8 @@ def build_preview_html(content_json: dict) -> str:
 
 
 def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
+    if content_json and content_json.get("format") == "html":
+        return preview_html or ""
     if content_json and content_json.get("sections") is not None:
         return build_preview_html(content_json)
     return preview_html or ""
@@ -393,7 +274,7 @@ def create_document(
         user=user,
         original_name=original_name,
         content_json=content_json,
-        docx_bytes=docx_bytes,
+        file_bytes=docx_bytes,
         preview_html=preview_html,
     )
     _register_display(tool_call_id, file_obj, updated=False)
@@ -470,7 +351,7 @@ def update_document(
     file_obj = update_generated_file(
         file_obj=file_obj,
         content_json=content_json,
-        docx_bytes=docx_bytes,
+        file_bytes=docx_bytes,
         preview_html=preview_html,
     )
     _register_display(tool_call_id, file_obj, updated=True)

@@ -19,6 +19,7 @@ class TestPlatformSkills:
         skills_dir = get_platform_skills_dir()
         assert skills_dir.is_dir()
         assert (skills_dir / "docx-documents" / "SKILL.md").is_file()
+        assert (skills_dir / "html-reports" / "SKILL.md").is_file()
 
     def test_docx_skill_frontmatter(self):
         skill_path = get_platform_skills_dir() / "docx-documents" / "SKILL.md"

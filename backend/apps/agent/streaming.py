@@ -9,16 +9,26 @@ from apps.agent.tools.chart import (
     validate_chart_input,
 )
 from apps.agent.tools.document import pop_document_display
+from apps.agent.tools.html_report import pop_html_report_display
 from apps.agent.tools.display import PLAN_TOOL_LABEL, get_tool_display
 from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
 
 PLAN_TOOLS = {"write_todos"}
-DISPLAY_TOOLS = {"show_data_table", "show_chart", "create_document", "update_document"}
+DISPLAY_TOOLS = {
+    "show_data_table",
+    "show_chart",
+    "create_document",
+    "update_document",
+    "create_html_report",
+    "update_html_report",
+}
 TABLE_DISPLAY_TOOL = "show_data_table"
 CHART_DISPLAY_TOOL = "show_chart"
 CREATE_DOCUMENT_TOOL = "create_document"
 UPDATE_DOCUMENT_TOOL = "update_document"
+CREATE_HTML_REPORT_TOOL = "create_html_report"
+UPDATE_HTML_REPORT_TOOL = "update_html_report"
 OUTPUT_SUMMARY_MAX_LEN = 500
 
 
@@ -196,8 +206,13 @@ class StreamEventHandler:
                     message=self.message,
                 )
             output_summary = "Gráfico mostrado" if result.get("ok") else "Error al mostrar gráfico"
-        elif name in (CREATE_DOCUMENT_TOOL, UPDATE_DOCUMENT_TOOL):
-            result = self._resolve_document_display_result(output, tool_call_id)
+        elif name in (
+            CREATE_DOCUMENT_TOOL,
+            UPDATE_DOCUMENT_TOOL,
+            CREATE_HTML_REPORT_TOOL,
+            UPDATE_HTML_REPORT_TOOL,
+        ):
+            result = self._resolve_file_display_result(output, tool_call_id)
             if result.get("file_id"):
                 event_type = (
                     AgentEvent.EventType.FILE_UPDATED
@@ -210,11 +225,19 @@ class StreamEventHandler:
                     payload=result,
                     message=self.message,
                 )
-            output_summary = (
-                "Documento actualizado"
-                if result.get("updated")
-                else "Documento creado"
-            ) if result.get("file_id") else "Error al generar documento"
+            is_html = result.get("format") == "html" or result.get("ext") == "HTML"
+            if is_html:
+                output_summary = (
+                    "Reporte actualizado"
+                    if result.get("updated")
+                    else "Reporte creado"
+                ) if result.get("file_id") else "Error al generar reporte"
+            else:
+                output_summary = (
+                    "Documento actualizado"
+                    if result.get("updated")
+                    else "Documento creado"
+                ) if result.get("file_id") else "Error al generar documento"
         else:
             return
 
@@ -296,12 +319,12 @@ class StreamEventHandler:
             return parsed
         return {"ok": False}
 
-    def _resolve_document_display_result(
+    def _resolve_file_display_result(
         self,
         output: str,
         tool_call_id: str | None,
     ) -> dict:
-        registry_result = pop_document_display(tool_call_id)
+        registry_result = pop_document_display(tool_call_id) or pop_html_report_display(tool_call_id)
         if registry_result:
             return registry_result
 
@@ -310,18 +333,28 @@ class StreamEventHandler:
         except json.JSONDecodeError:
             return {}
         if parsed.get("ok") and parsed.get("file_id"):
-            return {
-                "file_id": parsed["file_id"],
+            file_id = parsed["file_id"]
+            payload = {
+                "file_id": file_id,
                 "name": parsed.get("name", "Document"),
                 "ext": "DOCX",
+                "format": "docx",
                 "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 "meta": "Document",
                 "version": parsed.get("version", 1),
-                "download_url": f"/files/{parsed['file_id']}/download/",
-                "preview_url": f"/files/{parsed['file_id']}/preview/",
+                "download_url": f"/files/{file_id}/download/",
+                "preview_url": f"/files/{file_id}/preview/",
                 "updated": parsed.get("action") == "updated",
             }
+            return payload
         return {}
+
+    def _resolve_document_display_result(
+        self,
+        output: str,
+        tool_call_id: str | None,
+    ) -> dict:
+        return self._resolve_file_display_result(output, tool_call_id)
 
     def _emit_tool_start(self, name: str, tool_input: dict, tool_call_id: str) -> None:
         if name in PLAN_TOOLS:

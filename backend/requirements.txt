@@ -13,3 +13,5 @@ pytest>=8.0
 pytest-django>=4.9
 pytest-cov>=6.0
 ruff>=0.8
+weasyprint>=63.0
+bleach>=6.0

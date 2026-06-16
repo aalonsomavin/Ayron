@@ -5,6 +5,11 @@ from apps.agent.tools.document import (
     list_conversation_files,
     update_document,
 )
+from apps.agent.tools.html_report import (
+    create_html_report,
+    get_html_report,
+    update_html_report,
+)
 from apps.agent.tools.sql import describe_table, list_tables, run_sql_query
 from apps.agent.tools.table import show_data_table
 
@@ -15,9 +20,12 @@ AGENT_TOOLS = [
     show_data_table,
     show_chart,
     create_document,
+    create_html_report,
     list_conversation_files,
     get_document,
+    get_html_report,
     update_document,
+    update_html_report,
 ]
 SQL_TOOLS = [
     list_tables,
@@ -31,12 +39,15 @@ __all__ = [
     "AGENT_TOOLS",
     "SQL_TOOLS",
     "create_document",
+    "create_html_report",
     "describe_table",
     "get_document",
+    "get_html_report",
     "list_conversation_files",
     "list_tables",
     "run_sql_query",
     "show_chart",
     "show_data_table",
     "update_document",
+    "update_html_report",
 ]

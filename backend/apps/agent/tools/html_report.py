@@ -1,0 +1,266 @@
+import json
+import re
+from datetime import date
+from pathlib import Path
+from typing import Annotated
+
+from django.conf import settings
+from langchain_core.tools import InjectedToolCallId, tool
+
+from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.tools.document_style import footer_attribution_text
+from apps.agent.tools.html_sanitize import normalize_agent_html
+from apps.files.models import HTML_MIME
+from apps.files.services import (
+    escape_preview_text as esc,
+    get_file_for_conversation,
+    save_generated_file,
+    serialize_file_for_agent,
+    serialize_file_for_ui,
+    update_generated_file,
+)
+
+_HTML_REPORT_DISPLAY_REGISTRY: dict[str, dict] = {}
+
+AGENT_INSTRUCTION_AFTER_HTML_REPORT = (
+    "El reporte ya está visible en el chat del usuario. "
+    "NO repitas el contenido del informe en tu siguiente mensaje. "
+    "Solo añade una frase breve si aporta contexto, o termina sin texto."
+)
+
+
+def pop_html_report_display(tool_call_id: str | None) -> dict | None:
+    if not tool_call_id:
+        return None
+    return _HTML_REPORT_DISPLAY_REGISTRY.pop(tool_call_id, None)
+
+
+def _sanitize_filename(name: str, fallback: str) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*]', "", name).strip()
+    if not cleaned:
+        cleaned = fallback
+    if not cleaned.lower().endswith(".html"):
+        cleaned = f"{cleaned}.html"
+    return cleaned[:200]
+
+
+def validate_html_report_content(
+    title: str,
+    html: str,
+    subtitle: str = "",
+) -> dict:
+    if not title or not str(title).strip():
+        raise ValueError("title is required")
+    normalized = normalize_agent_html(html)
+    return {
+        "format": "html",
+        "title": str(title).strip(),
+        "subtitle": str(subtitle or "").strip(),
+        "html": normalized["html"],
+        "body_html": normalized["body_html"],
+        "full_document": normalized["full_document"],
+    }
+
+
+def _load_export_css() -> str:
+    css_path = Path(settings.BASE_DIR) / "static" / "css" / "html_report_export.css"
+    return css_path.read_text(encoding="utf-8")
+
+
+def _footer_html() -> str:
+    return f'<footer class="ay-html-report__footer">{esc(footer_attribution_text(date.today()))}</footer>'
+
+
+def build_preview_fragment(content_json: dict) -> str:
+    body_html = content_json.get("body_html") or content_json.get("html") or ""
+    return f'<div class="ay-html-report-preview">{body_html}</div>'
+
+
+def build_export_html(content_json: dict) -> str:
+    title = esc(content_json.get("title", "Reporte"))
+    generated_on = esc(footer_attribution_text(date.today()))
+
+    if content_json.get("full_document"):
+        html = content_json.get("html") or ""
+        if "ay-html-report__footer" not in html and generated_on not in html:
+            if re.search(r"</body>", html, re.IGNORECASE):
+                html = re.sub(
+                    r"</body>",
+                    f"{_footer_html()}</body>",
+                    html,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+            else:
+                html = f"{html}{_footer_html()}"
+        return html
+
+    body_html = content_json.get("body_html") or content_json.get("html") or ""
+    css = _load_export_css()
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="es">'
+        "<head>"
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{title}</title>"
+        f"<style>{css}</style>"
+        "</head>"
+        "<body>"
+        f'<div class="ay-html-report">{body_html}{_footer_html()}</div>'
+        "</body>"
+        "</html>"
+    )
+
+
+def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
+    if content_json and content_json.get("format") == "html":
+        if content_json.get("body_html") or content_json.get("html"):
+            return build_preview_fragment(content_json)
+    return preview_html or ""
+
+
+def _merge_content_json(existing: dict, title, subtitle, html) -> dict:
+    merged = dict(existing)
+    if title is not None:
+        merged["title"] = str(title).strip()
+    if subtitle is not None:
+        merged["subtitle"] = str(subtitle).strip()
+    if html is not None:
+        normalized = normalize_agent_html(html)
+        merged["html"] = normalized["html"]
+        merged["body_html"] = normalized["body_html"]
+        merged["full_document"] = normalized["full_document"]
+    return validate_html_report_content(
+        merged.get("title", ""),
+        merged.get("html") or merged.get("body_html", ""),
+        merged.get("subtitle", ""),
+    )
+
+
+def _build_agent_tool_response(file_obj, action: str) -> str:
+    return json.dumps(
+        {
+            "ok": True,
+            "action": action,
+            "file_id": str(file_obj.id),
+            "name": file_obj.original_name,
+            "version": file_obj.version,
+            "agent_instruction": AGENT_INSTRUCTION_AFTER_HTML_REPORT,
+        }
+    )
+
+
+def _register_display(tool_call_id: str, file_obj, updated: bool = False) -> None:
+    payload = serialize_file_for_ui(file_obj)
+    payload["updated"] = updated
+    _HTML_REPORT_DISPLAY_REGISTRY[tool_call_id] = payload
+
+
+@tool
+def create_html_report(
+    title: str,
+    html: str,
+    subtitle: str = "",
+    filename: str = "",
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> str:
+    """Create an HTML report for the user in the chat, exportable as PDF.
+
+    Pass the report body as `html`: semantic HTML with inline CSS in a <style> block,
+    tables, SVG diagrams, code in <pre><code>, etc. You may pass a full document
+    (<!DOCTYPE html>...) or a body fragment. Ayron sanitizes and stores the HTML.
+
+    Set `title` for the file metadata. Use `subtitle` for one line of context.
+    Use `filename` like `<topic>-<kind>.html`. Do not repeat report content in chat.
+
+    To modify an existing report later, use update_html_report with the same file_id.
+    """
+    conversation = get_agent_conversation()
+    user = get_agent_user()
+    if conversation is None or user is None:
+        return json.dumps({"ok": False, "error": "No conversation context"})
+
+    try:
+        content_json = validate_html_report_content(title, html, subtitle)
+    except ValueError as exc:
+        return json.dumps({"ok": False, "error": str(exc)})
+
+    original_name = _sanitize_filename(filename, content_json["title"])
+    export_html = build_export_html(content_json)
+    preview_html = build_preview_fragment(content_json)
+
+    file_obj = save_generated_file(
+        conversation=conversation,
+        user=user,
+        original_name=original_name,
+        content_json=content_json,
+        file_bytes=export_html.encode("utf-8"),
+        preview_html=preview_html,
+        mime_type=HTML_MIME,
+    )
+    _register_display(tool_call_id, file_obj, updated=False)
+    return _build_agent_tool_response(file_obj, "created")
+
+
+@tool
+def get_html_report(file_id: str) -> str:
+    """Read the HTML report content by file_id.
+
+    Returns title, subtitle, and the stored `html` for editing.
+    Call before update_html_report when you need the current markup.
+    """
+    conversation = get_agent_conversation()
+    if conversation is None:
+        return json.dumps({"ok": False, "error": "No conversation context"})
+
+    file_obj = get_file_for_conversation(file_id, conversation)
+    if file_obj is None or file_obj.format_key != "html":
+        return json.dumps({"ok": False, "error": "HTML report not found in this conversation"})
+
+    payload = {
+        "ok": True,
+        **serialize_file_for_agent(file_obj),
+        "title": file_obj.content_json.get("title", ""),
+        "subtitle": file_obj.content_json.get("subtitle", ""),
+        "html": file_obj.content_json.get("html")
+        or file_obj.content_json.get("body_html", ""),
+    }
+    return json.dumps(payload)
+
+
+@tool
+def update_html_report(
+    file_id: str,
+    title: str | None = None,
+    subtitle: str | None = None,
+    html: str | None = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> str:
+    """Update an existing HTML report by file_id.
+
+    Provide only the fields you want to change. `html` replaces all markup when provided.
+    """
+    conversation = get_agent_conversation()
+    if conversation is None:
+        return json.dumps({"ok": False, "error": "No conversation context"})
+
+    file_obj = get_file_for_conversation(file_id, conversation)
+    if file_obj is None or file_obj.format_key != "html":
+        return json.dumps({"ok": False, "error": "HTML report not found in this conversation"})
+
+    try:
+        content_json = _merge_content_json(file_obj.content_json, title, subtitle, html)
+    except ValueError as exc:
+        return json.dumps({"ok": False, "error": str(exc)})
+
+    export_html = build_export_html(content_json)
+    preview_html = build_preview_fragment(content_json)
+    file_obj = update_generated_file(
+        file_obj=file_obj,
+        content_json=content_json,
+        file_bytes=export_html.encode("utf-8"),
+        preview_html=preview_html,
+    )
+    _register_display(tool_call_id, file_obj, updated=True)
+    return _build_agent_tool_response(file_obj, "updated")

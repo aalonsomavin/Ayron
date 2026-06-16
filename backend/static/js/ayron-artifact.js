@@ -25,6 +25,7 @@
       meta: el.dataset.fileMeta || "",
       version: parseInt(el.dataset.fileVersion || "1", 10),
       download_url: el.dataset.downloadUrl,
+      download_pdf_url: el.dataset.downloadPdfUrl || "",
       preview_url: el.dataset.previewUrl,
     };
   }
@@ -37,8 +38,13 @@
       meta: event.meta || "",
       version: event.version || 1,
       download_url: event.download_url,
+      download_pdf_url: event.download_pdf_url || "",
       preview_url: event.preview_url,
     };
+  }
+
+  function metaSuffix(meta) {
+    return (meta || "").replace(/^Document · /, "").replace(/^Report · /, "");
   }
 
   function createFileCard(file, active) {
@@ -51,15 +57,16 @@
     btn.dataset.fileMeta = file.meta || "";
     btn.dataset.fileVersion = String(file.version || 1);
     btn.dataset.downloadUrl = file.download_url;
+    btn.dataset.downloadPdfUrl = file.download_pdf_url || "";
     btn.dataset.previewUrl = file.preview_url;
-    const metaSuffix = (file.meta || "").replace(/^Document · /, "");
+    const metaSuffixText = metaSuffix(file.meta);
     btn.innerHTML =
       '<span class="ay-file-card__icon">' + iconSvg("filetext") + "</span>" +
       '<span class="ay-file-card__body">' +
         '<span class="ay-file-card__name"></span>' +
         '<span class="ay-file-card__meta">' +
           '<span class="ay-file-card__ext"></span>' +
-          "<span>· " + metaSuffix + "</span>" +
+          "<span>· " + metaSuffixText + "</span>" +
         "</span>" +
       "</span>" +
       '<span class="ay-file-card__chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>';
@@ -103,10 +110,21 @@
         self.toggleExpand();
       });
       this.panelEl.querySelector("[data-artifact-download]").addEventListener("click", function () {
-        if (self.openFile && self.openFile.download_url) {
-          window.location.href = self.openFile.download_url;
-        }
+        if (!self.openFile) return;
+        const url =
+          self.openFile.ext === "HTML" && self.openFile.download_pdf_url
+            ? self.openFile.download_pdf_url
+            : self.openFile.download_url;
+        if (url) window.location.href = url;
       });
+      const htmlDownloadBtn = this.panelEl.querySelector("[data-artifact-download-html]");
+      if (htmlDownloadBtn) {
+        htmlDownloadBtn.addEventListener("click", function () {
+          if (self.openFile && self.openFile.download_url) {
+            window.location.href = self.openFile.download_url;
+          }
+        });
+      }
       this.panelEl.querySelector("[data-artifact-copy]").addEventListener("click", function () {
         const body = self.panelEl.querySelector(".ay-artifact-panel__body");
         if (!body) return;
@@ -188,7 +206,16 @@
       this.panelEl.querySelector(".ay-artifact-panel__ext").textContent = file.ext || "DOCX";
       const metaEl = this.panelEl.querySelector(".ay-artifact-panel__meta-suffix");
       if (metaEl) {
-        metaEl.textContent = (file.meta || "").replace(/^Document · /, "");
+        metaEl.textContent = metaSuffix(file.meta);
+      }
+      const htmlDownloadBtn = this.panelEl.querySelector("[data-artifact-download-html]");
+      const downloadBtn = this.panelEl.querySelector("[data-artifact-download]");
+      const isHtml = file.ext === "HTML";
+      if (htmlDownloadBtn) {
+        htmlDownloadBtn.hidden = !isHtml;
+      }
+      if (downloadBtn) {
+        downloadBtn.title = isHtml ? "Download PDF" : "Download";
       }
 
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
@@ -202,7 +229,9 @@
         .then(function (html) {
           if (self.openFile && self.openFile.file_id === file.file_id) {
             body.innerHTML = html;
-            if (window.AyronDocPreview) {
+            if (isHtml) {
+              body.innerHTML = html;
+            } else if (window.AyronDocPreview) {
               window.AyronDocPreview.mount(body);
             }
           }

@@ -67,6 +67,9 @@ TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "update_document": ("Actualizar documento", lambda _: "Word"),
     "list_conversation_files": ("Listar documentos", None),
     "get_document": ("Leer documento", None),
+    "create_html_report": ("Crear reporte HTML", lambda _: "PDF"),
+    "update_html_report": ("Actualizar reporte HTML", lambda _: "PDF"),
+    "get_html_report": ("Leer reporte HTML", None),
     "write_todos": ("Planificar", None),
 }
 

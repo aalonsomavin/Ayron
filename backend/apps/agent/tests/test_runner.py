@@ -31,7 +31,7 @@ class TestAgentFileAwareness:
             user=user,
             original_name="Doc.docx",
             content_json=content,
-            docx_bytes=b"x",
+            file_bytes=b"x",
             preview_html="",
         )
         prompt = build_system_prompt(conversation)

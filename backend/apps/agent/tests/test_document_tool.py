@@ -90,6 +90,7 @@ class TestDocumentTool:
             sample_content["sections"],
         )
         assert result["title"] == "Informe de ventas"
+        assert result["format"] == "docx"
         assert len(result["sections"]) == 1
         assert result["sections"][0]["blocks"][1]["type"] == "callout"
 

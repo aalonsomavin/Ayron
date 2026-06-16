@@ -4,11 +4,18 @@ from django.conf import settings
 from django.db import models
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+HTML_MIME = "text/html"
+
+MIME_EXTENSIONS = {
+    DOCX_MIME: ".docx",
+    HTML_MIME: ".html",
+}
 
 
 def conversation_file_path(instance, filename):
     conversation_id = instance.conversation_id or "orphan"
-    return f"conversations/{conversation_id}/{instance.id}.docx"
+    ext = MIME_EXTENSIONS.get(instance.mime_type, ".bin")
+    return f"conversations/{conversation_id}/{instance.id}{ext}"
 
 
 class File(models.Model):
@@ -40,3 +47,9 @@ class File(models.Model):
 
     def __str__(self):
         return self.original_name
+
+    @property
+    def format_key(self) -> str:
+        return self.content_json.get("format") or (
+            "html" if self.mime_type == HTML_MIME else "docx"
+        )
