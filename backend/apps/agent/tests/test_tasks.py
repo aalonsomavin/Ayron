@@ -588,3 +588,61 @@ class TestStreamEventHandler:
         assert chart_event["payload"]["datasets"][0]["data"] == [100.0, 200.0]
         assert tool_end["payload"]["tool"] == "show_chart"
         assert tool_end["payload"]["output_summary"] == "Gráfico mostrado"
+
+    def test_stream_handler_emits_file_created(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+
+        from apps.agent.tools.document import _DOCUMENT_DISPLAY_REGISTRY
+
+        file_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        _DOCUMENT_DISPLAY_REGISTRY["call_doc"] = {
+            "file_id": file_id,
+            "name": "Informe.docx",
+            "ext": "DOCX",
+            "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "meta": "Document · 1 página",
+            "version": 1,
+            "download_url": f"/files/{file_id}/download/",
+            "preview_url": f"/files/{file_id}/preview/",
+            "updated": False,
+        }
+
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=json.dumps(
+                            {
+                                "ok": True,
+                                "action": "created",
+                                "file_id": file_id,
+                                "name": "Informe.docx",
+                                "version": 1,
+                            }
+                        ),
+                        name="create_document",
+                        tool_call_id="call_doc",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        file_event = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.FILE_CREATED
+        )
+        assert file_event["payload"]["file_id"] == file_id
+        assert file_event["payload"]["name"] == "Informe.docx"

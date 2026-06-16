@@ -63,6 +63,10 @@ TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "run_sql_query": ("Buscando datos", _sql_query_subtitle),
     "show_data_table": ("Mostrar tabla", _table_subtitle),
     "show_chart": ("Mostrar gráfico", _chart_subtitle),
+    "create_document": ("Crear documento", lambda _: "Word"),
+    "update_document": ("Actualizar documento", lambda _: "Word"),
+    "list_conversation_files": ("Listar documentos", None),
+    "get_document": ("Leer documento", None),
     "write_todos": ("Planificar", None),
 }
 

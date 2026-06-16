@@ -4,6 +4,7 @@ import time
 from celery import shared_task
 from openai import OpenAIError
 
+from apps.agent.context import set_agent_context
 from apps.agent.events import persist_event
 from apps.agent.runner import create_agent
 from apps.agent.streaming import StreamEventHandler
@@ -63,7 +64,8 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
     )
 
     try:
-        agent = create_agent()
+        set_agent_context(conversation, conversation.user)
+        agent = create_agent(conversation)
         agent_messages = build_agent_messages(
             conversation,
             exclude_message_id=assistant_message.id,

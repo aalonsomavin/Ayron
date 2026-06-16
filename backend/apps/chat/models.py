@@ -62,6 +62,8 @@ class AgentEvent(models.Model):
         PLAN = "plan", "Plan"
         TABLE = "table", "Table"
         CHART = "chart", "Chart"
+        FILE_CREATED = "file_created", "File Created"
+        FILE_UPDATED = "file_updated", "File Updated"
         ERROR = "error", "Error"
         DONE = "done", "Done"
 

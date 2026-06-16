@@ -14,6 +14,10 @@ env = environ.Env(
     OPENAI_API_KEY=(str, ""),
     DEFAULT_LLM_MODEL=(str, "openai:gpt-4o"),
     DEMO_DB_URL=(str, ""),
+    AWS_ACCESS_KEY_ID=(str, ""),
+    AWS_SECRET_ACCESS_KEY=(str, ""),
+    AWS_STORAGE_BUCKET_NAME=(str, ""),
+    AWS_S3_REGION_NAME=(str, ""),
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -34,6 +38,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.chat",
     "apps.agent",
+    "apps.files",
 ]
 
 MIDDLEWARE = [
@@ -83,6 +88,22 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {
+            "location": MEDIA_ROOT,
+            "base_url": MEDIA_URL,
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

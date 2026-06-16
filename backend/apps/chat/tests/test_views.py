@@ -473,6 +473,35 @@ class TestConversationDetail:
         assert "Mostrar tabla" in content
         assert content.index("Son 10 álbumes.") < content.index("ay-tool-trace")
 
+    def test_content_blocks_include_file(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+            payload={
+                "file_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "name": "Informe.docx",
+                "ext": "DOCX",
+                "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "meta": "Document · 1 página",
+                "version": 1,
+                "download_url": "/files/a1b2c3d4-e5f6-7890-abcd-ef1234567890/download/",
+                "preview_url": "/files/a1b2c3d4-e5f6-7890-abcd-ef1234567890/preview/",
+            },
+            sequence_number=0,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "files"
+        assert blocks[0]["files"][0]["name"] == "Informe.docx"
+
 
 @pytest.mark.django_db
 class TestConversationNew:

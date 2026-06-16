@@ -8,14 +8,17 @@ from apps.agent.tools.chart import (
     prepare_chart_for_render,
     validate_chart_input,
 )
+from apps.agent.tools.document import pop_document_display
 from apps.agent.tools.display import PLAN_TOOL_LABEL, get_tool_display
 from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
 
 PLAN_TOOLS = {"write_todos"}
-DISPLAY_TOOLS = {"show_data_table", "show_chart"}
+DISPLAY_TOOLS = {"show_data_table", "show_chart", "create_document", "update_document"}
 TABLE_DISPLAY_TOOL = "show_data_table"
 CHART_DISPLAY_TOOL = "show_chart"
+CREATE_DOCUMENT_TOOL = "create_document"
+UPDATE_DOCUMENT_TOOL = "update_document"
 OUTPUT_SUMMARY_MAX_LEN = 500
 
 
@@ -193,6 +196,25 @@ class StreamEventHandler:
                     message=self.message,
                 )
             output_summary = "Gráfico mostrado" if result.get("ok") else "Error al mostrar gráfico"
+        elif name in (CREATE_DOCUMENT_TOOL, UPDATE_DOCUMENT_TOOL):
+            result = self._resolve_document_display_result(output, tool_call_id)
+            if result.get("file_id"):
+                event_type = (
+                    AgentEvent.EventType.FILE_UPDATED
+                    if result.get("updated")
+                    else AgentEvent.EventType.FILE_CREATED
+                )
+                self.persist(
+                    conversation=self.conversation,
+                    event_type=event_type,
+                    payload=result,
+                    message=self.message,
+                )
+            output_summary = (
+                "Documento actualizado"
+                if result.get("updated")
+                else "Documento creado"
+            ) if result.get("file_id") else "Error al generar documento"
         else:
             return
 
@@ -273,6 +295,33 @@ class StreamEventHandler:
         if parsed.get("ok") and parsed.get("labels"):
             return parsed
         return {"ok": False}
+
+    def _resolve_document_display_result(
+        self,
+        output: str,
+        tool_call_id: str | None,
+    ) -> dict:
+        registry_result = pop_document_display(tool_call_id)
+        if registry_result:
+            return registry_result
+
+        try:
+            parsed = json.loads(output)
+        except json.JSONDecodeError:
+            return {}
+        if parsed.get("ok") and parsed.get("file_id"):
+            return {
+                "file_id": parsed["file_id"],
+                "name": parsed.get("name", "Document"),
+                "ext": "DOCX",
+                "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "meta": "Document",
+                "version": parsed.get("version", 1),
+                "download_url": f"/files/{parsed['file_id']}/download/",
+                "preview_url": f"/files/{parsed['file_id']}/preview/",
+                "updated": parsed.get("action") == "updated",
+            }
+        return {}
 
     def _emit_tool_start(self, name: str, tool_input: dict, tool_call_id: str) -> None:
         if name in PLAN_TOOLS:

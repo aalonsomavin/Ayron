@@ -2,6 +2,8 @@ from django.conf import settings
 from deepagents import create_deep_agent
 
 from apps.agent.tools import AGENT_TOOLS
+from apps.chat.models import Conversation
+from apps.files.services import format_agent_file_index_block
 
 CHINOOK_SYSTEM_PROMPT = """\
 Eres un asistente de datos para la base Chinook: una tienda de música digital \
@@ -111,12 +113,32 @@ de la base; no inventes cifras.
   clave, encabezados cortos si la respuesta es larga.
 - Tablas y gráficos **solo** con `show_data_table` y `show_chart`; nunca tablas markdown \
   (`| col |`) ni intentes reproducir datos visuales en texto.
+
+## Documentos Word
+
+- Usa `create_document` cuando el usuario pida un informe, memo, resumen exportable \
+  o documento Word.
+- Pasa contenido estructurado en `sections` (encabezados, párrafos, viñetas, tablas opcionales).
+- Tras `create_document`, **no repitas el contenido del informe** en texto del chat.
+- Para modificar un documento existente: usa `get_document(file_id)` si necesitas el \
+  contenido actual, luego `update_document(file_id, ...)`.
+- **Nunca** llames `create_document` de nuevo para el mismo informe; usa `update_document` \
+  con el `file_id` existente.
+- `list_conversation_files` lista los documentos de esta conversación con sus file_id.
+- Combina con SQL: primero consulta datos, luego sintetiza en el documento.
 """
 
 
-def create_agent():
+def build_system_prompt(conversation: Conversation) -> str:
+    file_index = format_agent_file_index_block(conversation)
+    if file_index:
+        return f"{CHINOOK_SYSTEM_PROMPT}\n{file_index}"
+    return CHINOOK_SYSTEM_PROMPT
+
+
+def create_agent(conversation: Conversation):
     return create_deep_agent(
         model=settings.DEFAULT_LLM_MODEL,
         tools=AGENT_TOOLS,
-        system_prompt=CHINOOK_SYSTEM_PROMPT,
+        system_prompt=build_system_prompt(conversation),
     )

@@ -11,6 +11,8 @@ DATABASES = {
     }
 }
 
+MEDIA_ROOT = BASE_DIR / "test_media"
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]

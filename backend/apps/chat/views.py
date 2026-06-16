@@ -83,6 +83,8 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
             AgentEvent.EventType.TOKEN,
             AgentEvent.EventType.TABLE,
             AgentEvent.EventType.CHART,
+            AgentEvent.EventType.FILE_CREATED,
+            AgentEvent.EventType.FILE_UPDATED,
         ),
     ).order_by("sequence_number")
 
@@ -103,6 +105,15 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
                     "table": prepare_table_for_render(event.payload),
                 }
             )
+        elif event.event_type in (
+            AgentEvent.EventType.FILE_CREATED,
+            AgentEvent.EventType.FILE_UPDATED,
+        ):
+            file_payload = dict(event.payload)
+            if blocks and blocks[-1]["type"] == "files":
+                blocks[-1]["files"].append(file_payload)
+            else:
+                blocks.append({"type": "files", "files": [file_payload]})
         else:
             chart = prepare_chart_for_render(event.payload)
             blocks.append(
