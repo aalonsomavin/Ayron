@@ -23,6 +23,11 @@ components.
   - `SourcesScreen.jsx` — connected sources list with status, plus integration catalog.
   - `AutomationsScreen.jsx` — workflow cards with live on/off switches.
   - `data.js` — sample data for all screens.
+- **`Dashboard · Catálogo de bloques.dc.html`** — standalone HTML block library (KPIs, tables, insight/callout) with inline styles for agent-generated reports.
+
+## Agent HTML reports
+
+The `.dc.html` catalog is a human visual reference. The agent reads `backend/skills/html-reports/GUIDELINES.md` and composes HTML with shared classes in `backend/static/css/html_report_dashboard.css` (and `.ay-report-prose` in `html_report_export.css`) — update CSS and guidelines when editing the catalog.
 
 ## Notes
 - Charts are lightweight SVG/CSS (line, bars, progress) using the data-viz tokens

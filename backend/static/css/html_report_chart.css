@@ -1,0 +1,60 @@
+:root {
+  --ay-chart-1: #3b6ef6;
+  --ay-chart-2: #16a34a;
+  --ay-chart-3: #d97706;
+  --ay-chart-4: #8b5cf6;
+  --ay-chart-5: #e1568f;
+  --ay-chart-6: #0d9aa8;
+  --ay-chart-7: #6b7280;
+  --ay-chart-8: #db5a3c;
+  --ay-font-sans: "Geist", system-ui, sans-serif;
+  --ay-font-mono: "Geist Mono", ui-monospace, monospace;
+  --ay-text: #18181b;
+  --ay-text-muted: #8a8a92;
+  --ay-border-subtle: #ededee;
+}
+
+.ay-chart {
+  white-space: normal;
+}
+
+.ay-chart__card {
+  background: #fff;
+  border: 1px solid #e6e6e8;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 16, 20, 0.04), 0 1px 3px rgba(16, 16, 20, 0.06);
+}
+
+.ay-chart__title {
+  padding: 14px 16px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ay-text);
+}
+
+.ay-chart__plot {
+  position: relative;
+  height: 220px;
+  padding: 12px 16px 8px;
+}
+
+.ay-chart__canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.ay-chart__caption {
+  padding: 10px 16px 14px;
+  font-size: 12px;
+  color: var(--ay-text-muted);
+  border-top: 1px solid var(--ay-border-subtle);
+}
+
+.ay-dash-col .ay-chart {
+  height: 100%;
+}
+
+.ay-report-prose .ay-chart {
+  margin: 1.5rem 0;
+}

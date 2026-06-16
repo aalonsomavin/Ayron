@@ -1,6 +1,9 @@
 import json
+import uuid
+from html import escape
 from typing import Annotated, Literal
 
+from django.utils.html import json_script
 from langchain_core.tools import InjectedToolCallId, tool
 
 _CHART_DISPLAY_REGISTRY: dict[str, dict] = {}
@@ -147,6 +150,25 @@ def build_agent_tool_response(payload: dict) -> str:
             "agent_instruction": AGENT_INSTRUCTION_AFTER_CHART,
         }
     )
+
+
+def render_inline_chart_html(payload: dict, chart_id: str | None = None) -> str:
+    chart = prepare_chart_for_render(format_chart_payload(payload))
+    cid = chart_id or f"chart-{uuid.uuid4().hex[:10]}"
+    parts = [
+        f'<div class="ay-chart" data-chart-id="{escape(cid, quote=True)}">',
+        json_script(chart, cid),
+        '<div class="ay-chart__card">',
+    ]
+    if chart.get("title"):
+        parts.append(f'<div class="ay-chart__title">{escape(chart["title"])}</div>')
+    parts.append(
+        '<div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>'
+    )
+    if chart.get("caption"):
+        parts.append(f'<div class="ay-chart__caption">{escape(chart["caption"])}</div>')
+    parts.extend(["</div>", "</div>"])
+    return "".join(parts)
 
 
 def prepare_chart_for_render(payload: dict) -> dict:

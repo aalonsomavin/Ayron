@@ -1,9 +1,15 @@
+import json
 import re
 
 import bleach
 from bleach.css_sanitizer import CSSSanitizer
 
 MAX_HTML_BYTES = 512_000
+
+_JSON_SCRIPT_RE = re.compile(
+    r"<script\b([^>]*\btype\s*=\s*[\"']application/json[\"'][^>]*)>(.*?)</script>",
+    re.IGNORECASE | re.DOTALL,
+)
 
 ALLOWED_TAGS = frozenset(
     {
@@ -59,6 +65,7 @@ ALLOWED_TAGS = frozenset(
         "aside",
         "figure",
         "figcaption",
+        "canvas",
         "details",
         "summary",
         "svg",
@@ -84,6 +91,8 @@ ALLOWED_TAGS = frozenset(
 
 ALLOWED_ATTRIBUTES = {
     "*": ["class", "id", "title", "role", "aria-label", "aria-hidden", "lang"],
+    "div": ["data-chart-id", "data-ay-chart-script"],
+    "canvas": ["class", "width", "height"],
     "a": ["href", "rel", "target"],
     "img": ["src", "alt", "width", "height", "loading"],
     "link": ["rel", "href"],
@@ -172,6 +181,35 @@ CSS_SANITIZER = CSSSanitizer(
 )
 
 
+def _preserve_json_scripts(html: str) -> tuple[str, list[str]]:
+    stored: list[str] = []
+
+    def replace(match: re.Match) -> str:
+        body = match.group(2).strip()
+        try:
+            json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid chart JSON script: {exc}") from exc
+        token = f'<div data-ay-chart-script="{len(stored)}"></div>'
+        stored.append(match.group(0))
+        return token
+
+    preserved = _JSON_SCRIPT_RE.sub(replace, html)
+    preserved = re.sub(
+        r"<script\b[^>]*>.*?</script>",
+        "",
+        preserved,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return preserved, stored
+
+
+def _restore_json_scripts(html: str, stored: list[str]) -> str:
+    for idx, script in enumerate(stored):
+        html = html.replace(f'<div data-ay-chart-script="{idx}"></div>', script, 1)
+    return html
+
+
 def _is_full_document(html: str) -> bool:
     return bool(re.search(r"<!DOCTYPE|<html", html, re.IGNORECASE))
 
@@ -195,6 +233,7 @@ def sanitize_html_report(html: str) -> str:
     if len(raw.encode("utf-8")) > MAX_HTML_BYTES:
         raise ValueError(f"html exceeds maximum of {MAX_HTML_BYTES} bytes")
 
+    raw, json_scripts = _preserve_json_scripts(raw)
     cleaned = bleach.clean(
         raw,
         tags=ALLOWED_TAGS,
@@ -202,6 +241,7 @@ def sanitize_html_report(html: str) -> str:
         css_sanitizer=CSS_SANITIZER,
         strip=True,
     )
+    cleaned = _restore_json_scripts(cleaned, json_scripts)
     if not cleaned.strip():
         raise ValueError("html is empty after sanitization")
     return cleaned

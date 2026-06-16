@@ -67,13 +67,86 @@ def _load_export_css() -> str:
     return css_path.read_text(encoding="utf-8")
 
 
+def _load_dashboard_css() -> str:
+    css_path = Path(settings.BASE_DIR) / "static" / "css" / "html_report_dashboard.css"
+    return css_path.read_text(encoding="utf-8")
+
+
+CHART_JS_CDN = "https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"
+
+
+def _load_chart_css() -> str:
+    css_path = Path(settings.BASE_DIR) / "static" / "css" / "html_report_chart.css"
+    return css_path.read_text(encoding="utf-8")
+
+
+def _load_ayron_chart_js() -> str:
+    js_path = Path(settings.BASE_DIR) / "static" / "js" / "ayron-chart.js"
+    return js_path.read_text(encoding="utf-8")
+
+
+def _load_report_css(*, include_charts: bool = False) -> str:
+    css = f"{_load_export_css()}\n{_load_dashboard_css()}"
+    if include_charts:
+        css = f"{css}\n{_load_chart_css()}"
+    return css
+
+
+def _body_has_charts(body_html: str) -> bool:
+    return "ay-chart" in body_html
+
+
+def _report_chart_scripts(*, inline_mount: bool = False) -> str:
+    ayron_js = _load_ayron_chart_js()
+    mount = (
+        "<script>document.addEventListener('DOMContentLoaded',function(){"
+        "if(window.AyronChart){AyronChart.mountAll(document);}"
+        "});</script>"
+        if inline_mount
+        else ""
+    )
+    return (
+        f'<script src="{CHART_JS_CDN}"></script>'
+        f"<script>{ayron_js}</script>"
+        f"{mount}"
+    )
+
+
+def _report_font_links() -> str:
+    return (
+        '<link rel="preconnect" href="https://fonts.googleapis.com">'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2'
+        "?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap\">"
+    )
+
+
+def _report_styles_html(*, include_charts: bool = False) -> str:
+    return f"<style>{_load_report_css(include_charts=include_charts)}</style>"
+
+
 def _footer_html() -> str:
     return f'<footer class="ay-html-report__footer">{esc(footer_attribution_text(date.today()))}</footer>'
 
 
+def _uses_report_shell(body_html: str) -> bool:
+    return "ay-dash-page" in body_html or "ay-report-prose" in body_html
+
+
+def _wrap_export_body(body_html: str) -> str:
+    if _uses_report_shell(body_html):
+        return f"{body_html}{_footer_html()}"
+    return f'<div class="ay-html-report">{body_html}{_footer_html()}</div>'
+
+
 def build_preview_fragment(content_json: dict) -> str:
     body_html = content_json.get("body_html") or content_json.get("html") or ""
-    return f'<div class="ay-html-report-preview">{body_html}</div>'
+    include_charts = _body_has_charts(body_html)
+    return (
+        f"{_report_font_links()}"
+        f"{_report_styles_html(include_charts=include_charts)}"
+        f'<div class="ay-html-report-preview">{body_html}</div>'
+    )
 
 
 def build_export_html(content_json: dict) -> str:
@@ -96,7 +169,9 @@ def build_export_html(content_json: dict) -> str:
         return html
 
     body_html = content_json.get("body_html") or content_json.get("html") or ""
-    css = _load_export_css()
+    wrapped_body = _wrap_export_body(body_html)
+    include_charts = _body_has_charts(body_html)
+    chart_scripts = _report_chart_scripts(inline_mount=True) if include_charts else ""
     return (
         "<!DOCTYPE html>"
         '<html lang="es">'
@@ -104,10 +179,12 @@ def build_export_html(content_json: dict) -> str:
         '<meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{title}</title>"
-        f"<style>{css}</style>"
+        f"{_report_font_links()}"
+        f"<style>{_load_report_css(include_charts=include_charts)}</style>"
         "</head>"
         "<body>"
-        f'<div class="ay-html-report">{body_html}{_footer_html()}</div>'
+        f"{wrapped_body}"
+        f"{chart_scripts}"
         "</body>"
         "</html>"
     )
@@ -167,11 +244,20 @@ def create_html_report(
 ) -> str:
     """Create an HTML report for the user in the chat, exportable as PDF.
 
-    Pass the report body as `html`: semantic HTML with inline CSS in a <style> block,
-    tables, SVG diagrams, code in <pre><code>, etc. You may pass a full document
-    (<!DOCTYPE html>...) or a body fragment. Ayron sanitizes and stores the HTML.
+    Read `/skills/html-reports/GUIDELINES.md` before writing HTML. Use shared
+    classes (`ay-dash-*` for dashboards, `ay-report-prose` for explainers) — do
+    not duplicate system CSS or Google Fonts in the fragment. Ayron injects fonts
+    and stylesheet automatically.
 
-    Set `title` for the file metadata. Use `subtitle` for one line of context.
+    For charts, embed `.ay-chart` blocks with a JSON payload in
+    `<script type="application/json">` (see GUIDELINES). Do not use `<script>`
+    for JavaScript.
+
+    Pass the report body as `html`: a body fragment with semantic markup. You may
+    pass a full document (<!DOCTYPE html>...) if needed. Tables, SVG diagrams, and
+    <pre><code> are allowed; no <script>.
+
+    Set `title` for file metadata. Use `subtitle` for one line of context.
     Use `filename` like `<topic>-<kind>.html`. Do not repeat report content in chat.
 
     To modify an existing report later, use update_html_report with the same file_id.

@@ -7,6 +7,7 @@ from apps.agent.tools.chart import (
     MAX_SERIES,
     pop_chart_display,
     prepare_chart_for_render,
+    render_inline_chart_html,
     show_chart,
     validate_chart_input,
 )
@@ -114,3 +115,20 @@ class TestShowChartTool:
         payload = pop_chart_display("call_test")
         assert payload is not None
         assert payload["labels"] == ["EMEA"]
+
+
+class TestRenderInlineChartHtml:
+    def test_renders_chart_markup(self):
+        payload = validate_chart_input(
+            chart_type="bar",
+            labels=["EMEA", "APAC"],
+            series=[{"name": "Ingresos", "values": [100, 200]}],
+            title="Por región",
+        )
+        html = render_inline_chart_html(payload, chart_id="chart-test")
+        assert 'class="ay-chart"' in html
+        assert 'data-chart-id="chart-test"' in html
+        assert 'type="application/json"' in html
+        assert "chart-test" in html
+        assert 'class="ay-chart__canvas"' in html
+        assert "Por región" in html

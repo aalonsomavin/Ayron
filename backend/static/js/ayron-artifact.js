@@ -229,9 +229,9 @@
         .then(function (html) {
           if (self.openFile && self.openFile.file_id === file.file_id) {
             body.innerHTML = html;
-            if (isHtml) {
-              body.innerHTML = html;
-            } else if (window.AyronDocPreview) {
+            if (isHtml && window.AyronChart) {
+              window.AyronChart.mountAll(body);
+            } else if (!isHtml && window.AyronDocPreview) {
               window.AyronDocPreview.mount(body);
             }
           }

@@ -21,6 +21,20 @@ class TestPlatformSkills:
         assert (skills_dir / "docx-documents" / "SKILL.md").is_file()
         assert (skills_dir / "html-reports" / "SKILL.md").is_file()
 
+    def test_html_reports_guidelines_exist(self):
+        skills_dir = get_platform_skills_dir() / "html-reports"
+        assert (skills_dir / "GUIDELINES.md").is_file()
+        assert (skills_dir / "starter-dashboard.html").is_file()
+
+    def test_html_reports_skill_references_guidelines(self):
+        skill_path = get_platform_skills_dir() / "html-reports" / "SKILL.md"
+        body = skill_path.read_text(encoding="utf-8")
+        assert "GUIDELINES.md" in body
+        assert "create_html_report" in body
+        assert "append_html_report_block" not in body
+        assert "create_html_dashboard_report" not in body
+        assert "ay-dash-page" in body or "ay-dash-" in body
+
     def test_docx_skill_frontmatter(self):
         skill_path = get_platform_skills_dir() / "docx-documents" / "SKILL.md"
         text = skill_path.read_text(encoding="utf-8")

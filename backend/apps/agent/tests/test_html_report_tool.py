@@ -4,6 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from apps.agent.context import set_agent_context
+from apps.agent.tools.chart import render_inline_chart_html, validate_chart_input
 from apps.agent.tools.html_report import (
     build_export_html,
     build_preview_fragment,
@@ -47,6 +48,44 @@ SAMPLE_HTML = """
 </main>
 """
 
+DASHBOARD_HTML = """
+<div class="ay-dash-page">
+  <div class="ay-dash-inner">
+    <h1 class="ay-dash-title">Ventas Mayo</h1>
+    <div class="ay-dash-grid">
+      <div class="ay-dash-col ay-dash-col--3">
+        <div class="ay-dash-card">
+          <div class="ay-dash-kpi-label">Ingresos</div>
+          <div class="ay-dash-kpi-value">$1.28M</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+"""
+
+
+def _chart_report_html() -> str:
+    chart = render_inline_chart_html(
+        validate_chart_input(
+            chart_type="bar",
+            labels=["EMEA", "APAC"],
+            series=[{"name": "Ingresos", "values": [100, 200]}],
+            title="Por región",
+        ),
+        chart_id="chart-report",
+    )
+    return f"""
+<div class="ay-dash-page">
+  <div class="ay-dash-inner">
+    <h1 class="ay-dash-title">Ventas</h1>
+    <div class="ay-dash-grid">
+      <div class="ay-dash-col ay-dash-col--12">{chart}</div>
+    </div>
+  </div>
+</div>
+"""
+
 
 @pytest.fixture
 def user(db):
@@ -64,7 +103,20 @@ class TestHtmlReportTool:
         dirty = "<p>Hola</p><script>alert(1)</script>"
         clean = sanitize_html_report(dirty)
         assert "Hola" in clean
-        assert "script" not in clean
+        assert "alert" not in clean
+
+    def test_sanitize_preserves_chart_json_script(self):
+        dirty = """
+        <div class="ay-chart" data-chart-id="chart-1">
+          <script id="chart-1" type="application/json">{"chart_type":"bar","labels":["A"],"datasets":[{"label":"S","data":[1],"color_index":0}],"value_format":"number"}</script>
+          <canvas class="ay-chart__canvas"></canvas>
+        </div>
+        """
+        clean = sanitize_html_report(dirty)
+        assert 'type="application/json"' in clean
+        assert "chart-1" in clean
+        assert "ay-chart__canvas" in clean
+        assert "alert" not in clean
 
     def test_validate_html_report_content(self):
         result = validate_html_report_content("Informe", SAMPLE_HTML, "Mayo 2026")
@@ -76,18 +128,52 @@ class TestHtmlReportTool:
         content = validate_html_report_content("Informe", SAMPLE_HTML, "")
         html = build_preview_fragment(content)
         assert "ay-html-report-preview" in html
+        assert "fonts.googleapis.com" in html
+        assert ".ay-dash-page" in html or "ay-dash-page" in html
+        assert ".ay-report-prose" in html or "ay-report-prose" in html
         assert "<table>" in html
         assert "<svg" in html
+
+    def test_build_preview_fragment_dashboard(self):
+        content = validate_html_report_content("Ventas", DASHBOARD_HTML, "")
+        html = build_preview_fragment(content)
+        assert "ay-dash-kpi-value" in html
+        assert "ay-dash-page" in html
 
     def test_build_export_html(self):
         content = validate_html_report_content("Informe", SAMPLE_HTML, "")
         html = build_export_html(content)
         assert "<!DOCTYPE html>" in html
         assert "<style>" in html
+        assert "fonts.googleapis.com" in html
+        assert ".ay-dash-" in html
+        assert ".ay-report-prose" in html
         assert "<table>" in html
         assert "<svg" in html
         assert "<script" not in html
         assert "Generado con Ayron" in html
+
+    def test_build_export_html_dashboard(self):
+        content = validate_html_report_content("Ventas", DASHBOARD_HTML, "")
+        html = build_export_html(content)
+        assert ".ay-dash-page" in html
+        assert ".ay-dash-kpi-value" in html
+        assert "fonts.googleapis.com" in html
+        assert 'class="ay-dash-page"' in html
+
+    def test_build_export_html_with_chart(self):
+        content = validate_html_report_content("Ventas", _chart_report_html(), "")
+        html = build_export_html(content)
+        assert ".ay-chart__plot" in html
+        assert "chart.js" in html
+        assert "AyronChart.mountAll" in html
+        assert 'type="application/json"' in html
+
+    def test_build_preview_fragment_with_chart(self):
+        content = validate_html_report_content("Ventas", _chart_report_html(), "")
+        html = build_preview_fragment(content)
+        assert ".ay-chart__plot" in html
+        assert "chart.js" not in html
 
     def test_create_html_report(self, user, conversation):
         set_agent_context(conversation, user)
