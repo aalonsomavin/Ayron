@@ -857,8 +857,8 @@
 
   .ay-msg-user__bubble {
     max-width: 78%;
-    background: var(--ay-ink);
-    color: #fff;
+    background: var(--ay-bg-muted);
+    color: var(--ay-text);
     padding: 11px 15px;
     border-radius: 16px 16px 4px 16px;
     font-size: 14.5px;
