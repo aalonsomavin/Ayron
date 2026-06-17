@@ -1,5 +1,10 @@
 (function () {
   const MONO = ["#2a2a30", "#18181b", "#131316"];
+  const BRAND = [
+    [111, 230, 207],
+    [147, 239, 102],
+    [217, 242, 62],
+  ];
   const A = [
     [0.165, 0.8],
     [0.165, 0.175],
@@ -97,8 +102,14 @@
     };
   }
 
-  function makeGrad(ctx, map) {
+  function makeGrad(ctx, map, variant) {
     const g = ctx.createLinearGradient(map.X(0.1), map.Y(0.02), map.X(0.95), map.Y(0.98));
+    if (variant === "brand") {
+      g.addColorStop(0, "rgb(" + BRAND[0].join(",") + ")");
+      g.addColorStop(0.5, "rgb(" + BRAND[1].join(",") + ")");
+      g.addColorStop(1, "rgb(" + BRAND[2].join(",") + ")");
+      return g;
+    }
     g.addColorStop(0, MONO[0]);
     g.addColorStop(0.5, MONO[1]);
     g.addColorStop(1, MONO[2]);
@@ -158,7 +169,7 @@
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineWidth = map.L(2 * R);
-    ctx.strokeStyle = makeGrad(ctx, map);
+    ctx.strokeStyle = makeGrad(ctx, map, canvasState.variant);
     ctx.save();
     clipBand(ctx, map, cutTop, 1.5, w, h);
     strokeReveal(ctx, map, Ar, p);
@@ -212,14 +223,25 @@
   function mount(root, options) {
     const canvas = getCanvas(root);
     if (!canvas) return null;
+    const opts = options || {};
+    const variant = opts.variant === "brand" ? "brand" : "mono";
     let state = states.get(canvas);
     if (!state) {
-      state = { canvas: canvas, canvasState: setup(canvas), raf: null, active: false, prog: 0 };
+      state = {
+        canvas: canvas,
+        canvasState: setup(canvas),
+        raf: null,
+        active: false,
+        prog: 0,
+        variant: variant,
+      };
       states.set(canvas, state);
     } else {
       state.canvasState = setup(canvas);
+      state.variant = variant;
     }
-    const active = options && options.active;
+    state.canvasState.variant = variant;
+    const active = opts.active;
     if (active) start(state);
     else drawAvatar(state.canvasState, 1);
     return state;

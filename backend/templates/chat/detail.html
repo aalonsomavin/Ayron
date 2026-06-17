@@ -5,27 +5,7 @@
 
 {% block content %}
 <div class="ay-shell">
-  <aside class="ay-sidebar">
-    <div class="ay-sidebar__section" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-      <span class="ay-sidebar__label" style="margin:0;">History</span>
-      <form method="post" action="{% url 'chat:new' %}">
-        {% csrf_token %}
-        {% include "components/button.html" with variant="ghost" size="sm" type="submit" label="New" left_icon="plus" %}
-      </form>
-    </div>
-    <ul class="ay-sidebar__list" style="padding:8px 12px;">
-      {% for item in conversations %}
-        <li>
-          <a
-            href="{% url 'chat:detail' conversation_id=item.id %}"
-            class="ay-sidebar__link{% if item.id == conversation.id %} ay-sidebar__link--active{% endif %}"
-          >
-            {{ item.title|default:"Untitled" }}
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
-  </aside>
+  {% include "chat/sidebar.html" with new_chat_active=False active_conversation_id=conversation.id %}
 
   <div class="ay-main" id="ay-main">
   <section class="ay-chat">

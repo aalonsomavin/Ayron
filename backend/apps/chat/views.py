@@ -1,4 +1,5 @@
 import json
+import random
 
 from django.db.models import Max
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
@@ -12,6 +13,47 @@ from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.chat.tool_trace import tool_trace_for_message
+
+
+HERO_TITLES = (
+    "¿Qué quieres saber hoy?",
+    "¿Qué te gustaría explorar?",
+    "¿Qué pregunta tenés?",
+    "¿En qué te ayudo?",
+    "¿Qué buscamos hoy?",
+    "¿Qué necesitás saber?",
+    "¿Por dónde empezamos?",
+    "¿Qué resolvemos hoy?",
+    "¿Qué te interesa saber?",
+    "¿Qué armamos hoy?",
+    "¿Qué revisamos juntos?",
+    "¿Qué comparamos?",
+    "¿Qué te traés hoy?",
+    "¿Qué miramos?",
+    "¿Qué descubrimos hoy?",
+)
+
+
+def _user_display_name(user) -> str:
+    full_name = user.get_full_name().strip()
+    if full_name:
+        name = full_name.split()[0]
+    else:
+        name = user.get_username()
+    if not name:
+        return name
+    return name[0].upper() + name[1:]
+
+
+def _hero_title(user) -> str:
+    name = _user_display_name(user)
+    options = list(HERO_TITLES) + [
+        f"¡Hola, {name}!",
+        f"Hola, {name}! ¿qué hacemos?",
+        f"¿Qué hacemos hoy, {name}?",
+        f"Hola, {name}! ¿en qué te ayudo?",
+    ]
+    return random.choice(options)
 
 
 def _get_conversation(request, conversation_id):
@@ -159,49 +201,7 @@ def _chat_turns(messages: list[Message]) -> list[dict]:
     return turns
 
 
-@require_GET
-def conversation_list(request):
-    conversations = _sidebar_conversations(request)
-    return render(request, "chat/list.html", {"conversations": conversations})
-
-
-@require_POST
-def conversation_new(request):
-    conversation = Conversation.objects.create(user=request.user)
-    return redirect("chat:detail", conversation_id=conversation.id)
-
-
-@require_GET
-def conversation_detail(request, conversation_id):
-    conversation = _get_conversation(request, conversation_id)
-    chat_messages = _messages_with_content_blocks(conversation)
-    return render(
-        request,
-        "chat/detail.html",
-        {
-            "conversation": conversation,
-            "chat_messages": chat_messages,
-            "chat_turns": _chat_turns(chat_messages),
-            "conversations": _sidebar_conversations(request),
-            "last_sequence": _conversation_last_sequence(conversation),
-            "active_message_id": _active_message_id(conversation),
-            "tool_labels_json": json.dumps(TOOL_LABELS),
-            "user_initials": _user_initials(request.user),
-        },
-    )
-
-
-@require_POST
-def send_message(request, conversation_id):
-    conversation = _get_conversation(request, conversation_id)
-
-    if conversation.status == Conversation.Status.PROCESSING:
-        return HttpResponseBadRequest("Conversation is already processing a message.")
-
-    content = request.POST.get("content", "").strip()
-    if not content:
-        return HttpResponseBadRequest("Message content is required.")
-
+def _enqueue_user_message(conversation: Conversation, content: str) -> tuple[Message, Message]:
     user_message = Message.objects.create(
         conversation=conversation,
         role=Message.Role.USER,
@@ -226,6 +226,73 @@ def send_message(request, conversation_id):
     )
     conversation.celery_task_id = task.id
     conversation.save(update_fields=update_fields)
+    return user_message, assistant_message
+
+
+@require_GET
+def conversation_list(request):
+    return render(
+        request,
+        "chat/list.html",
+        {
+            "conversations": _sidebar_conversations(request),
+            "new_chat_active": True,
+            "active_conversation_id": None,
+            "hero_title": _hero_title(request.user),
+        },
+    )
+
+
+@require_GET
+def conversation_new(request):
+    return redirect("chat:list")
+
+
+@require_POST
+def conversation_start(request):
+    content = request.POST.get("content", "").strip()
+    if not content:
+        return HttpResponseBadRequest("Message content is required.")
+
+    conversation = Conversation.objects.create(user=request.user)
+    _enqueue_user_message(conversation, content)
+    return redirect("chat:detail", conversation_id=conversation.id)
+
+
+@require_GET
+def conversation_detail(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    chat_messages = _messages_with_content_blocks(conversation)
+    return render(
+        request,
+        "chat/detail.html",
+        {
+            "conversation": conversation,
+            "chat_messages": chat_messages,
+            "chat_turns": _chat_turns(chat_messages),
+            "conversations": _sidebar_conversations(request),
+            "new_chat_active": False,
+            "active_conversation_id": conversation.id,
+            "last_sequence": _conversation_last_sequence(conversation),
+            "active_message_id": _active_message_id(conversation),
+            "tool_labels_json": json.dumps(TOOL_LABELS),
+            "user_initials": _user_initials(request.user),
+        },
+    )
+
+
+@require_POST
+def send_message(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+
+    if conversation.status == Conversation.Status.PROCESSING:
+        return HttpResponseBadRequest("Conversation is already processing a message.")
+
+    content = request.POST.get("content", "").strip()
+    if not content:
+        return HttpResponseBadRequest("Message content is required.")
+
+    _enqueue_user_message(conversation, content)
 
     if request.headers.get("HX-Request"):
         return HttpResponse(status=204)

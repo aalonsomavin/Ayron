@@ -1,30 +1,117 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Chat — Ayron{% endblock %}
 
 {% block content %}
-<div class="ay-page">
-  <div class="ay-page__header">
-    <h1 class="ay-page__title">Conversations</h1>
-    <form method="post" action="{% url 'chat:new' %}">
-      {% csrf_token %}
-      {% include "components/button.html" with variant="primary" size="sm" type="submit" label="New chat" left_icon="plus" %}
-    </form>
-  </div>
+<div class="ay-shell">
+  {% include "chat/sidebar.html" with new_chat_active=True active_conversation_id=None %}
 
-  {% if conversations %}
-    <ul class="ay-list">
-      {% for item in conversations %}
-        <li class="ay-list__item">
-          <a href="{% url 'chat:detail' conversation_id=item.id %}">
-            <span>{{ item.title|default:"Untitled" }}</span>
-            <span class="ay-list__meta">{{ item.updated_at|date:"M j, H:i" }}</span>
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="ay-empty">No conversations yet. Start a new chat to ask questions about the Chinook music store database.</p>
-  {% endif %}
+  <div class="ay-main" id="ay-main">
+    <section class="ay-chat ay-chat--landing">
+      <div class="ay-chat__viewport">
+        <div class="ay-chat-empty__harmono-stage" aria-hidden="true">
+          <canvas class="ay-chat-empty__harmono"></canvas>
+          <div class="ay-chat-empty__fade"></div>
+        </div>
+        <div class="ay-chat-empty">
+          <div class="ay-chat-empty__center">
+            <div class="ay-chat-empty__hero">
+              <div class="ay-chat-empty__heading">
+                <div class="ay-chat-empty__mark-wrap" aria-hidden="true">
+                  <canvas class="ay-chat-empty__mark"></canvas>
+                </div>
+                <h1 class="ay-chat-empty__title">{{ hero_title }}</h1>
+              </div>
+            </div>
+
+            <form id="chat-composer" class="ay-chat-empty__composer" method="post" action="{% url 'chat:start' %}">
+              {% csrf_token %}
+              <div class="ay-chat-empty__composer-box">
+                <input
+                  type="text"
+                  name="content"
+                  id="chat-input"
+                  class="ay-chat-empty__input"
+                  placeholder="Escribe una consulta…"
+                  autocomplete="off"
+                  required
+                />
+                <div class="ay-chat-empty__composer-footer">
+                  <button type="button" class="ay-chat-empty__attach" aria-label="Agregar fotos o archivos" title="Próximamente">
+                    {% include "components/icon.html" with name="plus" size=18 %}
+                  </button>
+                  <button type="submit" id="chat-send" class="ay-chat-empty__send" aria-label="Enviar" disabled>
+                    {% include "components/icon.html" with name="sparkles" size=16 %}
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <div class="ay-chat-empty__suggestions">
+              <button type="button" class="ay-chat-empty__chip" data-suggestion="Genera un documento Word sobre ">
+                {% include "components/icon.html" with name="filetext" size=15 %}
+                <span>Generar documento Word</span>
+              </button>
+              <button type="button" class="ay-chat-empty__chip" data-suggestion="Genera un dashboard para ">
+                {% include "components/icon.html" with name="dashboard" size=15 %}
+                <span>Generar dashboard</span>
+              </button>
+              <button type="button" class="ay-chat-empty__chip" data-suggestion="Genera una hoja Excel con ">
+                {% include "components/icon.html" with name="table" size=15 %}
+                <span>Generar Excel</span>
+              </button>
+              <button type="button" class="ay-chat-empty__chip" data-suggestion="Genera gráficos con ">
+                {% include "components/icon.html" with name="chartbar" size=15 %}
+                <span>Generar gráficos</span>
+              </button>
+              <button type="button" class="ay-chat-empty__chip" data-suggestion="Genera una consulta sobre los datos de ">
+                {% include "components/icon.html" with name="database" size=15 %}
+                <span>Generar consulta sobre datos</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
 </div>
+
+<script src="{% static 'js/ayron-harmonograph.js' %}"></script>
+<script src="{% static 'js/ayron-avatar.js' %}"></script>
+<script>
+(function () {
+  const canvas = document.querySelector(".ay-chat-empty__harmono");
+  if (canvas && window.AyronHarmonograph) {
+    window.AyronHarmonograph.mount(canvas);
+  }
+
+  const mark = document.querySelector(".ay-chat-empty__mark");
+  if (mark && window.AyronAgentAvatar) {
+    window.AyronAgentAvatar.mount(mark, { active: false, variant: "brand" });
+  }
+
+  const inputEl = document.getElementById("chat-input");
+  const sendEl = document.getElementById("chat-send");
+
+  function updateSendState() {
+    if (!inputEl || !sendEl) return;
+    sendEl.disabled = !inputEl.value.trim();
+  }
+
+  if (inputEl) {
+    inputEl.addEventListener("input", updateSendState);
+    updateSendState();
+  }
+
+  document.querySelectorAll("[data-suggestion]").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      if (!inputEl) return;
+      inputEl.value = chip.dataset.suggestion || "";
+      inputEl.focus();
+      updateSendState();
+    });
+  });
+})();
+</script>
 {% endblock %}

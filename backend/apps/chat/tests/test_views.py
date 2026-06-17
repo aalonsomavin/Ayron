@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from apps.agent.events import persist_event
 from apps.chat.models import AgentEvent, Conversation, Message
-from apps.chat.views import _content_blocks_for_message, serialize_agent_event
+from apps.chat.views import _content_blocks_for_message, _hero_title, serialize_agent_event
 
 User = get_user_model()
 
@@ -505,9 +505,60 @@ class TestConversationDetail:
 
 @pytest.mark.django_db
 class TestConversationNew:
-    def test_new_creates_and_redirects(self, client, user):
+    def test_new_redirects_to_list(self, client, user):
         client.force_login(user)
-        response = client.post(reverse("chat:new"))
+        response = client.get(reverse("chat:new"))
+        assert response.status_code == 302
+        assert response.url == reverse("chat:list")
+        assert Conversation.objects.filter(user=user).count() == 0
+
+    def test_list_does_not_create_conversation(self, client, user):
+        client.force_login(user)
+        response = client.get(reverse("chat:list"))
+        assert response.status_code == 200
+        assert Conversation.objects.filter(user=user).count() == 0
+        content = response.content.decode()
+        assert "ay-chat-empty__title" in content
+
+
+@pytest.mark.django_db
+class TestHeroTitle:
+    def test_hero_title_returns_generic_title(self, user):
+        with patch("apps.chat.views.random.choice", side_effect=lambda opts: opts[0]):
+            assert _hero_title(user) == "¿Qué quieres saber hoy?"
+
+    def test_hero_title_greets_user_by_first_name(self, user):
+        user.first_name = "Alejandro"
+        user.save()
+        with patch("apps.chat.views.random.choice", side_effect=lambda opts: opts[-1]):
+            assert "Alejandro" in _hero_title(user)
+
+    def test_hero_title_capitalizes_username(self, user):
+        user.first_name = ""
+        user.last_name = ""
+        user.username = "alejandro"
+        user.save()
+        with patch("apps.chat.views.random.choice", side_effect=lambda opts: opts[-1]):
+            assert "Alejandro" in _hero_title(user)
+
+
+@pytest.mark.django_db
+class TestConversationStart:
+    def test_start_creates_conversation_on_first_message(self, client, user):
+        client.force_login(user)
+        with patch("apps.chat.views.run_agent_conversation") as mock_task:
+            mock_task.delay.return_value = MagicMock(id="task-456")
+            response = client.post(reverse("chat:start"), {"content": "Top artists by albums"})
+
         assert response.status_code == 302
         conversation = Conversation.objects.get(user=user)
         assert str(conversation.id) in response.url
+        assert conversation.title == "Top artists by albums"
+        assert conversation.status == Conversation.Status.PROCESSING
+        mock_task.delay.assert_called_once()
+
+    def test_start_rejects_empty_content(self, client, user):
+        client.force_login(user)
+        response = client.post(reverse("chat:start"), {"content": "   "})
+        assert response.status_code == 400
+        assert Conversation.objects.filter(user=user).count() == 0
