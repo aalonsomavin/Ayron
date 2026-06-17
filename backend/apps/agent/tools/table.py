@@ -4,6 +4,8 @@ from typing import Annotated
 
 from langchain_core.tools import InjectedToolCallId, tool
 
+from apps.agent.tools.errors import build_tool_error_response
+
 _TABLE_DISPLAY_REGISTRY: dict[str, dict] = {}
 
 
@@ -316,7 +318,7 @@ def show_data_table(
     try:
         payload = validate_table_input(columns, rows, caption, column_widths)
     except ValueError as exc:
-        return json.dumps({"ok": False, "error": str(exc)})
+        return build_tool_error_response(str(exc))
     if tool_call_id:
         _TABLE_DISPLAY_REGISTRY[tool_call_id] = payload
     return build_agent_tool_response(payload)

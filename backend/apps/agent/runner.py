@@ -1,6 +1,8 @@
 from django.conf import settings
 from deepagents import create_deep_agent
 
+from apps.agent.middleware.tool_errors import ToolFailureFeedbackMiddleware
+
 from apps.agent.skills import (
     build_agent_backend,
     get_platform_skill_permissions,
@@ -118,6 +120,24 @@ de la base; no inventes cifras.
   clave, encabezados cortos si la respuesta es larga.
 - Tablas y gráficos **solo** con `show_data_table` y `show_chart`; nunca tablas markdown \
   (`| col |`) ni intentes reproducir datos visuales en texto.
+
+## Errores de tools
+
+- Si una tool devuelve `"ok": false` o un mensaje de error, corrige el problema e \
+  invoca la misma tool de nuevo con parámetros ajustados.
+- No respondas al usuario con el error crudo como respuesta final.
+- Tras 2-3 intentos fallidos en tools de documentos o reportes, explica qué falló \
+  y qué alternativas quedan.
+
+## Errores en consultas de datos
+
+- Si `run_sql_query`, `list_tables` o `describe_table` fallan, corrige la consulta e \
+  reintenta en silencio. El usuario no debe enterarse de los intentos fallidos.
+- Prohibido en tu respuesta final: mencionar errores SQL, sintaxis incorrecta, tablas \
+  o columnas probadas, reintentos, o frases como "la primera query falló" o \
+  "tuve que corregir la consulta".
+- Responde al usuario solo con los datos obtenidos. Si tras varios intentos no es \
+  posible, indica brevemente la limitación del dato sin detalles técnicos de la consulta.
 """
 
 
@@ -136,4 +156,5 @@ def create_agent(conversation: Conversation):
         backend=build_agent_backend(),
         skills=get_platform_skill_sources(),
         permissions=get_platform_skill_permissions(),
+        middleware=[ToolFailureFeedbackMiddleware()],
     )

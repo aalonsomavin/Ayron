@@ -8,6 +8,7 @@ from django.conf import settings
 from langchain_core.tools import InjectedToolCallId, tool
 
 from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import footer_attribution_text
 from apps.agent.tools.html_sanitize import normalize_agent_html
 from apps.files.models import HTML_MIME
@@ -303,27 +304,30 @@ def create_html_report(
     conversation = get_agent_conversation()
     user = get_agent_user()
     if conversation is None or user is None:
-        return json.dumps({"ok": False, "error": "No conversation context"})
+        return build_tool_error_response("No conversation context")
 
     try:
         kind = html_kind.strip() if html_kind else None
         content_json = validate_html_report_content(title, html, subtitle, html_kind=kind)
     except ValueError as exc:
-        return json.dumps({"ok": False, "error": str(exc)})
+        return build_tool_error_response(str(exc))
 
-    original_name = _sanitize_filename(filename, content_json["title"])
-    export_html = build_export_html(content_json)
-    preview_html = build_preview_fragment(content_json)
+    try:
+        original_name = _sanitize_filename(filename, content_json["title"])
+        export_html = build_export_html(content_json)
+        preview_html = build_preview_fragment(content_json)
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name=original_name,
+            content_json=content_json,
+            file_bytes=export_html.encode("utf-8"),
+            preview_html=preview_html,
+            mime_type=HTML_MIME,
+        )
+    except Exception as exc:
+        return build_tool_error_response(str(exc))
 
-    file_obj = save_generated_file(
-        conversation=conversation,
-        user=user,
-        original_name=original_name,
-        content_json=content_json,
-        file_bytes=export_html.encode("utf-8"),
-        preview_html=preview_html,
-        mime_type=HTML_MIME,
-    )
     _register_display(tool_call_id, file_obj, updated=False)
     return _build_agent_tool_response(file_obj, "created")
 
@@ -337,11 +341,11 @@ def get_html_report(file_id: str) -> str:
     """
     conversation = get_agent_conversation()
     if conversation is None:
-        return json.dumps({"ok": False, "error": "No conversation context"})
+        return build_tool_error_response("No conversation context")
 
     file_obj = get_file_for_conversation(file_id, conversation)
     if file_obj is None or file_obj.format_key != "html":
-        return json.dumps({"ok": False, "error": "HTML report not found in this conversation"})
+        return build_tool_error_response("HTML report not found in this conversation")
 
     body_html = file_obj.content_json.get("body_html") or file_obj.content_json.get("html", "")
     payload = {
@@ -372,11 +376,11 @@ def update_html_report(
     """
     conversation = get_agent_conversation()
     if conversation is None:
-        return json.dumps({"ok": False, "error": "No conversation context"})
+        return build_tool_error_response("No conversation context")
 
     file_obj = get_file_for_conversation(file_id, conversation)
     if file_obj is None or file_obj.format_key != "html":
-        return json.dumps({"ok": False, "error": "HTML report not found in this conversation"})
+        return build_tool_error_response("HTML report not found in this conversation")
 
     try:
         kind = html_kind.strip() if isinstance(html_kind, str) and html_kind.strip() else None
@@ -384,15 +388,19 @@ def update_html_report(
             file_obj.content_json, title, subtitle, html, html_kind=kind
         )
     except ValueError as exc:
-        return json.dumps({"ok": False, "error": str(exc)})
+        return build_tool_error_response(str(exc))
 
-    export_html = build_export_html(content_json)
-    preview_html = build_preview_fragment(content_json)
-    file_obj = update_generated_file(
-        file_obj=file_obj,
-        content_json=content_json,
-        file_bytes=export_html.encode("utf-8"),
-        preview_html=preview_html,
-    )
+    try:
+        export_html = build_export_html(content_json)
+        preview_html = build_preview_fragment(content_json)
+        file_obj = update_generated_file(
+            file_obj=file_obj,
+            content_json=content_json,
+            file_bytes=export_html.encode("utf-8"),
+            preview_html=preview_html,
+        )
+    except Exception as exc:
+        return build_tool_error_response(str(exc))
+
     _register_display(tool_call_id, file_obj, updated=True)
     return _build_agent_tool_response(file_obj, "updated")

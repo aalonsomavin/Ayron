@@ -66,3 +66,5 @@ class TestPlatformSkills:
         assert kwargs["skills"] == [PLATFORM_SKILLS_PATH]
         assert kwargs["backend"].virtual_mode is True
         assert kwargs["permissions"]
+        assert len(kwargs["middleware"]) == 1
+        assert kwargs["middleware"][0].__class__.__name__ == "ToolFailureFeedbackMiddleware"

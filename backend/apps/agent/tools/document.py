@@ -8,6 +8,7 @@ from docx import Document
 from langchain_core.tools import InjectedToolCallId, tool
 
 from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import (
     CALLOUT_VARIANTS,
     PAGE_HEIGHT_IN,
@@ -258,25 +259,28 @@ def create_document(
     conversation = get_agent_conversation()
     user = get_agent_user()
     if conversation is None or user is None:
-        return json.dumps({"ok": False, "error": "No conversation context"})
+        return build_tool_error_response("No conversation context")
 
     try:
         content_json = validate_content_json(title, subtitle, sections)
     except ValueError as exc:
-        return json.dumps({"ok": False, "error": str(exc)})
+        return build_tool_error_response(str(exc))
 
-    original_name = _sanitize_filename(filename, content_json["title"])
-    docx_bytes = build_docx(content_json)
-    preview_html = build_preview_html(content_json)
+    try:
+        original_name = _sanitize_filename(filename, content_json["title"])
+        docx_bytes = build_docx(content_json)
+        preview_html = build_preview_html(content_json)
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name=original_name,
+            content_json=content_json,
+            file_bytes=docx_bytes,
+            preview_html=preview_html,
+        )
+    except Exception as exc:
+        return build_tool_error_response(str(exc))
 
-    file_obj = save_generated_file(
-        conversation=conversation,
-        user=user,
-        original_name=original_name,
-        content_json=content_json,
-        file_bytes=docx_bytes,
-        preview_html=preview_html,
-    )
     _register_display(tool_call_id, file_obj, updated=False)
     return _build_agent_tool_response(file_obj, "created")
 
@@ -289,7 +293,7 @@ def list_conversation_files() -> str:
     """
     conversation = get_agent_conversation()
     if conversation is None:
-        return json.dumps({"ok": False, "error": "No conversation context"})
+        return build_tool_error_response("No conversation context")
 
     from apps.files.services import get_agent_file_index
 
@@ -305,11 +309,11 @@ def get_document(file_id: str) -> str:
     """
     conversation = get_agent_conversation()
     if conversation is None:
-        return json.dumps({"ok": False, "error": "No conversation context"})
+        return build_tool_error_response("No conversation context")
 
     file_obj = get_file_for_conversation(file_id, conversation)
     if file_obj is None:
-        return json.dumps({"ok": False, "error": "Document not found in this conversation"})
+        return build_tool_error_response("Document not found in this conversation")
 
     return json.dumps(
         {
@@ -335,24 +339,28 @@ def update_document(
     """
     conversation = get_agent_conversation()
     if conversation is None:
-        return json.dumps({"ok": False, "error": "No conversation context"})
+        return build_tool_error_response("No conversation context")
 
     file_obj = get_file_for_conversation(file_id, conversation)
     if file_obj is None:
-        return json.dumps({"ok": False, "error": "Document not found in this conversation"})
+        return build_tool_error_response("Document not found in this conversation")
 
     try:
         content_json = _merge_content_json(file_obj.content_json, title, subtitle, sections)
     except ValueError as exc:
-        return json.dumps({"ok": False, "error": str(exc)})
+        return build_tool_error_response(str(exc))
 
-    docx_bytes = build_docx(content_json)
-    preview_html = build_preview_html(content_json)
-    file_obj = update_generated_file(
-        file_obj=file_obj,
-        content_json=content_json,
-        file_bytes=docx_bytes,
-        preview_html=preview_html,
-    )
+    try:
+        docx_bytes = build_docx(content_json)
+        preview_html = build_preview_html(content_json)
+        file_obj = update_generated_file(
+            file_obj=file_obj,
+            content_json=content_json,
+            file_bytes=docx_bytes,
+            preview_html=preview_html,
+        )
+    except Exception as exc:
+        return build_tool_error_response(str(exc))
+
     _register_display(tool_call_id, file_obj, updated=True)
     return _build_agent_tool_response(file_obj, "updated")

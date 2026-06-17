@@ -5,6 +5,7 @@ import psycopg
 from langchain_core.tools import tool
 
 from apps.agent.db import MAX_ROWS, demo_db_connection
+from apps.agent.tools.errors import build_query_error_response
 
 TABLE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 STRING_LITERAL_PATTERN = re.compile(r"'(?:''|[^'])*'")
@@ -145,17 +146,23 @@ def list_tables() -> str:
           AND table_type = 'BASE TABLE'
         ORDER BY table_name
     """
-    with demo_db_connection() as conn:
-        with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-            cur.execute(query)
-            tables = [row["table_name"] for row in cur.fetchall()]
-    return json.dumps(tables)
+    try:
+        with demo_db_connection() as conn:
+            with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                cur.execute(query)
+                tables = [row["table_name"] for row in cur.fetchall()]
+        return json.dumps(tables)
+    except psycopg.Error as exc:
+        return build_query_error_response(str(exc).strip())
 
 
 @tool
 def describe_table(table_name: str) -> str:
     """Return columns, types, nullability, defaults, and primary keys for a table."""
-    name = validate_table_name(table_name)
+    try:
+        name = validate_table_name(table_name)
+    except ValueError as exc:
+        return build_query_error_response(str(exc))
     columns_query = """
         SELECT
             column_name,
@@ -179,14 +186,17 @@ def describe_table(table_name: str) -> str:
           AND tc.constraint_type = 'PRIMARY KEY'
         ORDER BY kcu.ordinal_position
     """
-    with demo_db_connection() as conn:
-        with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-            cur.execute(columns_query, (name,))
-            columns = cur.fetchall()
-            if not columns:
-                raise ValueError(f"Table '{name}' not found")
-            cur.execute(pk_query, (name,))
-            primary_keys = [row["column_name"] for row in cur.fetchall()]
+    try:
+        with demo_db_connection() as conn:
+            with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                cur.execute(columns_query, (name,))
+                columns = cur.fetchall()
+                if not columns:
+                    return build_query_error_response(f"Table '{name}' not found")
+                cur.execute(pk_query, (name,))
+                primary_keys = [row["column_name"] for row in cur.fetchall()]
+    except psycopg.Error as exc:
+        return build_query_error_response(str(exc).strip())
     return json.dumps(
         {
             "table_name": name,
@@ -200,26 +210,30 @@ def describe_table(table_name: str) -> str:
 @tool
 def run_sql_query(sql: str) -> str:
     """Execute a read-only SELECT query against the Chinook demo database."""
-    query = normalize_chinook_sql(validate_select_only(sql))
-    with demo_db_connection() as conn:
-        with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-            try:
-                cur.execute(query)
-            except psycopg.Error as exc:
-                return json.dumps(
-                    {
-                        "error": str(exc).strip(),
-                        "hint": (
+    try:
+        query = normalize_chinook_sql(validate_select_only(sql))
+    except ValueError as exc:
+        return build_query_error_response(str(exc))
+    try:
+        with demo_db_connection() as conn:
+            with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                try:
+                    cur.execute(query)
+                except psycopg.Error as exc:
+                    return build_query_error_response(
+                        str(exc).strip(),
+                        hint=(
                             'Chinook uses PascalCase identifiers. Example: '
                             'SELECT * FROM "Album" LIMIT 5'
                         ),
-                        "sql_executed": query,
-                    }
-                )
-            rows = cur.fetchmany(MAX_ROWS + 1)
-            truncated = len(rows) > MAX_ROWS
-            if truncated:
-                rows = rows[:MAX_ROWS]
+                        sql_executed=query,
+                    )
+                rows = cur.fetchmany(MAX_ROWS + 1)
+                truncated = len(rows) > MAX_ROWS
+                if truncated:
+                    rows = rows[:MAX_ROWS]
+    except psycopg.Error as exc:
+        return build_query_error_response(str(exc).strip())
     result = {
         "rows": rows,
         "row_count": len(rows),

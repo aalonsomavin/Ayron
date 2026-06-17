@@ -57,6 +57,26 @@ def parse_tool_input(args) -> dict:
     return {}
 
 
+def parse_tool_output_status(output: str) -> dict:
+    try:
+        parsed = json.loads(output)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict) or parsed.get("ok") is not False:
+        return {}
+    error = str(parsed.get("error", "Tool failed"))
+    if len(error) > OUTPUT_SUMMARY_MAX_LEN:
+        error = error[: OUTPUT_SUMMARY_MAX_LEN - 3] + "..."
+    return {"success": False, "error": error}
+
+
+def merge_tool_output_status(payload: dict, output: str) -> dict:
+    status = parse_tool_output_status(output)
+    if status:
+        payload.update(status)
+    return payload
+
+
 def merge_tool_input(existing: dict, incoming: dict) -> dict:
     if not incoming or incoming.get("raw"):
         return existing
@@ -176,12 +196,15 @@ class StreamEventHandler:
         self.persist(
             conversation=self.conversation,
             event_type=AgentEvent.EventType.TOOL_END,
-            payload={
-                "tool": name,
-                "output_summary": summary,
-                "tool_call_id": tool_call_id,
-                **get_tool_display(name),
-            },
+            payload=merge_tool_output_status(
+                {
+                    "tool": name,
+                    "output_summary": summary,
+                    "tool_call_id": tool_call_id,
+                    **get_tool_display(name),
+                },
+                output,
+            ),
             message=self.message,
         )
 
@@ -244,12 +267,15 @@ class StreamEventHandler:
         self.persist(
             conversation=self.conversation,
             event_type=AgentEvent.EventType.TOOL_END,
-            payload={
-                "tool": name,
-                "output_summary": output_summary,
-                "tool_call_id": tool_call_id,
-                **get_tool_display(name),
-            },
+            payload=merge_tool_output_status(
+                {
+                    "tool": name,
+                    "output_summary": output_summary,
+                    "tool_call_id": tool_call_id,
+                    **get_tool_display(name),
+                },
+                output,
+            ),
             message=self.message,
         )
 

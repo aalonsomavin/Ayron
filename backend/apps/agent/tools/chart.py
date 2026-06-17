@@ -6,6 +6,8 @@ from typing import Annotated, Literal
 from django.utils.html import json_script
 from langchain_core.tools import InjectedToolCallId, tool
 
+from apps.agent.tools.errors import build_tool_error_response
+
 _CHART_DISPLAY_REGISTRY: dict[str, dict] = {}
 
 VALID_CHART_TYPES = frozenset({"bar", "line", "pie"})
@@ -230,7 +232,7 @@ def show_chart(
             value_format,
         )
     except ValueError as exc:
-        return json.dumps({"ok": False, "error": str(exc)})
+        return build_tool_error_response(str(exc))
     if tool_call_id:
         _CHART_DISPLAY_REGISTRY[tool_call_id] = payload
     return build_agent_tool_response(payload)

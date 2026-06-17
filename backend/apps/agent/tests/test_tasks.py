@@ -237,6 +237,105 @@ class TestRunAgentConversation:
         assert error_event.payload["message"] == LLM_RETRY_MESSAGE
         assert error_event.payload["recoverable"] is True
 
+    def test_run_agent_conversation_continues_after_tool_error(self, conversation_with_messages):
+        conversation, user_message, assistant_message = conversation_with_messages
+        error_output = json.dumps(
+            {
+                "ok": False,
+                "error": "Only SELECT queries are allowed",
+                "agent_instruction": "retry",
+            }
+        )
+        stream_chunks = [
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_1",
+                                "name": "run_sql_query",
+                                "args": '{"sql": "DELETE FROM Artist"}',
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            },
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=error_output,
+                        name="run_sql_query",
+                        tool_call_id="call_1",
+                    ),
+                    {},
+                ),
+            },
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_2",
+                                "name": "run_sql_query",
+                                "args": '{"sql": "SELECT 1"}',
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            },
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content='{"rows": [], "row_count": 0, "truncated": false, "max_rows": 100}',
+                        name="run_sql_query",
+                        tool_call_id="call_2",
+                    ),
+                    {},
+                ),
+            },
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (AIMessageChunk(content="Consulta corregida."), {}),
+            },
+        ]
+        mock_agent = MagicMock()
+        mock_agent.stream.return_value = stream_chunks
+
+        with patch("apps.agent.tasks.create_agent", return_value=mock_agent):
+            with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+                mock_get_redis.return_value = MagicMock()
+                run_agent_conversation(
+                    str(conversation.id),
+                    user_message.id,
+                    assistant_message.id,
+                )
+
+        assistant_message.refresh_from_db()
+        conversation.refresh_from_db()
+
+        assert assistant_message.content == "Consulta corregida."
+        assert conversation.status == Conversation.Status.ACTIVE
+        tool_end_events = AgentEvent.objects.filter(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.TOOL_END,
+        ).order_by("sequence_number")
+        assert tool_end_events.count() == 2
+        assert tool_end_events[0].payload["success"] is False
+        assert "success" not in tool_end_events[1].payload
+
 
 @pytest.mark.django_db
 class TestFormatAgentError:
@@ -326,6 +425,46 @@ class TestStreamEventHandler:
         assert emitted[0]["event_type"] == AgentEvent.EventType.TOOL_START
         assert emitted[0]["payload"]["tool_label"] == "Buscando datos"
         assert emitted[0]["payload"]["tool_subtitle"] == 'SELECT * FROM "Artist" LIMIT 5'
+
+    def test_tool_error_emits_success_false_in_tool_end(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        error_output = json.dumps(
+            {
+                "ok": False,
+                "error": "Only SELECT queries are allowed",
+                "agent_instruction": "retry",
+            }
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=error_output,
+                        name="run_sql_query",
+                        tool_call_id="call_err",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        tool_end = emitted[0]
+        assert tool_end["event_type"] == AgentEvent.EventType.TOOL_END
+        assert tool_end["payload"]["success"] is False
+        assert "Only SELECT" in tool_end["payload"]["error"]
 
     def test_show_data_table_emits_table_event(self, conversation_with_messages):
         conversation, _, assistant_message = conversation_with_messages

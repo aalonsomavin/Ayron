@@ -117,5 +117,21 @@ class TestSqlToolsIntegration:
         assert "Title" in result["rows"][0]
 
     def test_run_sql_query_rejects_non_select(self):
-        with pytest.raises(ValueError, match="Only SELECT"):
-            run_sql_query.invoke({"sql": "DELETE FROM artist"})
+        result = json.loads(run_sql_query.invoke({"sql": "DELETE FROM artist"}))
+        assert result["ok"] is False
+        assert "Only SELECT" in result["error"]
+        assert "agent_instruction" in result
+
+    def test_describe_table_not_found_returns_error_json(self):
+        result = json.loads(describe_table.invoke({"table_name": "NotARealTable"}))
+        assert result["ok"] is False
+        assert "not found" in result["error"].lower()
+        assert "agent_instruction" in result
+
+    def test_run_sql_query_db_error_returns_error_json(self):
+        result = json.loads(
+            run_sql_query.invoke({"sql": 'SELECT * FROM "NotARealTable" LIMIT 1'})
+        )
+        assert result["ok"] is False
+        assert "agent_instruction" in result
+        assert "hint" in result
