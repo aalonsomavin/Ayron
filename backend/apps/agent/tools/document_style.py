@@ -3,7 +3,7 @@ from datetime import date
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Length, Pt, RGBColor
 
 FOOTER_ATTRIBUTION = "Generado con Ayron"
 SPANISH_MONTHS = (
@@ -63,15 +63,17 @@ CALLOUT_VARIANTS = {
 
 PAGE_WIDTH_IN = 8.5
 PAGE_HEIGHT_IN = 11.0
-PAGE_MARGIN_IN = 1.0
+PAGE_MARGIN_IN = 0.75
 CONTENT_WIDTH_IN = PAGE_WIDTH_IN - (2 * PAGE_MARGIN_IN)
 PREVIEW_DPI = 96
-SECTION_SPACE_BEFORE = Pt(18)
-SECTION_SPACE_AFTER = Pt(8)
-BODY_SPACE_AFTER = Pt(6)
-BLOCK_SPACE_AFTER = Pt(10)
-TABLE_SPACE_BEFORE = Pt(10)
-TABLE_SPACE_AFTER = Pt(12)
+SECTION_SPACE_BEFORE = Pt(10)
+SECTION_SPACE_AFTER = Pt(6)
+BODY_SPACE_AFTER = Pt(4)
+BLOCK_SPACE_AFTER = Pt(6)
+TABLE_SPACE_BEFORE = Pt(6)
+TABLE_SPACE_AFTER = Pt(6)
+TABLE_CELL_MARGIN_TWIPS = 50
+CALLOUT_CELL_MARGIN_TWIPS = 70
 
 
 def rgb(hex_color: str) -> RGBColor:
@@ -196,6 +198,9 @@ def configure_document_styles(doc):
     normal.paragraph_format.space_after = BODY_SPACE_AFTER
     normal.paragraph_format.line_spacing = 1.35
 
+    for style_name in ("Title", "Heading 1", "Heading 2"):
+        _disable_heading_page_breaks(doc.styles[style_name])
+
     for style_name, size, bold, color in (
         ("Heading 1", FONT_SECTION_PT, True, COLORS["heading"]),
         ("Heading 2", 14, True, COLORS["heading"]),
@@ -228,7 +233,14 @@ def _set_cell_border(cell, *, color: str = COLORS["border"], size: str = "4"):
     tc_pr.append(borders)
 
 
-def _set_cell_margins(cell, *, top=80, bottom=80, left=120, right=120):
+def _set_cell_margins(
+    cell,
+    *,
+    top=TABLE_CELL_MARGIN_TWIPS,
+    bottom=TABLE_CELL_MARGIN_TWIPS,
+    left=TABLE_CELL_MARGIN_TWIPS + 20,
+    right=TABLE_CELL_MARGIN_TWIPS + 20,
+):
     tc_pr = cell._tc.get_or_add_tcPr()
     margins = OxmlElement("w:tcMar")
     for side, value in (("top", top), ("bottom", bottom), ("start", left), ("end", right)):
@@ -239,9 +251,27 @@ def _set_cell_margins(cell, *, top=80, bottom=80, left=120, right=120):
     tc_pr.append(margins)
 
 
+def _coerce_spacing(value) -> Length:
+    if isinstance(value, Length):
+        return value
+    return Pt(value)
+
+
+def _disable_heading_page_breaks(style):
+    style.paragraph_format.page_break_before = False
+    style.paragraph_format.keep_with_next = False
+    style.paragraph_format.keep_together = False
+
+
+def _reset_heading_paragraph_format(paragraph):
+    paragraph.paragraph_format.page_break_before = False
+    paragraph.paragraph_format.keep_with_next = False
+    paragraph.paragraph_format.keep_together = False
+
+
 def _style_paragraph(paragraph, *, space_before=0, space_after=BODY_SPACE_AFTER):
-    paragraph.paragraph_format.space_before = Pt(space_before)
-    paragraph.paragraph_format.space_after = space_after
+    paragraph.paragraph_format.space_before = _coerce_spacing(space_before)
+    paragraph.paragraph_format.space_after = _coerce_spacing(space_after)
 
 
 def add_kicker(doc, text: str):
@@ -261,6 +291,7 @@ def add_document_header(doc, title: str, subtitle: str = ""):
 
 def add_title(doc, text: str):
     paragraph = doc.add_heading(text, level=0)
+    _reset_heading_paragraph_format(paragraph)
     paragraph.paragraph_format.space_after = Pt(6)
     for run in paragraph.runs:
         set_run_font(run, size_pt=FONT_TITLE_PT, bold=True, color=COLORS["heading"])
@@ -268,13 +299,14 @@ def add_title(doc, text: str):
 
 def add_subtitle(doc, text: str):
     paragraph = doc.add_paragraph()
-    _style_paragraph(paragraph, space_after=Pt(16))
+    _style_paragraph(paragraph, space_after=Pt(10))
     run = paragraph.add_run(text)
     set_run_font(run, size_pt=FONT_SUBTITLE_PT, color=COLORS["text_muted"])
 
 
 def add_section_heading(doc, text: str):
     paragraph = doc.add_heading(text, level=1)
+    _reset_heading_paragraph_format(paragraph)
     paragraph.paragraph_format.space_before = SECTION_SPACE_BEFORE
     paragraph.paragraph_format.space_after = SECTION_SPACE_AFTER
     for run in paragraph.runs:
@@ -297,7 +329,7 @@ def add_bullet_item(doc, text: str):
 
 def add_separator(doc):
     paragraph = doc.add_paragraph()
-    _style_paragraph(paragraph, space_before=Pt(8), space_after=Pt(8))
+    _style_paragraph(paragraph, space_before=Pt(6), space_after=Pt(6))
     p_pr = paragraph._p.get_or_add_pPr()
     border = OxmlElement("w:pBdr")
     bottom = OxmlElement("w:bottom")
@@ -316,8 +348,9 @@ def _set_row_repeat_header(row):
 
 
 def add_styled_table(doc, headers: list[str], rows: list[list[str]]):
-    spacer_before = doc.add_paragraph()
-    _style_paragraph(spacer_before, space_before=Pt(2), space_after=TABLE_SPACE_BEFORE)
+    lead = doc.add_paragraph()
+    lead.paragraph_format.space_before = Pt(0)
+    lead.paragraph_format.space_after = TABLE_SPACE_BEFORE
 
     table = doc.add_table(rows=1 + len(rows), cols=len(headers))
     table.autofit = True
@@ -349,8 +382,9 @@ def add_styled_table(doc, headers: list[str], rows: list[list[str]]):
             _set_cell_border(cell, color=COLORS["border_subtle"], size="4")
             _set_cell_margins(cell)
 
-    spacer = doc.add_paragraph()
-    _style_paragraph(spacer, space_before=TABLE_SPACE_AFTER, space_after=BLOCK_SPACE_AFTER)
+    gap = doc.add_paragraph()
+    gap.paragraph_format.space_before = Pt(0)
+    gap.paragraph_format.space_after = BLOCK_SPACE_AFTER
 
 
 def add_callout(doc, *, variant: str, title: str, text: str):
@@ -359,7 +393,8 @@ def add_callout(doc, *, variant: str, title: str, text: str):
     cell = table.rows[0].cells[0]
     cell.text = ""
     _set_cell_shading(cell, theme["bg"])
-    _set_cell_margins(cell, top=100, bottom=100, left=140, right=140)
+    pad = CALLOUT_CELL_MARGIN_TWIPS
+    _set_cell_margins(cell, top=pad, bottom=pad, left=pad + 20, right=pad + 20)
 
     tc_pr = cell._tc.get_or_add_tcPr()
     borders = OxmlElement("w:tcBorders")
@@ -389,5 +424,6 @@ def add_callout(doc, *, variant: str, title: str, text: str):
     set_run_font(body_run, size_pt=FONT_BODY_PT, color=COLORS["text_muted"])
     body_paragraph.paragraph_format.space_after = Pt(0)
 
-    spacer = doc.add_paragraph()
-    _style_paragraph(spacer, space_before=0, space_after=BLOCK_SPACE_AFTER)
+    gap = doc.add_paragraph()
+    gap.paragraph_format.space_before = Pt(0)
+    gap.paragraph_format.space_after = BLOCK_SPACE_AFTER

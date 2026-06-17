@@ -1,7 +1,7 @@
 (function () {
   var DEFAULT_WIDTH_PX = 816;
   var DEFAULT_HEIGHT_PX = 1056;
-  var DEFAULT_MARGIN_PX = 96;
+  var DEFAULT_MARGIN_PX = 72;
   var resizeObserver = null;
   var observedContainer = null;
   var resizeTimer = null;

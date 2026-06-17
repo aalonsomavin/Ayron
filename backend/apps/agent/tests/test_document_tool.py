@@ -1,4 +1,6 @@
 import json
+from io import BytesIO
+from zipfile import ZipFile
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -114,6 +116,47 @@ class TestDocumentTool:
         assert len(docx_bytes) > 100
         assert docx_bytes[:2] == b"PK"
 
+    def test_build_docx_no_page_break_before_section_headings(self):
+        content = validate_content_json(
+            "Informe multi-sección",
+            "Mayo 2026",
+            [
+                {
+                    "heading": "Resumen",
+                    "blocks": [{"type": "paragraph", "text": "Primer bloque."}],
+                },
+                {
+                    "heading": "Hallazgos",
+                    "blocks": [{"type": "paragraph", "text": "Segundo bloque."}],
+                },
+                {
+                    "heading": "Recomendaciones",
+                    "blocks": [{"type": "paragraph", "text": "Tercer bloque."}],
+                },
+            ],
+        )
+        docx_bytes = build_docx(content)
+        xml = ZipFile(BytesIO(docx_bytes)).read("word/document.xml").decode()
+        assert 'w:pageBreakBefore w:val="true"' not in xml
+        assert 'w:pageBreakBefore w:val="on"' not in xml
+
+    def test_build_docx_spacing_values_are_reasonable(self, sample_content):
+        content = validate_content_json(
+            sample_content["title"],
+            sample_content["subtitle"],
+            sample_content["sections"],
+        )
+        docx_bytes = build_docx(content)
+        xml = ZipFile(BytesIO(docx_bytes)).read("word/document.xml").decode()
+        import re
+
+        for match in re.finditer(r'w:(before|after)="(\d+)"', xml):
+            twips = int(match.group(2))
+            assert twips <= 400, (
+                f"spacing {match.group(1)}={twips} twips is excessive "
+                f"(>{400} twips / 20pt)"
+            )
+
     def test_build_preview_html(self, sample_content):
         content = validate_content_json(
             sample_content["title"],
@@ -129,7 +172,7 @@ class TestDocumentTool:
         assert "ay-doc-preview__pages" in html
         assert 'data-page-width-px="816"' in html
         assert 'data-page-height-px="1056"' in html
-        assert 'data-page-margin-px="96"' in html
+        assert 'data-page-margin-px="72"' in html
         assert "ay-doc-preview__callout" in html
         assert "ay-doc-preview__separator" in html
         assert "Generado con Ayron" in html
