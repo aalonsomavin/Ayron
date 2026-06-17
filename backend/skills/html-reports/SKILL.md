@@ -38,6 +38,8 @@ No uses para: Word (`.docx`), respuestas solo en chat. Para datos sueltos en el 
 
 ## Flujo único
 
+0. **Planifica** con `write_todos` antes de consultar datos. El último paso debe ser \
+**Generar archivo con create_html_report**. No cierres el turno con solo análisis en chat.
 1. Identifica el modo: **dashboard** (KPIs, tablas, cifras) o **prosa** (explainer, postmortem, brief)
 2. Lee **`/skills/html-reports/GUIDELINES.md`**
 3. Si es dashboard, lee también **`/skills/html-reports/starter-dashboard.html`** como plantilla
@@ -138,6 +140,7 @@ create_html_report(
 
 ## Anti-patrones
 
+- Completar el análisis en el chat sin llamar a `create_html_report`
 - Volcar el informe en markdown en el chat
 - CSS inline duplicado en cada elemento — usa clases de GUIDELINES
 - Bloques JSON o múltiples tool calls para armar un informe

@@ -99,6 +99,8 @@ no configura la marca manualmente.
 
 ### Crear un documento nuevo
 
+0. **Planifica** con `write_todos` antes de consultar datos. El último paso debe ser \
+**Generar archivo con create_document**. No cierres el turno con solo análisis en chat.
 1. Si hace falta, consulta datos con SQL u otras tools.
 2. Sintetiza el contenido en secciones claras (encabezados, párrafos, viñetas, tablas).
 3. Llama `create_document` con `title`, `sections` y opcionalmente `subtitle` y `filename`.
@@ -106,6 +108,8 @@ no configura la marca manualmente.
 
 ### Modificar un documento existente
 
+0. **Planifica** con `write_todos`. El último paso debe ser **Actualizar archivo** con \
+`update_document`.
 1. Usa `list_conversation_files` o el índice de archivos del system prompt para obtener el `file_id`.
 2. Si necesitas el contenido actual, llama `get_document(file_id)`.
 3. Llama `update_document(file_id, ...)` con solo los campos que cambian.

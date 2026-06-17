@@ -5,6 +5,7 @@ from celery import shared_task
 from openai import OpenAIError
 
 from apps.agent.context import set_agent_context
+from apps.agent.deliverable_intent import detect_deliverable_intent
 from apps.agent.events import persist_event
 from apps.agent.runner import create_agent
 from apps.agent.streaming import StreamEventHandler
@@ -52,6 +53,10 @@ def build_agent_messages(conversation: Conversation, exclude_message_id: int) ->
 @shared_task(bind=True)
 def run_agent_conversation(self, conversation_id, user_message_id, assistant_message_id):
     conversation = Conversation.objects.get(id=conversation_id)
+    user_message = Message.objects.get(
+        id=user_message_id,
+        conversation=conversation,
+    )
     assistant_message = Message.objects.get(
         id=assistant_message_id,
         conversation=conversation,
@@ -64,8 +69,13 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
     )
 
     try:
-        set_agent_context(conversation, conversation.user)
-        agent = create_agent(conversation)
+        deliverable_intent = detect_deliverable_intent(user_message.content)
+        set_agent_context(
+            conversation,
+            conversation.user,
+            deliverable_intent=deliverable_intent,
+        )
+        agent = create_agent(conversation, user_message=user_message.content)
         agent_messages = build_agent_messages(
             conversation,
             exclude_message_id=assistant_message.id,

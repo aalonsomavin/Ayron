@@ -1,6 +1,12 @@
 from django.conf import settings
 from deepagents import create_deep_agent
 
+from apps.agent.deliverable_intent import (
+    DeliverableIntent,
+    detect_deliverable_intent,
+    format_deliverable_prompt_block,
+)
+from apps.agent.middleware.deliverable_guard import DeliverableGuardMiddleware
 from apps.agent.middleware.tool_errors import ToolFailureFeedbackMiddleware
 
 from apps.agent.skills import (
@@ -138,23 +144,43 @@ de la base; no inventes cifras.
   "tuve que corregir la consulta".
 - Responde al usuario solo con los datos obtenidos. Si tras varios intentos no es \
   posible, indica brevemente la limitación del dato sin detalles técnicos de la consulta.
+
+## Entregables
+
+- Si el usuario pide un informe, dashboard, documento o archivo compartible, **planifica \
+  primero** con `write_todos` antes de consultar datos.
+- Plantilla mínima de todos: recopilar datos → sintetizar → **generar archivo** \
+  (último paso obligatorio).
+- `show_data_table` y `show_chart` son pasos intermedios; **no sustituyen** el archivo.
+- No des por terminada la tarea hasta que `create_html_report`, `create_document`, \
+  `update_html_report` o `update_document` devuelvan `"ok": true`.
+- Tras crear o actualizar el archivo, no repitas su contenido en el chat.
 """
 
 
-def build_system_prompt(conversation: Conversation) -> str:
+def build_system_prompt(conversation: Conversation, user_message: str = "") -> str:
+    prompt = CHINOOK_SYSTEM_PROMPT
     file_index = format_agent_file_index_block(conversation)
     if file_index:
-        return f"{CHINOOK_SYSTEM_PROMPT}\n{file_index}"
-    return CHINOOK_SYSTEM_PROMPT
+        prompt = f"{prompt}\n{file_index}"
+    intent = detect_deliverable_intent(user_message)
+    if intent != DeliverableIntent.NONE:
+        block = format_deliverable_prompt_block(intent)
+        if block:
+            prompt = f"{prompt}\n{block}"
+    return prompt
 
 
-def create_agent(conversation: Conversation):
+def create_agent(conversation: Conversation, user_message: str = ""):
     return create_deep_agent(
         model=settings.DEFAULT_LLM_MODEL,
         tools=AGENT_TOOLS,
-        system_prompt=build_system_prompt(conversation),
+        system_prompt=build_system_prompt(conversation, user_message),
         backend=build_agent_backend(),
         skills=get_platform_skill_sources(),
         permissions=get_platform_skill_permissions(),
-        middleware=[ToolFailureFeedbackMiddleware()],
+        middleware=[
+            DeliverableGuardMiddleware(),
+            ToolFailureFeedbackMiddleware(),
+        ],
     )

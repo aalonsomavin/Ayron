@@ -31,6 +31,7 @@ class TestPlatformSkills:
         body = skill_path.read_text(encoding="utf-8")
         assert "GUIDELINES.md" in body
         assert "create_html_report" in body
+        assert "write_todos" in body
         assert "append_html_report_block" not in body
         assert "create_html_dashboard_report" not in body
         assert "ay-dash-page" in body or "ay-dash-" in body
@@ -46,6 +47,7 @@ class TestPlatformSkills:
         assert meta["name"] == "docx-documents"
         assert "docx" in meta["description"].lower()
         assert "create_document" in body
+        assert "write_todos" in body
         assert "python-docx" in body
         assert "Calidad y formato" in body
 
@@ -66,5 +68,6 @@ class TestPlatformSkills:
         assert kwargs["skills"] == [PLATFORM_SKILLS_PATH]
         assert kwargs["backend"].virtual_mode is True
         assert kwargs["permissions"]
-        assert len(kwargs["middleware"]) == 1
-        assert kwargs["middleware"][0].__class__.__name__ == "ToolFailureFeedbackMiddleware"
+        assert len(kwargs["middleware"]) == 2
+        assert kwargs["middleware"][0].__class__.__name__ == "DeliverableGuardMiddleware"
+        assert kwargs["middleware"][1].__class__.__name__ == "ToolFailureFeedbackMiddleware"
