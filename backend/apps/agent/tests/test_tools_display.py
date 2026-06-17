@@ -48,3 +48,21 @@ class TestGetToolDisplay:
             "tool_label": "Mostrar tabla",
             "tool_subtitle": "3 filas",
         }
+
+    def test_create_html_report_dashboard_subtitle(self):
+        assert get_tool_display(
+            "create_html_report",
+            {"html": '<div class="ay-dash-page"></div>'},
+        ) == {
+            "tool_label": "Crear reporte HTML",
+            "tool_subtitle": "Dashboard",
+        }
+
+    def test_create_html_report_prose_subtitle(self):
+        assert get_tool_display(
+            "create_html_report",
+            {"html": '<div class="ay-report-prose"></div>'},
+        ) == {
+            "tool_label": "Crear reporte HTML",
+            "tool_subtitle": "PDF",
+        }

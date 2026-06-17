@@ -46,12 +46,23 @@ No uses para: Word (`.docx`), respuestas solo en chat. Para datos sueltos en el 
 
 Para editar: `get_html_report` → modifica `html` → `update_html_report`
 
+## Dos tipos de entregable
+
+No son solo estilos distintos — cada tipo tiene **UX distinta** en el chat:
+
+| Tipo | Cuándo | Wrapper raíz | Al hacer click |
+|------|--------|--------------|----------------|
+| **Reporte** | Explainers, postmortems, briefs, aprendizaje | `.ay-report-prose` | Panel lateral (como documento), export PDF |
+| **Dashboard** | Ventas, KPIs, status con cifras, informes analíticos | `.ay-dash-page` | Vista expandida a pantalla completa |
+
+Ayron infiere el tipo del markup (`.ay-dash-page` → dashboard). Opcionalmente puedes pasar `html_kind="report"` o `html_kind="dashboard"` si quieres reforzar la intención.
+
 ## Dos modos de reporte
 
-| Modo | Cuándo | Wrapper raíz |
-|------|--------|--------------|
-| **Dashboard** | Ventas, KPIs, status con cifras | `.ay-dash-page` |
-| **Prosa** | «Cómo funciona X», postmortem, brief | `.ay-report-prose` |
+| Modo | Cuándo | Wrapper raíz | UX |
+|------|--------|--------------|-----|
+| **Dashboard** | Ventas, KPIs, status con cifras | `.ay-dash-page` | Se abre expandido al click |
+| **Prosa** | «Cómo funciona X», postmortem, brief | `.ay-report-prose` | Panel lateral, export PDF |
 
 Ayron inyecta fuentes Geist y CSS (`ay-dash-*`, `ay-report-prose`, `.ay-chart`). **No repitas `<link>` ni `<style>` del sistema** en el fragmento — solo clases documentadas en GUIDELINES.
 
@@ -137,6 +148,8 @@ create_html_report(
 
 ## Reglas en el chat
 
-- El reporte aparece como tarjeta de archivo HTML
+- El entregable aparece como tarjeta de archivo HTML
+- **Dashboard**: al click se abre en vista expandida (ideal para KPIs y tablas anchas)
+- **Reporte**: al click se abre en el panel lateral, exportable a PDF
 - No repitas el contenido en tu respuesta
 - Una frase breve de contexto o silencio

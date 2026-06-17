@@ -14,12 +14,21 @@ Lee este archivo antes de escribir HTML para `create_html_report`. Ayron inyecta
 - Cards: borde hairline + sombra suave; radius ~12px
 - Profundidad con bordes y sombras, no gradientes en superficies
 
+## Dos tipos de entregable
+
+| Tipo | Cuándo | Wrapper raíz | UX en el chat |
+|------|--------|--------------|---------------|
+| **Dashboard** | KPIs, tablas, status con cifras, informes analíticos | `.ay-dash-page` | Click → vista expandida a pantalla completa |
+| **Reporte (prosa)** | Explainers, postmortems, briefs técnicos, aprendizaje | `.ay-report-prose` | Click → panel lateral, tamaño documento, export PDF |
+
+El tipo se infiere del wrapper raíz. El HTML que ya generas con `.ay-dash-page` es el formato correcto para dashboards.
+
 ## Dos modos de reporte
 
-| Modo | Cuándo | Wrapper raíz |
-|------|--------|--------------|
-| **Dashboard** | KPIs, tablas, status con cifras, informes analíticos | `.ay-dash-page` |
-| **Prosa** | Explainers, postmortems, briefs técnicos, aprendizaje | `.ay-report-prose` |
+| Modo | Cuándo | Wrapper raíz | UX |
+|------|--------|--------------|-----|
+| **Dashboard** | KPIs, tablas, status con cifras, informes analíticos | `.ay-dash-page` | Expandido al click |
+| **Prosa** | Explainers, postmortems, briefs técnicos, aprendizaje | `.ay-report-prose` | Panel lateral, PDF |
 
 Usa **solo clases `ay-dash-*` / `ay-report-prose`** — evita CSS inline duplicado. Inline permitido solo para valores dinámicos (p. ej. `width:62%` en barras de progreso).
 
@@ -132,7 +141,7 @@ Reglas del gráfico:
 </div>
 ```
 
-Prosa usa Georgia. SVG de flujo y `<pre><code>` permitidos. Tablas simples con bordes incluidos en `.ay-report-prose`.
+Prosa usa Geist (misma fuente UI del design system). SVG de flujo y `<pre><code>` permitidos. Tablas simples con bordes incluidos en `.ay-report-prose`.
 
 ## Libertad del agente
 

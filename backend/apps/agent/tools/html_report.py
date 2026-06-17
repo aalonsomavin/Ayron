@@ -44,20 +44,49 @@ def _sanitize_filename(name: str, fallback: str) -> str:
     return cleaned[:200]
 
 
+HTML_KIND_REPORT = "report"
+HTML_KIND_DASHBOARD = "dashboard"
+HTML_KINDS = {HTML_KIND_REPORT, HTML_KIND_DASHBOARD}
+
+
+def infer_html_kind(body_html: str) -> str:
+    if "ay-dash-page" in body_html:
+        return HTML_KIND_DASHBOARD
+    return HTML_KIND_REPORT
+
+
+def resolve_html_kind(body_html: str, html_kind: str | None = None) -> str:
+    inferred = infer_html_kind(body_html)
+    if html_kind is None or not str(html_kind).strip():
+        return inferred
+    normalized = str(html_kind).strip().lower()
+    if normalized not in HTML_KINDS:
+        raise ValueError(f"html_kind must be one of: {', '.join(sorted(HTML_KINDS))}")
+    if normalized != inferred:
+        raise ValueError(
+            f"html_kind={normalized!r} does not match markup "
+            f"(expected {inferred!r} for this HTML)"
+        )
+    return normalized
+
+
 def validate_html_report_content(
     title: str,
     html: str,
     subtitle: str = "",
+    html_kind: str | None = None,
 ) -> dict:
     if not title or not str(title).strip():
         raise ValueError("title is required")
     normalized = normalize_agent_html(html)
+    body_html = normalized["body_html"]
     return {
         "format": "html",
+        "html_kind": resolve_html_kind(body_html, html_kind),
         "title": str(title).strip(),
         "subtitle": str(subtitle or "").strip(),
         "html": normalized["html"],
-        "body_html": normalized["body_html"],
+        "body_html": body_html,
         "full_document": normalized["full_document"],
     }
 
@@ -197,7 +226,7 @@ def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
     return preview_html or ""
 
 
-def _merge_content_json(existing: dict, title, subtitle, html) -> dict:
+def _merge_content_json(existing: dict, title, subtitle, html, html_kind=None) -> dict:
     merged = dict(existing)
     if title is not None:
         merged["title"] = str(title).strip()
@@ -208,10 +237,13 @@ def _merge_content_json(existing: dict, title, subtitle, html) -> dict:
         merged["html"] = normalized["html"]
         merged["body_html"] = normalized["body_html"]
         merged["full_document"] = normalized["full_document"]
+        merged.pop("html_kind", None)
+    kind = html_kind if html_kind is not None else merged.get("html_kind")
     return validate_html_report_content(
         merged.get("title", ""),
         merged.get("html") or merged.get("body_html", ""),
         merged.get("subtitle", ""),
+        html_kind=kind,
     )
 
 
@@ -240,14 +272,20 @@ def create_html_report(
     html: str,
     subtitle: str = "",
     filename: str = "",
+    html_kind: str = "",
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
-    """Create an HTML report for the user in the chat, exportable as PDF.
+    """Create an HTML report or dashboard for the user in the chat.
 
     Read `/skills/html-reports/GUIDELINES.md` before writing HTML. Use shared
     classes (`ay-dash-*` for dashboards, `ay-report-prose` for explainers) — do
     not duplicate system CSS or Google Fonts in the fragment. Ayron injects fonts
     and stylesheet automatically.
+
+    Two deliverable types (inferred from markup, or set `html_kind` explicitly):
+    - `report`: prose document (`.ay-report-prose`), opens in the artifact panel,
+      exportable as PDF.
+    - `dashboard`: analytics layout (`.ay-dash-page`), opens expanded on click.
 
     For charts, embed `.ay-chart` blocks with a JSON payload in
     `<script type="application/json">` (see GUIDELINES). Do not use `<script>`
@@ -268,7 +306,8 @@ def create_html_report(
         return json.dumps({"ok": False, "error": "No conversation context"})
 
     try:
-        content_json = validate_html_report_content(title, html, subtitle)
+        kind = html_kind.strip() if html_kind else None
+        content_json = validate_html_report_content(title, html, subtitle, html_kind=kind)
     except ValueError as exc:
         return json.dumps({"ok": False, "error": str(exc)})
 
@@ -304,13 +343,15 @@ def get_html_report(file_id: str) -> str:
     if file_obj is None or file_obj.format_key != "html":
         return json.dumps({"ok": False, "error": "HTML report not found in this conversation"})
 
+    body_html = file_obj.content_json.get("body_html") or file_obj.content_json.get("html", "")
     payload = {
         "ok": True,
         **serialize_file_for_agent(file_obj),
         "title": file_obj.content_json.get("title", ""),
         "subtitle": file_obj.content_json.get("subtitle", ""),
-        "html": file_obj.content_json.get("html")
-        or file_obj.content_json.get("body_html", ""),
+        "html_kind": file_obj.content_json.get("html_kind")
+        or infer_html_kind(body_html),
+        "html": file_obj.content_json.get("html") or body_html,
     }
     return json.dumps(payload)
 
@@ -321,11 +362,13 @@ def update_html_report(
     title: str | None = None,
     subtitle: str | None = None,
     html: str | None = None,
+    html_kind: str | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Update an existing HTML report by file_id.
 
     Provide only the fields you want to change. `html` replaces all markup when provided.
+    `html_kind` is re-inferred when `html` changes.
     """
     conversation = get_agent_conversation()
     if conversation is None:
@@ -336,7 +379,10 @@ def update_html_report(
         return json.dumps({"ok": False, "error": "HTML report not found in this conversation"})
 
     try:
-        content_json = _merge_content_json(file_obj.content_json, title, subtitle, html)
+        kind = html_kind.strip() if isinstance(html_kind, str) and html_kind.strip() else None
+        content_json = _merge_content_json(
+            file_obj.content_json, title, subtitle, html, html_kind=kind
+        )
     except ValueError as exc:
         return json.dumps({"ok": False, "error": str(exc)})
 

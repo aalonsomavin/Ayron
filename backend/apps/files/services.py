@@ -13,9 +13,21 @@ def _section_count(content_json: dict) -> int:
     return len(content_json.get("sections") or [])
 
 
+def _html_kind(content_json: dict) -> str:
+    kind = content_json.get("html_kind")
+    if kind in ("report", "dashboard"):
+        return kind
+    body_html = content_json.get("body_html") or content_json.get("html") or ""
+    if "ay-dash-page" in body_html:
+        return "dashboard"
+    return "report"
+
+
 def _file_meta(content_json: dict) -> str:
     format_key = content_json.get("format", "docx")
     if format_key == "html":
+        if _html_kind(content_json) == "dashboard":
+            return "Dashboard · HTML"
         return "Report · HTML"
     sections = _section_count(content_json)
     page_word = "sección" if sections == 1 else "secciones"
@@ -44,6 +56,7 @@ def serialize_file_for_ui(file_obj: File) -> dict:
     }
     if format_key == "html":
         payload["download_pdf_url"] = f"/files/{file_obj.id}/download/pdf/"
+        payload["open_expanded"] = _html_kind(file_obj.content_json) == "dashboard"
     return payload
 
 

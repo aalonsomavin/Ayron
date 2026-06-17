@@ -151,4 +151,31 @@ class TestFileServices:
         assert data["ext"] == "HTML"
         assert data["format"] == "html"
         assert data["meta"] == "Report · HTML"
+        assert data["open_expanded"] is False
         assert data["download_pdf_url"] == f"/files/{file_obj.id}/download/pdf/"
+
+    def test_serialize_dashboard_html_includes_open_expanded(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "Ventas",
+            "subtitle": "",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Ventas.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        data = serialize_file_for_ui(file_obj)
+        assert data["meta"] == "Dashboard · HTML"
+        assert data["open_expanded"] is True

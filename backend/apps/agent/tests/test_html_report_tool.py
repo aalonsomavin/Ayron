@@ -10,12 +10,14 @@ from apps.agent.tools.html_report import (
     build_preview_fragment,
     create_html_report,
     get_html_report,
+    infer_html_kind,
     update_html_report,
     validate_html_report_content,
 )
 from apps.agent.tools.html_sanitize import sanitize_html_report
 from apps.chat.models import Conversation
 from apps.files.models import File
+from apps.files.services import serialize_file_for_ui
 
 User = get_user_model()
 
@@ -121,8 +123,29 @@ class TestHtmlReportTool:
     def test_validate_html_report_content(self):
         result = validate_html_report_content("Informe", SAMPLE_HTML, "Mayo 2026")
         assert result["format"] == "html"
+        assert result["html_kind"] == "report"
         assert "Informe de ventas" in result["body_html"]
         assert result["full_document"] is False
+
+    def test_validate_html_kind_dashboard(self):
+        result = validate_html_report_content("Ventas", DASHBOARD_HTML, "")
+        assert result["html_kind"] == "dashboard"
+
+    def test_validate_html_kind_explicit_match(self):
+        result = validate_html_report_content(
+            "Ventas", DASHBOARD_HTML, "", html_kind="dashboard"
+        )
+        assert result["html_kind"] == "dashboard"
+
+    def test_validate_html_kind_mismatch_raises(self):
+        with pytest.raises(ValueError, match="does not match markup"):
+            validate_html_report_content(
+                "Ventas", DASHBOARD_HTML, "", html_kind="report"
+            )
+
+    def test_infer_html_kind(self):
+        assert infer_html_kind(DASHBOARD_HTML) == "dashboard"
+        assert infer_html_kind(SAMPLE_HTML) == "report"
 
     def test_build_preview_fragment(self):
         content = validate_html_report_content("Informe", SAMPLE_HTML, "")
@@ -190,7 +213,40 @@ class TestHtmlReportTool:
         assert result["ok"] is True
         file_obj = File.objects.get(id=result["file_id"])
         assert file_obj.mime_type == "text/html"
+        assert file_obj.content_json["html_kind"] == "report"
         assert "Informe de ventas" in file_obj.content_json["body_html"]
+
+    def test_create_dashboard_html_report(self, user, conversation):
+        set_agent_context(conversation, user)
+        result = json.loads(
+            invoke_tool(
+                create_html_report,
+                "call_html_dash",
+                title="Ventas Mayo",
+                html=DASHBOARD_HTML,
+            )
+        )
+        assert result["ok"] is True
+        file_obj = File.objects.get(id=result["file_id"])
+        assert file_obj.content_json["html_kind"] == "dashboard"
+        ui = serialize_file_for_ui(file_obj)
+        assert ui["meta"] == "Dashboard · HTML"
+        assert ui["open_expanded"] is True
+
+    def test_create_report_open_expanded_false(self, user, conversation):
+        set_agent_context(conversation, user)
+        result = json.loads(
+            invoke_tool(
+                create_html_report,
+                "call_html_rep",
+                title="Informe",
+                html=SAMPLE_HTML,
+            )
+        )
+        file_obj = File.objects.get(id=result["file_id"])
+        ui = serialize_file_for_ui(file_obj)
+        assert ui["meta"] == "Report · HTML"
+        assert ui["open_expanded"] is False
 
     def test_get_and_update_html_report(self, user, conversation):
         set_agent_context(conversation, user)
@@ -204,6 +260,7 @@ class TestHtmlReportTool:
         )
         fetched = json.loads(get_html_report.invoke({"file_id": created["file_id"]}))
         assert fetched["ok"] is True
+        assert fetched["html_kind"] == "report"
         assert "Informe de ventas" in fetched["html"]
 
         updated_html = SAMPLE_HTML.replace("12 %", "18 %")

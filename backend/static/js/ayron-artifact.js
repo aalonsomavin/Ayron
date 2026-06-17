@@ -27,6 +27,7 @@
       download_url: el.dataset.downloadUrl,
       download_pdf_url: el.dataset.downloadPdfUrl || "",
       preview_url: el.dataset.previewUrl,
+      open_expanded: el.dataset.openExpanded === "true",
     };
   }
 
@@ -40,11 +41,12 @@
       download_url: event.download_url,
       download_pdf_url: event.download_pdf_url || "",
       preview_url: event.preview_url,
+      open_expanded: Boolean(event.open_expanded),
     };
   }
 
   function metaSuffix(meta) {
-    return (meta || "").replace(/^Document · /, "").replace(/^Report · /, "");
+    return (meta || "").replace(/^Document · /, "").replace(/^Report · /, "").replace(/^Dashboard · /, "");
   }
 
   function createFileCard(file, active) {
@@ -59,6 +61,7 @@
     btn.dataset.downloadUrl = file.download_url;
     btn.dataset.downloadPdfUrl = file.download_pdf_url || "";
     btn.dataset.previewUrl = file.preview_url;
+    btn.dataset.openExpanded = file.open_expanded ? "true" : "false";
     const metaSuffixText = metaSuffix(file.meta);
     btn.innerHTML =
       '<span class="ay-file-card__icon">' + iconSvg("filetext") + "</span>" +
@@ -200,8 +203,14 @@
     open: function (file) {
       const self = this;
       this.openFile = file;
+      this.expanded = Boolean(file.open_expanded);
       this.panelEl.hidden = false;
       this.mainEl.classList.add("ay-main--artifact-open");
+      this.mainEl.classList.toggle("ay-main--artifact-expanded", this.expanded);
+      const expandBtn = this.panelEl.querySelector("[data-artifact-expand]");
+      if (expandBtn) {
+        expandBtn.innerHTML = this.expanded ? iconSvg("collapse") : iconSvg("expand");
+      }
       this.panelEl.querySelector(".ay-artifact-panel__name").textContent = file.name;
       this.panelEl.querySelector(".ay-artifact-panel__ext").textContent = file.ext || "DOCX";
       const metaEl = this.panelEl.querySelector(".ay-artifact-panel__meta-suffix");
@@ -252,6 +261,7 @@
         card.dataset.fileVersion = String(file.version || 1);
         card.dataset.fileName = file.name;
         card.dataset.fileMeta = file.meta || "";
+        card.dataset.openExpanded = file.open_expanded ? "true" : "false";
       });
     },
 

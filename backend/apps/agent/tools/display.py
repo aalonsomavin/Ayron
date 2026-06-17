@@ -57,6 +57,16 @@ def _chart_subtitle(tool_input: ToolInput) -> str:
     return f"{type_label} · {count} {point_word}"
 
 
+def _html_report_subtitle(tool_input: ToolInput) -> str:
+    if not tool_input:
+        return "PDF"
+    html = tool_input.get("html") or ""
+    kind = str(tool_input.get("html_kind") or "").strip().lower()
+    if kind == "dashboard" or "ay-dash-page" in html:
+        return "Dashboard"
+    return "PDF"
+
+
 TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "list_tables": ("Listar tablas", lambda _: "Base Chinook"),
     "describe_table": ("Describir tabla", _sql_table_subtitle),
@@ -67,8 +77,8 @@ TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "update_document": ("Actualizar documento", lambda _: "Word"),
     "list_conversation_files": ("Listar documentos", None),
     "get_document": ("Leer documento", None),
-    "create_html_report": ("Crear reporte HTML", lambda _: "PDF"),
-    "update_html_report": ("Actualizar reporte HTML", lambda _: "PDF"),
+    "create_html_report": ("Crear reporte HTML", _html_report_subtitle),
+    "update_html_report": ("Actualizar reporte HTML", _html_report_subtitle),
     "get_html_report": ("Leer reporte HTML", None),
     "write_todos": ("Planificar", None),
 }

@@ -34,6 +34,8 @@ class TestPlatformSkills:
         assert "append_html_report_block" not in body
         assert "create_html_dashboard_report" not in body
         assert "ay-dash-page" in body or "ay-dash-" in body
+        assert "Dos tipos de entregable" in body
+        assert "expandido" in body.lower()
 
     def test_docx_skill_frontmatter(self):
         skill_path = get_platform_skills_dir() / "docx-documents" / "SKILL.md"
