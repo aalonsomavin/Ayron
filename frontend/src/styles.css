@@ -765,6 +765,11 @@
     background: var(--ay-surface-hover);
   }
 
+  .ay-artifact-panel__btn[hidden],
+  .ay-artifact-panel__divider[hidden] {
+    display: none !important;
+  }
+
   .ay-artifact-panel__divider {
     width: 1px;
     height: 20px;

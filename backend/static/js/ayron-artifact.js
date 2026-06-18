@@ -32,6 +32,7 @@
     if (file.kind === "dashboard") return "dashboard";
     if (file.kind === "doc") return "doc";
     if ((file.meta || "").indexOf("Dashboard ·") === 0) return "dashboard";
+    if (file.open_expanded && (file.ext || "") === "HTML") return "dashboard";
     return "doc";
   }
 
@@ -52,6 +53,29 @@
     if (!iconEl) return;
     iconEl.className = "ay-artifact-panel__file-icon ay-artifact-panel__file-icon--" + kind;
     iconEl.innerHTML = iconSvg(fileIconName(kind), 17);
+  }
+
+  function applyPanelExpandVisibility(panelEl, file, expanded) {
+    const expandBtn = panelEl.querySelector("[data-artifact-expand]");
+    if (!expandBtn) return;
+    const hideExpand = fileKind(file) === "dashboard";
+    expandBtn.hidden = hideExpand;
+    expandBtn.innerHTML = expanded ? iconSvg("collapse") : iconSvg("expand");
+    const divider = expandBtn.previousElementSibling;
+    if (divider && divider.classList.contains("ay-artifact-panel__divider")) {
+      divider.hidden = hideExpand;
+    }
+  }
+
+  function resetPanelExpandVisibility(panelEl) {
+    const expandBtn = panelEl.querySelector("[data-artifact-expand]");
+    if (!expandBtn) return;
+    expandBtn.hidden = false;
+    expandBtn.innerHTML = iconSvg("expand");
+    const divider = expandBtn.previousElementSibling;
+    if (divider && divider.classList.contains("ay-artifact-panel__divider")) {
+      divider.hidden = false;
+    }
   }
 
   function filePayloadFromEl(el) {
@@ -245,10 +269,7 @@
       this.mainEl.classList.add("ay-main--artifact-open");
       this.mainEl.classList.toggle("ay-main--artifact-expanded", this.expanded);
       this.panelEl.setAttribute("aria-hidden", "false");
-      const expandBtn = this.panelEl.querySelector("[data-artifact-expand]");
-      if (expandBtn) {
-        expandBtn.innerHTML = this.expanded ? iconSvg("collapse") : iconSvg("expand");
-      }
+      applyPanelExpandVisibility(this.panelEl, file, this.expanded);
       applyPanelFileIcon(this.panelEl, fileKind(file));
       this.panelEl.querySelector(".ay-artifact-panel__name").textContent = file.name;
       this.panelEl.querySelector(".ay-artifact-panel__ext").textContent = file.ext || "DOCX";
@@ -303,8 +324,7 @@
       this.mainEl.classList.remove("ay-main--artifact-open", "ay-main--artifact-expanded");
       this.panelEl.setAttribute("aria-hidden", "true");
       this.setActiveCard(null);
-      const expandBtn = this.panelEl.querySelector("[data-artifact-expand]");
-      if (expandBtn) expandBtn.innerHTML = iconSvg("expand");
+      resetPanelExpandVisibility(this.panelEl);
     },
 
     toggleExpand: function () {
