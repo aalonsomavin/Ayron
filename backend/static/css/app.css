@@ -1933,6 +1933,48 @@ body {
   padding: 0 0 28px;
 }
 
+.ay-chat__user-pill {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(78%, 480px);
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--ay-radius-full);
+  background: rgba(19, 19, 22, 0.28);
+  backdrop-filter: blur(10px);
+  color: var(--ay-primary-text);
+  box-shadow: var(--ay-shadow-md);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ay-dur-fast) var(--ay-ease),
+      background var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-chat__user-pill.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ay-chat__user-pill:hover {
+  background: rgba(19, 19, 22, 0.42);
+}
+
+.ay-chat__user-pill-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ay-chat__scroll-btn {
   position: absolute;
   bottom: 16px;
@@ -2246,94 +2288,6 @@ body {
   justify-content: flex-end;
 }
 
-.ay-msg-user--pin {
-  display: flex;
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  box-sizing: border-box;
-  margin: 0 -28px;
-  height: 0;
-  min-height: 0;
-  overflow: hidden;
-  visibility: hidden;
-  pointer-events: none;
-  padding: 0;
-  border: 0;
-  background: var(--ay-bg);
-}
-
-.ay-msg-user--pin.is-visible {
-  height: auto;
-  overflow: visible;
-  visibility: visible;
-  pointer-events: auto;
-  padding: 10px 28px;
-  border-bottom: 1px solid var(--ay-border);
-}
-
-.ay-msg-user--pin.is-visible::before {
-  content: "";
-  position: absolute;
-  left: -28px;
-  right: -28px;
-  top: -100vh;
-  height: 100vh;
-  background: var(--ay-bg);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.ay-msg-user__pin-inner {
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
-  width: 100%;
-  position: relative;
-  z-index: 1;
-}
-
-.ay-msg-user__pin-avatar {
-  align-self: center;
-  flex: none;
-}
-
-.ay-msg-user__pin-jump {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-}
-
-.ay-msg-user__pin-retry {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  padding: 0;
-  border: 1px solid var(--ay-border-strong);
-  border-radius: var(--ay-radius-lg);
-  background: var(--ay-surface);
-  color: var(--ay-text-muted);
-  box-shadow: var(--ay-shadow-xs);
-  cursor: pointer;
-  transition: color var(--ay-dur-fast) var(--ay-ease),
-      background var(--ay-dur-fast) var(--ay-ease),
-      border-color var(--ay-dur-fast) var(--ay-ease);
-}
-
-.ay-msg-user__pin-retry:hover {
-  color: var(--ay-text);
-  background: var(--ay-surface-hover);
-  border-color: var(--ay-border-strong);
-}
-
 .ay-msg-user__bubble {
   max-width: 78%;
   background: var(--ay-bg-muted);
@@ -2343,42 +2297,6 @@ body {
   font-size: 14.5px;
   line-height: 1.5;
   white-space: pre-wrap;
-}
-
-.ay-msg-user--pin.is-visible .ay-msg-user__bubble {
-  display: block;
-  box-sizing: border-box;
-  max-width: none;
-  width: 100%;
-  background: var(--ay-surface);
-  color: var(--ay-text);
-  border: 1px solid var(--ay-border-strong);
-  border-radius: var(--ay-radius-lg);
-  box-shadow: var(--ay-shadow-xs);
-}
-
-.ay-msg-user__pin-jump:hover .ay-msg-user__bubble {
-  border-color: var(--ay-accent);
-}
-
-.ay-msg-user--pin.is-visible.is-long .ay-msg-user__bubble {
-  position: relative;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  white-space: normal;
-}
-
-.ay-msg-user--pin.is-visible.is-long .ay-msg-user__bubble::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1.4em;
-  background: linear-gradient(to bottom, transparent, var(--ay-surface));
-  pointer-events: none;
 }
 
 .ay-msg-agent {
@@ -2924,10 +2842,6 @@ body {
   position:   relative;
 }
 
-.sticky{
-  position:   sticky;
-}
-
 .block{
   display:   block;
 }
@@ -3003,6 +2917,15 @@ body {
 
 .outline{
   outline-style:   solid;
+}
+
+.blur{
+  --tw-blur:   blur(8px);
+  filter:   var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
+}
+
+.backdrop-filter{
+  backdrop-filter:   var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
 }
 
 .transition{

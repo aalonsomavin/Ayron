@@ -18,17 +18,6 @@
             <div class="ay-msg-user" data-message-id="{{ turn.user.id }}">
               <div class="ay-msg-user__bubble">{{ turn.user.content }}</div>
             </div>
-            <div class="ay-msg-user ay-msg-user--pin" aria-hidden="true">
-              <div class="ay-msg-user__pin-inner">
-                {% include "components/avatar.html" with initials=user_initials class="ay-msg-user__pin-avatar" %}
-                <button type="button" class="ay-msg-user__pin-jump">
-                  <span class="ay-msg-user__bubble"></span>
-                </button>
-                <button type="button" class="ay-msg-user__pin-retry" aria-label="Reintentar">
-                  {% include "components/icon.html" with name="refresh" size=16 %}
-                </button>
-              </div>
-            </div>
             {% if turn.assistant %}
               {% if turn.assistant.content_blocks or turn.assistant.tool_trace %}
                 <div class="ay-msg-agent" data-message-id="{{ turn.assistant.id }}">
@@ -71,6 +60,10 @@
         {% endfor %}
       </div>
       </div>
+      <button type="button" id="chat-user-pill" class="ay-chat__user-pill" aria-hidden="true">
+        {% include "components/icon.html" with name="arrowup" size=14 %}
+        <span class="ay-chat__user-pill-text"></span>
+      </button>
       <button type="button" id="chat-scroll-bottom" class="ay-chat__scroll-btn" aria-label="Scroll to bottom" aria-hidden="true">
         {% include "components/icon.html" with name="arrowdown" size=18 %}
       </button>
@@ -172,12 +165,13 @@
   const SCROLL_THRESHOLD = 48;
 
   const AGENT_AVATAR_HTML = '<div class="ay-agent-avatar ay-agent-avatar--active"><canvas class="ay-agent-avatar__canvas" aria-hidden="true"></canvas></div>';
-  const USER_AVATAR_HTML = '<span class="ay-avatar ay-msg-user__pin-avatar">{{ user_initials|escapejs }}</span>';
 
   const statusEl = document.getElementById("chat-status");
   const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
   const messagesEl = document.getElementById("chat-messages");
+  const userPillEl = document.getElementById("chat-user-pill");
+  const userPillTextEl = userPillEl && userPillEl.querySelector(".ay-chat__user-pill-text");
   const scrollBtnEl = document.getElementById("chat-scroll-bottom");
   const agentStreamEl = document.getElementById("agent-stream");
   const mainEl = document.getElementById("ay-main");
@@ -207,7 +201,7 @@
     }
     scrollBtnEl.classList.toggle("is-visible", !nearBottom && !scrollToBottomPending);
     scrollBtnEl.setAttribute("aria-hidden", nearBottom || scrollToBottomPending ? "true" : "false");
-    schedulePinnedUserMessages();
+    scheduleFloatingUserPill();
   }
 
   function messagesScrollMax() {
@@ -217,7 +211,7 @@
 
   function snapMessagesToBottom() {
     if (!messagesEl) return;
-    updatePinnedUserMessages();
+    updateFloatingUserPill();
     messagesEl.scrollTop = messagesScrollMax();
   }
 
@@ -730,19 +724,8 @@
     return turn;
   }
 
-  let pinnedUserRaf = 0;
-
-  function getPinSourceUser(pinEl) {
-    const userEl = pinEl.previousElementSibling;
-    return userEl && userEl.classList.contains("ay-msg-user") && !userEl.classList.contains("ay-msg-user--pin")
-      ? userEl
-      : null;
-  }
-
-  function getUserMessageText(userEl) {
-    const bubble = userEl && userEl.querySelector(".ay-msg-user__bubble");
-    return bubble ? bubble.textContent : "";
-  }
+  let floatingUserPillRaf = 0;
+  let activeFloatingUserEl = null;
 
   function scrollToUserMessage(userEl) {
     if (!messagesEl || !userEl) return;
@@ -752,114 +735,40 @@
     updateScrollAffordance();
   }
 
-  function retryUserMessage(userEl) {
-    if (!inputEl || !userEl) return;
-    inputEl.value = getUserMessageText(userEl);
-    inputEl.focus();
-  }
-
-  function getUserPin(userEl) {
-    const pin = userEl.nextElementSibling;
-    return pin && pin.classList.contains("ay-msg-user--pin") ? pin : null;
-  }
-
-  function updateUserMessageTruncation(userEl) {
-    const bubble = userEl.querySelector(".ay-msg-user__bubble");
-    if (!bubble) return;
-    userEl.classList.remove("is-long");
-    const styles = getComputedStyle(bubble);
-    const lineHeight = parseFloat(styles.lineHeight);
-    if (!lineHeight) return;
-    const paddingTop = parseFloat(styles.paddingTop);
-    const paddingBottom = parseFloat(styles.paddingBottom);
-    const contentHeight = bubble.scrollHeight - paddingTop - paddingBottom;
-    userEl.classList.toggle("is-long", contentHeight > lineHeight * 2 + 1);
-  }
-
-  function updateAllUserMessageTruncations() {
-    chatThreadEl.querySelectorAll(".ay-msg-user--pin").forEach(updateUserMessageTruncation);
-  }
-
-  function updatePinnedUserMessages() {
-    if (!messagesEl) return;
+  function updateFloatingUserPill() {
+    if (!messagesEl || !userPillEl) return;
     const viewportTop = messagesEl.getBoundingClientRect().top;
-    const scrollTopBefore = messagesEl.scrollTop;
-    const scrollHeightBefore = messagesEl.scrollHeight;
-    const userMsgs = chatThreadEl.querySelectorAll(".ay-msg-user:not(.ay-msg-user--pin)");
+    const userMsgs = chatThreadEl.querySelectorAll(".ay-msg-user");
     let active = null;
 
     userMsgs.forEach(function (userEl) {
-      const pin = getUserPin(userEl);
-      if (!pin) return;
       if (userEl.getBoundingClientRect().bottom <= viewportTop + 1) {
-        active = { userEl: userEl, pin: pin };
+        active = userEl;
       }
     });
 
-    userMsgs.forEach(function (userEl) {
-      const pin = getUserPin(userEl);
-      if (!pin) return;
-      const isActive = active && active.pin === pin;
-      pin.classList.toggle("is-visible", isActive);
-      pin.setAttribute("aria-hidden", isActive ? "false" : "true");
-    });
+    activeFloatingUserEl = active;
+    const isVisible = Boolean(active);
+    userPillEl.classList.toggle("is-visible", isVisible);
+    userPillEl.setAttribute("aria-hidden", isVisible ? "false" : "true");
 
-    const collapsedBy = scrollHeightBefore - messagesEl.scrollHeight;
-    const grewBy = messagesEl.scrollHeight - scrollHeightBefore;
-
-    if (!scrollToBottomPending) {
-      const wasAtBottom = scrollHeightBefore - scrollTopBefore - messagesEl.clientHeight <= SCROLL_THRESHOLD;
-      if (collapsedBy > 0) {
-        messagesEl.scrollTop = Math.max(0, scrollTopBefore - collapsedBy);
-        if (wasAtBottom) {
-          messagesEl.scrollTop = messagesScrollMax();
-        }
-      } else if (grewBy > 0) {
-        messagesEl.scrollTop = scrollTopBefore;
-        if (wasAtBottom) {
-          messagesEl.scrollTop = messagesScrollMax();
-        }
+    if (userPillTextEl) {
+      if (active) {
+        const bubble = active.querySelector(".ay-msg-user__bubble");
+        userPillTextEl.textContent = bubble ? bubble.textContent : "";
+      } else {
+        userPillTextEl.textContent = "";
       }
     }
-
-    if (active) {
-      const sourceBubble = active.userEl.querySelector(".ay-msg-user__bubble");
-      const pinBubble = active.pin.querySelector(".ay-msg-user__pin-jump .ay-msg-user__bubble");
-      if (sourceBubble && pinBubble) {
-        pinBubble.textContent = sourceBubble.textContent;
-      }
-      updateUserMessageTruncation(active.pin);
-    }
   }
 
-  function schedulePinnedUserMessages() {
-    if (pinnedUserRaf) return;
-    pinnedUserRaf = requestAnimationFrame(function () {
-      pinnedUserRaf = 0;
-      updatePinnedUserMessages();
+  function scheduleFloatingUserPill() {
+    if (floatingUserPillRaf) return;
+    floatingUserPillRaf = requestAnimationFrame(function () {
+      floatingUserPillRaf = 0;
+      updateFloatingUserPill();
     });
   }
-
-  function initStickyUserMessages() {
-    updatePinnedUserMessages();
-  }
-
-  chatThreadEl.addEventListener("click", function (e) {
-    const retryBtn = e.target.closest(".ay-msg-user__pin-retry");
-    if (retryBtn) {
-      const pin = retryBtn.closest(".ay-msg-user--pin");
-      const userEl = pin && getPinSourceUser(pin);
-      if (userEl) retryUserMessage(userEl);
-      return;
-    }
-
-    const jumpBtn = e.target.closest(".ay-msg-user__pin-jump");
-    if (jumpBtn) {
-      const pin = jumpBtn.closest(".ay-msg-user--pin");
-      const userEl = pin && getPinSourceUser(pin);
-      if (userEl) scrollToUserMessage(userEl);
-    }
-  });
 
   document.getElementById("chat-composer").addEventListener("htmx:afterRequest", function (e) {
     if (!e.detail.successful) return;
@@ -871,30 +780,8 @@
     row.innerHTML = '<div class="ay-msg-user__bubble"></div>';
     row.querySelector(".ay-msg-user__bubble").textContent = content;
 
-    const pin = document.createElement("div");
-    pin.className = "ay-msg-user ay-msg-user--pin";
-    pin.setAttribute("aria-hidden", "true");
-    pin.innerHTML =
-      '<div class="ay-msg-user__pin-inner">' +
-        USER_AVATAR_HTML +
-        '<button type="button" class="ay-msg-user__pin-jump">' +
-          '<span class="ay-msg-user__bubble"></span>' +
-        '</button>' +
-        '<button type="button" class="ay-msg-user__pin-retry" aria-label="Reintentar">' +
-          '<span class="ay-icon" aria-hidden="true">' +
-            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-              '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>' +
-              '<path d="M21 3v5h-5"/>' +
-              '<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>' +
-              '<path d="M8 16H3v5"/>' +
-            '</svg>' +
-          '</span>' +
-        '</button>' +
-      '</div>';
-
-    const turn = beginNewTurn(row);
-    row.insertAdjacentElement("afterend", pin);
-    schedulePinnedUserMessages();
+    beginNewTurn(row);
+    scheduleFloatingUserPill();
 
     inputEl.value = "";
     finalizeStreamBubble();
@@ -907,6 +794,12 @@
     scrollToBottom(true);
   });
 
+  if (userPillEl) {
+    userPillEl.addEventListener("click", function () {
+      if (activeFloatingUserEl) scrollToUserMessage(activeFloatingUserEl);
+    });
+  }
+
   if (scrollBtnEl) {
     scrollBtnEl.addEventListener("click", function () {
       scrollToBottom(true, true);
@@ -918,12 +811,11 @@
   }
 
   window.addEventListener("resize", function () {
-    updateAllUserMessageTruncations();
-    schedulePinnedUserMessages();
+    scheduleFloatingUserPill();
   }, { passive: true });
 
   scrollToBottom(true);
-  initStickyUserMessages();
+  updateFloatingUserPill();
   initToolTraces(chatThreadEl);
   if (window.AyronMarkdown) window.AyronMarkdown.mountAll(chatThreadEl);
   window.AyronAgentAvatar.mountAll(chatThreadEl);
