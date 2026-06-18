@@ -90,9 +90,9 @@
               {% if conversation.status == "processing" %}disabled{% endif %}
             />
             {% if conversation.status == "processing" %}
-              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Ask" left_icon="sparkles" disabled="disabled" %}
+              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" disabled="disabled" %}
             {% else %}
-              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Ask" left_icon="sparkles" %}
+              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
             {% endif %}
           </div>
         </form>
