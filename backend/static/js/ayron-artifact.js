@@ -1,20 +1,59 @@
 (function () {
-  function iconSvg(name) {
-    const icons = {
+  function iconSvg(name, size) {
+    size = size || 16;
+    const paths = {
       filetext:
-        '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>',
+        '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+      dashboard:
+        '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
       download:
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>',
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
       copy:
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
+        '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
       expand:
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/></svg>',
+        '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>',
       collapse:
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 10 7-7"/><path d="M20 10h-6V4"/><path d="m3 21 7-7"/><path d="M4 14h6v6"/></svg>',
+        '<path d="m14 10 7-7"/><path d="M20 10h-6V4"/><path d="m3 21 7-7"/><path d="M4 14h6v6"/>',
       close:
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+        '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     };
-    return icons[name] || "";
+    const inner = paths[name];
+    if (!inner) return "";
+    return (
+      '<svg width="' +
+      size +
+      '" height="' +
+      size +
+      '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      inner +
+      "</svg>"
+    );
+  }
+
+  function fileKind(file) {
+    if (file.kind === "dashboard") return "dashboard";
+    if (file.kind === "doc") return "doc";
+    if ((file.meta || "").indexOf("Dashboard ·") === 0) return "dashboard";
+    return "doc";
+  }
+
+  function fileIconName(kind) {
+    return kind === "dashboard" ? "dashboard" : "filetext";
+  }
+
+  function applyFileCardIcon(card, kind) {
+    const iconEl = card.querySelector(".ay-file-card__icon");
+    if (!iconEl) return;
+    iconEl.className = "ay-file-card__icon ay-file-card__icon--" + kind;
+    iconEl.innerHTML = iconSvg(fileIconName(kind), 19);
+    card.dataset.fileKind = kind;
+  }
+
+  function applyPanelFileIcon(panelEl, kind) {
+    const iconEl = panelEl.querySelector(".ay-artifact-panel__file-icon");
+    if (!iconEl) return;
+    iconEl.className = "ay-artifact-panel__file-icon ay-artifact-panel__file-icon--" + kind;
+    iconEl.innerHTML = iconSvg(fileIconName(kind), 17);
   }
 
   function filePayloadFromEl(el) {
@@ -22,6 +61,7 @@
       file_id: el.dataset.fileId,
       name: el.dataset.fileName,
       ext: el.dataset.fileExt || "DOCX",
+      kind: el.dataset.fileKind || "",
       meta: el.dataset.fileMeta || "",
       version: parseInt(el.dataset.fileVersion || "1", 10),
       download_url: el.dataset.downloadUrl,
@@ -36,6 +76,7 @@
       file_id: event.file_id,
       name: event.name,
       ext: event.ext || "DOCX",
+      kind: event.kind || "",
       meta: event.meta || "",
       version: event.version || 1,
       download_url: event.download_url,
@@ -50,12 +91,14 @@
   }
 
   function createFileCard(file, active) {
+    const kind = fileKind(file);
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "ay-file-card" + (active ? " ay-file-card--active" : "");
     btn.dataset.fileId = file.file_id;
     btn.dataset.fileName = file.name;
     btn.dataset.fileExt = file.ext || "DOCX";
+    btn.dataset.fileKind = kind;
     btn.dataset.fileMeta = file.meta || "";
     btn.dataset.fileVersion = String(file.version || 1);
     btn.dataset.downloadUrl = file.download_url;
@@ -64,7 +107,11 @@
     btn.dataset.openExpanded = file.open_expanded ? "true" : "false";
     const metaSuffixText = metaSuffix(file.meta);
     btn.innerHTML =
-      '<span class="ay-file-card__icon">' + iconSvg("filetext") + "</span>" +
+      '<span class="ay-file-card__icon ay-file-card__icon--' +
+      kind +
+      '">' +
+      iconSvg(fileIconName(kind), 19) +
+      "</span>" +
       '<span class="ay-file-card__body">' +
         '<span class="ay-file-card__name"></span>' +
         '<span class="ay-file-card__meta">' +
@@ -213,6 +260,7 @@
       if (expandBtn) {
         expandBtn.innerHTML = this.expanded ? iconSvg("collapse") : iconSvg("expand");
       }
+      applyPanelFileIcon(this.panelEl, fileKind(file));
       this.panelEl.querySelector(".ay-artifact-panel__name").textContent = file.name;
       this.panelEl.querySelector(".ay-artifact-panel__ext").textContent = file.ext || "DOCX";
       const metaEl = this.panelEl.querySelector(".ay-artifact-panel__meta-suffix");
@@ -264,6 +312,7 @@
         card.dataset.fileName = file.name;
         card.dataset.fileMeta = file.meta || "";
         card.dataset.openExpanded = file.open_expanded ? "true" : "false";
+        applyFileCardIcon(card, fileKind(file));
       });
     },
 
@@ -307,6 +356,7 @@
         existingInBubble.dataset.fileName = file.name;
         existingInBubble.dataset.fileMeta = file.meta || "";
         existingInBubble.querySelector(".ay-file-card__name").textContent = file.name;
+        applyFileCardIcon(existingInBubble, fileKind(file));
         this.refreshIfOpen(file);
         return;
       }

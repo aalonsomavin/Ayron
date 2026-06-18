@@ -125,6 +125,7 @@ class TestFileServices:
         )
         data = serialize_file_for_ui(file_obj)
         assert data["ext"] == "DOCX"
+        assert data["kind"] == "doc"
         assert data["download_url"] == f"/files/{file_obj.id}/download/"
 
     def test_serialize_html_report_includes_pdf_url(self, user, conversation):
@@ -150,6 +151,7 @@ class TestFileServices:
         data = serialize_file_for_ui(file_obj)
         assert data["ext"] == "HTML"
         assert data["format"] == "html"
+        assert data["kind"] == "doc"
         assert data["meta"] == "Report · HTML"
         assert data["open_expanded"] is False
         assert data["download_pdf_url"] == f"/files/{file_obj.id}/download/pdf/"
@@ -177,5 +179,6 @@ class TestFileServices:
             mime_type=HTML_MIME,
         )
         data = serialize_file_for_ui(file_obj)
+        assert data["kind"] == "dashboard"
         assert data["meta"] == "Dashboard · HTML"
         assert data["open_expanded"] is True

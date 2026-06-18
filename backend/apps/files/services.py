@@ -41,6 +41,13 @@ def _file_ext(content_json: dict, mime_type: str) -> str:
     return "DOCX"
 
 
+def _file_kind(content_json: dict) -> str:
+    format_key = content_json.get("format", "docx")
+    if format_key == "html" and _html_kind(content_json) == "dashboard":
+        return "dashboard"
+    return "doc"
+
+
 def serialize_file_for_ui(file_obj: File) -> dict:
     format_key = file_obj.format_key
     payload = {
@@ -48,6 +55,7 @@ def serialize_file_for_ui(file_obj: File) -> dict:
         "name": file_obj.original_name,
         "ext": _file_ext(file_obj.content_json, file_obj.mime_type),
         "format": format_key,
+        "kind": _file_kind(file_obj.content_json),
         "mime": file_obj.mime_type,
         "meta": _file_meta(file_obj.content_json),
         "version": file_obj.version,

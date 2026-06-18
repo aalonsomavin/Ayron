@@ -1447,8 +1447,16 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.ay-artifact-panel__file-icon--doc {
   background: var(--ay-blue-50);
   color: var(--ay-blue-700);
+}
+
+.ay-artifact-panel__file-icon--dashboard {
+  background: var(--ay-info-50);
+  color: var(--ay-info-500);
 }
 
 .ay-artifact-panel__title-wrap {
@@ -1568,8 +1576,16 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.ay-file-card__icon--doc {
   background: var(--ay-blue-50);
   color: var(--ay-blue-700);
+}
+
+.ay-file-card__icon--dashboard {
+  background: var(--ay-info-50);
+  color: var(--ay-info-500);
 }
 
 .ay-file-card__body {
