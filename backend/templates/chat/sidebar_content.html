@@ -1,0 +1,38 @@
+<div class="ay-sidebar__section">
+  <div class="ay-sidebar__header">
+    <span class="ay-sidebar__label" style="margin:0;">Recientes</span>
+    <div class="ay-sidebar__header-actions">
+      {% if new_chat_active %}
+        {% include "components/button.html" with variant="ghost" size="sm" type="button" label="Nuevo" left_icon="plus" disabled="disabled" %}
+      {% else %}
+        <a href="{% url 'chat:list' %}" class="ay-btn ay-btn--ghost ay-btn--sm">
+          {% include "components/icon.html" with name="plus" size=16 %}
+          Nuevo
+        </a>
+      {% endif %}
+      {% if not popover %}
+        <button type="button" class="ay-sidebar__close" data-sidebar-close aria-label="Ocultar recientes">
+          {% include "components/icon.html" with name="chevleft" size=16 %}
+        </button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% if popover %}
+<div class="ay-sidebar-popover__scroll">
+{% endif %}
+  <ul class="ay-sidebar__list"{% if not popover %} style="padding:8px 12px;"{% endif %}>
+    {% for item in conversations %}
+      <li>
+        <a
+          href="{% url 'chat:detail' conversation_id=item.id %}"
+          class="ay-sidebar__link{% if active_conversation_id == item.id %} ay-sidebar__link--active{% endif %}"
+        >
+          {{ item.title|default:"Untitled" }}
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% if popover %}
+</div>
+{% endif %}

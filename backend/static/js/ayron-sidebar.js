@@ -1,12 +1,20 @@
 (function () {
   var WIDTH_KEY = "ayron-sidebar-width";
+  var POPOVER_SHOW_DELAY = 320;
+  var POPOVER_HIDE_DELAY = 120;
+  var POPOVER_SUPPRESS_MS = 450;
 
   window.AyronSidebar = {
     shellEl: null,
     sidebarEl: null,
     toggleEl: null,
+    toggleWrapEl: null,
+    popoverEl: null,
     width: 256,
     collapsed: false,
+    popoverShowTimer: null,
+    popoverHideTimer: null,
+    popoverSuppressUntil: 0,
 
     init: function (options) {
       this.shellEl = options.shellEl;
@@ -14,6 +22,8 @@
       if (!this.shellEl || !this.sidebarEl) return;
 
       this.toggleEl = this.shellEl.querySelector("[data-sidebar-open]");
+      this.toggleWrapEl = this.shellEl.querySelector("[data-sidebar-toggle-wrap]");
+      this.popoverEl = this.shellEl.querySelector("[data-sidebar-popover]");
 
       localStorage.removeItem("ayron-sidebar-collapsed");
 
@@ -36,9 +46,53 @@
       }
       if (this.toggleEl) {
         this.toggleEl.addEventListener("click", function () {
+          self.hidePopover();
           self.open();
         });
       }
+      this.initPopoverHover();
+    },
+
+    hidePopover: function () {
+      if (!this.popoverEl) return;
+      clearTimeout(this.popoverShowTimer);
+      clearTimeout(this.popoverHideTimer);
+      this.popoverEl.classList.remove("is-visible");
+      this.popoverEl.setAttribute("aria-hidden", "true");
+    },
+
+    initPopoverHover: function () {
+      if (!this.toggleWrapEl || !this.popoverEl) return;
+
+      var self = this;
+
+      function scheduleShow() {
+        if (!self.collapsed) return;
+        if (Date.now() < self.popoverSuppressUntil) return;
+        clearTimeout(self.popoverHideTimer);
+        clearTimeout(self.popoverShowTimer);
+        self.popoverShowTimer = setTimeout(function () {
+          if (!self.collapsed) return;
+          if (Date.now() < self.popoverSuppressUntil) return;
+          self.popoverEl.classList.add("is-visible");
+          self.popoverEl.setAttribute("aria-hidden", "false");
+        }, POPOVER_SHOW_DELAY);
+      }
+
+      function scheduleHide() {
+        clearTimeout(self.popoverShowTimer);
+        clearTimeout(self.popoverHideTimer);
+        self.popoverHideTimer = setTimeout(function () {
+          self.hidePopover();
+        }, POPOVER_HIDE_DELAY);
+      }
+
+      this.toggleWrapEl.addEventListener("mouseenter", scheduleShow);
+      this.toggleWrapEl.addEventListener("mouseleave", scheduleHide);
+      this.popoverEl.addEventListener("mouseenter", function () {
+        clearTimeout(self.popoverHideTimer);
+      });
+      this.popoverEl.addEventListener("mouseleave", scheduleHide);
     },
 
     setWidth: function (width) {
@@ -92,6 +146,8 @@
     close: function () {
       if (!this.shellEl) return;
       this.collapsed = true;
+      this.popoverSuppressUntil = Date.now() + POPOVER_SUPPRESS_MS;
+      this.hidePopover();
       this.shellEl.classList.add("ay-shell--sidebar-collapsed");
       this.updateToggle();
     },
@@ -99,6 +155,7 @@
     open: function () {
       if (!this.shellEl) return;
       this.collapsed = false;
+      this.hidePopover();
       this.shellEl.classList.remove("ay-shell--sidebar-collapsed");
       this.updateToggle();
     },

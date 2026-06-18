@@ -1,0 +1,8 @@
+<div class="ay-sidebar-toggle-wrap" data-sidebar-toggle-wrap>
+  <button type="button" class="ay-sidebar-toggle" data-sidebar-open aria-hidden="true" aria-label="Mostrar recientes">
+    {% include "components/icon.html" with name="chevright" size=16 %}
+  </button>
+  <div class="ay-sidebar-popover" data-sidebar-popover role="navigation" aria-label="Recientes" aria-hidden="true">
+    {% include "chat/sidebar_content.html" with popover=True %}
+  </div>
+</div>
