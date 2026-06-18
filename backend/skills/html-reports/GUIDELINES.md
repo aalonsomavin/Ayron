@@ -91,7 +91,7 @@ Celdas: `.ay-dash-td-strong`, `.ay-dash-td-muted`, `.ay-dash-td-mono`, `.ay-dash
 
 **Barras inline** — `.ay-dash-bar-row` con `.ay-dash-bar-track` > `.ay-dash-bar-fill` (width inline). Colores: `.ay-dash-bar-fill--green|orange|purple`
 
-**Insight** — `.ay-dash-card.ay-dash-card--insight` + `.ay-dash-insight-head` con `.ay-dash-insight-logo` (mark Ayron, ver starter) + `.ay-dash-insight-text` + `.ay-dash-tags` / `.ay-dash-tag--accent|neutral`
+**Insight** — `.ay-dash-card.ay-dash-card--insight` + `.ay-dash-insight-head` con `.ay-dash-insight-logo` vacío (Ayron inyecta el mark automáticamente; no pongas SVG, emoji ni símbolos propios) + `.ay-dash-insight-brand` «Ayron» + `.ay-dash-insight-kind` «insight» + `.ay-dash-insight-text` + `.ay-dash-tags` / `.ay-dash-tag--accent|neutral`. Copia la estructura de `starter-dashboard.html` tal cual.
 
 **Callout** — `.ay-dash-callout` + `.ay-dash-callout-stats` / `.ay-dash-callout-stat`
 

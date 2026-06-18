@@ -997,8 +997,11 @@ body {
   width: 36px;
   height: 36px;
   flex: none;
-  border-radius: 10px;
-  background: var(--ay-neutral-150);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--ay-surface);
   border: 1px solid var(--ay-border);
   overflow: hidden;
 }
@@ -2522,29 +2525,14 @@ body {
 .ay-topbar__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
   text-decoration: none;
   color: var(--ay-text);
 }
 
-.ay-topbar__mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--ay-ink);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.04em;
-}
-
-.ay-topbar__name {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+.ay-topbar__logo {
+  display: block;
+  height: 38px;
+  width: auto;
 }
 
 .ay-topbar__nav {

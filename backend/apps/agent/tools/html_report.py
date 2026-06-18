@@ -10,6 +10,7 @@ from langchain_core.tools import InjectedToolCallId, tool
 from apps.agent.context import get_agent_conversation, get_agent_user
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import footer_attribution_text
+from apps.agent.tools.html_insight import normalize_insight_markup
 from apps.agent.tools.html_sanitize import normalize_agent_html
 from apps.files.models import HTML_MIME
 from apps.files.services import (
@@ -171,6 +172,7 @@ def _wrap_export_body(body_html: str) -> str:
 
 def build_preview_fragment(content_json: dict) -> str:
     body_html = content_json.get("body_html") or content_json.get("html") or ""
+    body_html = normalize_insight_markup(body_html)
     include_charts = _body_has_charts(body_html)
     return (
         f"{_report_font_links()}"
@@ -199,6 +201,7 @@ def build_export_html(content_json: dict) -> str:
         return html
 
     body_html = content_json.get("body_html") or content_json.get("html") or ""
+    body_html = normalize_insight_markup(body_html)
     wrapped_body = _wrap_export_body(body_html)
     include_charts = _body_has_charts(body_html)
     chart_scripts = _report_chart_scripts(inline_mount=True) if include_charts else ""
@@ -291,6 +294,10 @@ def create_html_report(
     For charts, embed `.ay-chart` blocks with a JSON payload in
     `<script type="application/json">` (see GUIDELINES). Do not use `<script>`
     for JavaScript.
+
+    Insight blocks must use the exact structure from `starter-dashboard.html`
+    (`.ay-dash-insight-head` + empty `.ay-dash-insight-logo`). Ayron injects
+    the brand mark automatically; never use custom icons, emoji, or symbols.
 
     Pass the report body as `html`: a body fragment with semantic markup. You may
     pass a full document (<!DOCTYPE html>...) if needed. Tables, SVG diagrams, and

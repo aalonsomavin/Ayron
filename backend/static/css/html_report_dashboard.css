@@ -318,16 +318,25 @@
 }
 
 .ay-dash-insight-logo {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: #ededee;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='2.4' y1='2.4' x2='21.6' y2='21.6' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%236fe6cf'/%3E%3Cstop offset='.5' stop-color='%2393ef66'/%3E%3Cstop offset='1' stop-color='%23d9f23e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M6.05 17.33 L6.05 7.66 L6.06 7.43 L6.08 7.20 L6.13 6.99 L6.19 6.79 L6.27 6.59 L6.36 6.41 L6.47 6.23 L6.60 6.07 L6.75 5.92 L6.91 5.77 L7.10 5.64 L7.29 5.52 L7.77 5.25 L7.89 5.18 L8.02 5.13 L8.14 5.10 L8.25 5.08 L8.37 5.08 L8.48 5.09 L8.59 5.12 L8.69 5.17 L8.80 5.23 L8.90 5.31 L8.99 5.40 L9.08 5.51 L13.33 10.93' stroke='url(%23g)' stroke-width='4.08' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M17.95 6.67 L17.95 16.34 L17.94 16.57 L17.92 16.80 L17.87 17.01 L17.81 17.21 L17.73 17.41 L17.64 17.59 L17.53 17.77 L17.40 17.93 L17.25 18.08 L17.09 18.23 L16.90 18.36 L16.71 18.48 L16.23 18.75 L16.11 18.82 L15.98 18.87 L15.86 18.90 L15.75 18.92 L15.63 18.92 L15.52 18.91 L15.41 18.88 L15.31 18.83 L15.20 18.77 L15.10 18.69 L15.01 18.60 L14.92 18.49 L10.67 13.07' stroke='url(%23g)' stroke-width='4.08' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 18px 18px;
   border: 1px solid #e6e6e8;
   display: flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  color: #18181b;
+  overflow: hidden;
+}
+
+.ay-dash-insight-logo svg,
+.ay-dash-insight-logo img {
+  display: none;
 }
 
 .ay-dash-insight-brand {

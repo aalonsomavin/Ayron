@@ -249,7 +249,10 @@
 
   function mountAll(root) {
     (root || document).querySelectorAll(".ay-agent-avatar").forEach(function (el) {
-      mount(el, { active: el.classList.contains("ay-agent-avatar--active") });
+      mount(el, {
+        active: el.classList.contains("ay-agent-avatar--active"),
+        variant: "brand",
+      });
     });
   }
 

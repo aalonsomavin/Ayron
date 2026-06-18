@@ -11,8 +11,13 @@
 <body>
   <header class="ay-topbar">
     <a href="{% url 'core:home' %}" class="ay-topbar__brand">
-      <span class="ay-topbar__mark">A</span>
-      <span class="ay-topbar__name">Ayron</span>
+      <img
+        src="{% static 'img/ayronone-logo.png' %}"
+        alt="AyronOne"
+        class="ay-topbar__logo"
+        width="280"
+        height="83"
+      />
     </a>
     <nav class="ay-topbar__nav">
       <a href="{% url 'core:home' %}">Home</a>

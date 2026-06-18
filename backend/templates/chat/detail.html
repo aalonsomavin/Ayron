@@ -235,7 +235,7 @@
 
   function mountAgentAvatar(root, active) {
     if (!root || !window.AyronAgentAvatar) return;
-    window.AyronAgentAvatar.mount(root, { active: !!active });
+    window.AyronAgentAvatar.mount(root, { active: !!active, variant: "brand" });
   }
 
   function stopAgentAvatar(root) {

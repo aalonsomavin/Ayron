@@ -4,6 +4,8 @@ import re
 import bleach
 from bleach.css_sanitizer import CSSSanitizer
 
+from apps.agent.tools.html_insight import normalize_insight_markup
+
 MAX_HTML_BYTES = 512_000
 
 _JSON_SCRIPT_RE = re.compile(
@@ -253,6 +255,17 @@ def normalize_agent_html(html: str) -> dict:
     body_html = _extract_body_html(sanitized) if full_document else sanitized
     if not body_html.strip():
         raise ValueError("html body is empty after sanitization")
+    body_html = normalize_insight_markup(body_html)
+    if full_document:
+        sanitized = re.sub(
+            r"(<body[^>]*>)(.*?)(</body>)",
+            lambda match: f"{match.group(1)}{body_html}{match.group(3)}",
+            sanitized,
+            count=1,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    else:
+        sanitized = body_html
     return {
         "html": sanitized if full_document else body_html,
         "body_html": body_html,
