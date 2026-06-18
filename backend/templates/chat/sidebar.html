@@ -1,14 +1,22 @@
-<aside class="ay-sidebar">
-  <div class="ay-sidebar__section" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-    <span class="ay-sidebar__label" style="margin:0;">History</span>
-    {% if new_chat_active %}
-      {% include "components/button.html" with variant="ghost" size="sm" type="button" label="New" left_icon="plus" disabled="disabled" %}
-    {% else %}
-      <a href="{% url 'chat:list' %}" class="ay-btn ay-btn--ghost ay-btn--sm">
-        {% include "components/icon.html" with name="plus" size=16 %}
-        New
-      </a>
-    {% endif %}
+<aside class="ay-sidebar" id="ay-sidebar">
+  <div class="ay-sidebar__resize" data-sidebar-resize aria-hidden="true"></div>
+  <div class="ay-sidebar__section">
+    <div class="ay-sidebar__header">
+      <span class="ay-sidebar__label" style="margin:0;">Recientes</span>
+      <div class="ay-sidebar__header-actions">
+        {% if new_chat_active %}
+          {% include "components/button.html" with variant="ghost" size="sm" type="button" label="Nuevo" left_icon="plus" disabled="disabled" %}
+        {% else %}
+          <a href="{% url 'chat:list' %}" class="ay-btn ay-btn--ghost ay-btn--sm">
+            {% include "components/icon.html" with name="plus" size=16 %}
+            Nuevo
+          </a>
+        {% endif %}
+        <button type="button" class="ay-sidebar__close" data-sidebar-close aria-label="Hide history">
+          {% include "components/icon.html" with name="chevleft" size=16 %}
+        </button>
+      </div>
+    </div>
   </div>
   <ul class="ay-sidebar__list" style="padding:8px 12px;">
     {% for item in conversations %}

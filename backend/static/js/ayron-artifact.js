@@ -100,7 +100,7 @@
       this.mainEl = options.mainEl;
       if (!this.panelEl) return;
 
-      this.panelEl.hidden = true;
+      this.panelEl.removeAttribute("hidden");
       this.mainEl.classList.remove("ay-main--artifact-open", "ay-main--artifact-expanded", "ay-main--artifact-resizing");
       this.setPanelWidth(this.panelWidth);
 
@@ -140,6 +140,7 @@
       document.addEventListener("click", function (e) {
         const card = e.target.closest(".ay-file-card");
         if (!card) return;
+        if (window.AyronSidebar) window.AyronSidebar.close();
         self.open(filePayloadFromEl(card));
         self.setActiveCard(card);
       });
@@ -202,11 +203,12 @@
 
     open: function (file) {
       const self = this;
+      if (window.AyronSidebar) window.AyronSidebar.close();
       this.openFile = file;
       this.expanded = Boolean(file.open_expanded);
-      this.panelEl.hidden = false;
       this.mainEl.classList.add("ay-main--artifact-open");
       this.mainEl.classList.toggle("ay-main--artifact-expanded", this.expanded);
+      this.panelEl.setAttribute("aria-hidden", "false");
       const expandBtn = this.panelEl.querySelector("[data-artifact-expand]");
       if (expandBtn) {
         expandBtn.innerHTML = this.expanded ? iconSvg("collapse") : iconSvg("expand");
@@ -268,8 +270,8 @@
     close: function () {
       this.openFile = null;
       this.expanded = false;
-      this.panelEl.hidden = true;
       this.mainEl.classList.remove("ay-main--artifact-open", "ay-main--artifact-expanded");
+      this.panelEl.setAttribute("aria-hidden", "true");
       this.setActiveCard(null);
       const expandBtn = this.panelEl.querySelector("[data-artifact-expand]");
       if (expandBtn) expandBtn.innerHTML = iconSvg("expand");
@@ -308,7 +310,11 @@
       }
 
       const container = ensureFilesContainer(contentEl);
-      this.renderFileCard(file, container);
+      const card = this.renderFileCard(file, container);
+      if (file.open_expanded) {
+        this.open(file);
+        this.setActiveCard(card);
+      }
     },
   };
 })();

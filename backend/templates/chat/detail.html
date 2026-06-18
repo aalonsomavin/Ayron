@@ -4,10 +4,13 @@
 {% block title %}{{ conversation.title|default:"Chat" }} — Ayron{% endblock %}
 
 {% block content %}
-<div class="ay-shell">
+<div class="ay-shell" id="ay-shell">
   {% include "chat/sidebar.html" with new_chat_active=False active_conversation_id=conversation.id %}
 
   <div class="ay-main" id="ay-main">
+    <button type="button" class="ay-sidebar-toggle" data-sidebar-open aria-hidden="true" aria-label="Show history">
+      {% include "components/icon.html" with name="chevright" size=16 %}
+    </button>
   <section class="ay-chat">
     <div class="ay-chat__viewport">
       <div id="chat-messages" class="ay-chat__messages">
@@ -107,7 +110,7 @@
     </footer>
   </section>
 
-  <aside class="ay-artifact-panel" id="artifact-panel" hidden>
+  <aside class="ay-artifact-panel" id="artifact-panel" aria-hidden="true">
     <div class="ay-artifact-panel__resize" data-artifact-resize aria-hidden="true"></div>
     <div class="ay-artifact-panel__header">
       <span class="ay-artifact-panel__file-icon">
@@ -152,6 +155,7 @@
 <script src="{% static 'js/ayron-markdown.js' %}"></script>
 <script src="{% static 'js/ayron-doc-preview.js' %}"></script>
 <script src="{% static 'js/ayron-artifact.js' %}"></script>
+<script src="{% static 'js/ayron-sidebar.js' %}"></script>
 <script>
 (function () {
   const eventsUrl = "{% url 'chat:events' conversation_id=conversation.id %}";
@@ -879,6 +883,12 @@
   if (window.AyronChart) window.AyronChart.mountAll(chatThreadEl);
   if (window.AyronArtifact) {
     window.AyronArtifact.init({ panelEl: artifactPanelEl, mainEl: mainEl });
+  }
+  if (window.AyronSidebar) {
+    window.AyronSidebar.init({
+      shellEl: document.getElementById("ay-shell"),
+      sidebarEl: document.getElementById("ay-sidebar"),
+    });
   }
   loadEvents();
 })();

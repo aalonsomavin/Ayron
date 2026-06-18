@@ -1048,13 +1048,112 @@ body {
 }
 
 .ay-sidebar {
-  width: 256px;
+  width: var(--sidebar-width, var(--ay-sidebar, 256px));
   flex: none;
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--ay-bg);
   border-right: 1px solid var(--ay-border);
   height: calc(100vh - 60px);
+  min-width: 0;
+  overflow: hidden;
+  transition:
+      width var(--ay-dur-slow) var(--ay-ease),
+      border-color var(--ay-dur-slow) var(--ay-ease);
+}
+
+.ay-shell--sidebar-resizing .ay-sidebar {
+  transition: none;
+}
+
+.ay-sidebar > :not(.ay-sidebar__resize) {
+  min-width: var(--sidebar-width, var(--ay-sidebar, 256px));
+  transition: opacity var(--ay-dur-normal) var(--ay-ease);
+}
+
+.ay-shell--sidebar-collapsed .ay-sidebar {
+  width: 0 !important;
+  min-width: 0;
+  border-right-color: transparent;
+  pointer-events: none;
+}
+
+.ay-shell--sidebar-collapsed .ay-sidebar > :not(.ay-sidebar__resize) {
+  opacity: 0;
+}
+
+.ay-shell--sidebar-collapsed .ay-sidebar__resize {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ay-sidebar__resize {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+  transition: opacity var(--ay-dur-normal) var(--ay-ease);
+}
+
+.ay-sidebar__resize::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-sidebar__resize:hover::after,
+  .ay-shell--sidebar-resizing .ay-sidebar__resize::after {
+  background: var(--ay-accent);
+}
+
+.ay-shell--sidebar-resizing {
+  cursor: col-resize;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+
+.ay-sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ay-sidebar__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.ay-sidebar__close {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--ay-radius-sm);
+  background: transparent;
+  color: var(--ay-text-muted);
+  cursor: pointer;
+  transition: background var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-sidebar__close:hover {
+  background: var(--ay-surface-hover);
+  color: var(--ay-text);
 }
 
 .ay-sidebar__section {
@@ -1081,9 +1180,9 @@ body {
 
 .ay-sidebar__link {
   display: block;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border-radius: var(--ay-radius-md);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ay-text-muted);
   text-decoration: none;
@@ -1107,16 +1206,71 @@ body {
 .ay-main {
   flex: 1;
   min-width: 0;
+  position: relative;
   display: flex;
   height: calc(100vh - 60px);
+}
+
+.ay-sidebar-toggle {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ay-border);
+  border-radius: var(--ay-radius-sm);
+  background: var(--ay-bg);
+  color: var(--ay-text-muted);
+  cursor: pointer;
+  box-shadow: var(--ay-shadow-xs);
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+  transition:
+      opacity var(--ay-dur-slow) var(--ay-ease),
+      transform var(--ay-dur-slow) var(--ay-ease),
+      background var(--ay-dur-fast) var(--ay-ease),
+      color var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-shell--sidebar-collapsed .ay-sidebar-toggle {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.ay-sidebar-toggle:hover {
+  background: var(--ay-surface-hover);
+  color: var(--ay-text);
 }
 
 .ay-main--artifact-open .ay-chat {
   max-width: none;
 }
 
+.ay-chat > * {
+  min-width: min(760px, 100%);
+  transition: opacity var(--ay-dur-normal) var(--ay-ease);
+}
+
 .ay-main--artifact-expanded .ay-chat {
-  display: none;
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ay-main--artifact-expanded .ay-chat > * {
+  opacity: 0;
+}
+
+.ay-main--artifact-resizing .ay-chat {
+  transition: none;
 }
 
 .ay-artifact-panel {
@@ -1131,10 +1285,40 @@ body {
   height: 100%;
   background: var(--ay-bg-subtle);
   border-left: 1px solid var(--ay-border);
+  overflow: hidden;
+  transition:
+      width var(--ay-dur-slow) var(--ay-ease),
+      flex var(--ay-dur-slow) var(--ay-ease),
+      max-width var(--ay-dur-slow) var(--ay-ease),
+      min-width var(--ay-dur-slow) var(--ay-ease),
+      border-color var(--ay-dur-slow) var(--ay-ease);
 }
 
-.ay-artifact-panel[hidden] {
-  display: none !important;
+.ay-main:not(.ay-main--artifact-open) .ay-artifact-panel {
+  width: 0 !important;
+  flex: 0 0 0 !important;
+  max-width: 0;
+  min-width: 0 !important;
+  border-left-color: transparent;
+  pointer-events: none;
+}
+
+.ay-artifact-panel > :not(.ay-artifact-panel__resize) {
+  min-width: var(--artifact-panel-width, 680px);
+  transition: opacity var(--ay-dur-normal) var(--ay-ease);
+}
+
+.ay-main:not(.ay-main--artifact-open) .ay-artifact-panel > :not(.ay-artifact-panel__resize) {
+  opacity: 0;
+}
+
+.ay-main:not(.ay-main--artifact-open) .ay-artifact-panel__resize {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ay-main--artifact-resizing .ay-artifact-panel {
+  transition: none;
 }
 
 .ay-artifact-panel__resize {
@@ -1146,6 +1330,7 @@ body {
   cursor: col-resize;
   z-index: 3;
   touch-action: none;
+  transition: opacity var(--ay-dur-normal) var(--ay-ease);
 }
 
 .ay-artifact-panel__resize::after {
@@ -1190,6 +1375,10 @@ body {
   padding: 0 14px 0 16px;
   border-bottom: 1px solid var(--ay-border);
   background: var(--ay-bg);
+}
+
+.ay-shell--sidebar-collapsed .ay-main--artifact-expanded .ay-artifact-panel__header {
+  padding-left: 52px;
 }
 
 .ay-artifact-panel__file-icon {
@@ -1632,12 +1821,17 @@ body {
 }
 
 .ay-chat {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--ay-bg);
   height: calc(100vh - 60px);
+  overflow: hidden;
+  transition:
+      flex var(--ay-dur-slow) var(--ay-ease),
+      width var(--ay-dur-slow) var(--ay-ease),
+      opacity var(--ay-dur-normal) var(--ay-ease);
 }
 
 .ay-chat__viewport {

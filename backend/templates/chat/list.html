@@ -4,10 +4,13 @@
 {% block title %}Chat — Ayron{% endblock %}
 
 {% block content %}
-<div class="ay-shell">
+<div class="ay-shell" id="ay-shell">
   {% include "chat/sidebar.html" with new_chat_active=True active_conversation_id=None %}
 
   <div class="ay-main" id="ay-main">
+    <button type="button" class="ay-sidebar-toggle" data-sidebar-open aria-hidden="true" aria-label="Show history">
+      {% include "components/icon.html" with name="chevright" size=16 %}
+    </button>
     <section class="ay-chat ay-chat--landing">
       <div class="ay-chat__viewport">
         <div class="ay-chat-empty__harmono-stage" aria-hidden="true">
@@ -79,8 +82,16 @@
 
 <script src="{% static 'js/ayron-harmonograph.js' %}"></script>
 <script src="{% static 'js/ayron-avatar.js' %}"></script>
+<script src="{% static 'js/ayron-sidebar.js' %}"></script>
 <script>
 (function () {
+  if (window.AyronSidebar) {
+    window.AyronSidebar.init({
+      shellEl: document.getElementById("ay-shell"),
+      sidebarEl: document.getElementById("ay-sidebar"),
+    });
+  }
+
   const canvas = document.querySelector(".ay-chat-empty__harmono");
   if (canvas && window.AyronHarmonograph) {
     window.AyronHarmonograph.mount(canvas);
