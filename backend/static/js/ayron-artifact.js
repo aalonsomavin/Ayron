@@ -299,12 +299,14 @@
       const contentEl = bubble.querySelector(".ay-msg-agent__content");
       if (!contentEl) return;
 
-      const existing = document.querySelector('.ay-file-card[data-file-id="' + file.file_id + '"]');
-      if (event.type === "file_updated" && existing) {
-        existing.dataset.fileVersion = String(file.version || 1);
-        existing.dataset.fileName = file.name;
-        existing.dataset.fileMeta = file.meta || "";
-        existing.querySelector(".ay-file-card__name").textContent = file.name;
+      const existingInBubble = contentEl.querySelector(
+        '.ay-file-card[data-file-id="' + file.file_id + '"]'
+      );
+      if (event.type === "file_updated" && existingInBubble) {
+        existingInBubble.dataset.fileVersion = String(file.version || 1);
+        existingInBubble.dataset.fileName = file.name;
+        existingInBubble.dataset.fileMeta = file.meta || "";
+        existingInBubble.querySelector(".ay-file-card__name").textContent = file.name;
         this.refreshIfOpen(file);
         return;
       }
