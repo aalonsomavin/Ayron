@@ -361,6 +361,86 @@ class TestConversationDetail:
         assert blocks[1]["chart"]["labels"] == ["EMEA"]
         assert blocks[1]["chart_id"].startswith("chart-")
 
+    def test_content_blocks_split_text_around_tools(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Voy a buscar los datos.Analizo los resultados.Aquí está el resumen.",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Voy a buscar los datos."},
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_call_id": "call_1",
+                "input": {"sql": 'SELECT * FROM "Album"'},
+            },
+            sequence_number=1,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Analizo los resultados."},
+            sequence_number=2,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_END,
+            payload={"tool": "run_sql_query", "tool_call_id": "call_1"},
+            sequence_number=3,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Aquí está el resumen."},
+            sequence_number=4,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert [block["type"] for block in blocks] == ["text", "text", "text"]
+        assert blocks[0]["content"] == "Voy a buscar los datos."
+        assert blocks[1]["content"] == "Analizo los resultados."
+        assert blocks[2]["content"] == "Aquí está el resumen."
+
+    def test_content_blocks_merge_consecutive_tokens(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Hello world",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Hello "},
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "world"},
+            sequence_number=1,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "text"
+        assert blocks[0]["content"] == "Hello world"
+
     def test_detail_renders_chart_events(self, client, user, conversation):
         assistant_message = Message.objects.create(
             conversation=conversation,

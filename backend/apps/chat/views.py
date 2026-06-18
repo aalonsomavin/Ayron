@@ -119,27 +119,20 @@ def _user_initials(user) -> str:
 
 
 def _content_blocks_for_message(message: Message) -> list[dict]:
-    events = AgentEvent.objects.filter(
-        message=message,
-        event_type__in=(
-            AgentEvent.EventType.TOKEN,
-            AgentEvent.EventType.TABLE,
-            AgentEvent.EventType.CHART,
-            AgentEvent.EventType.FILE_CREATED,
-            AgentEvent.EventType.FILE_UPDATED,
-        ),
-    ).order_by("sequence_number")
+    events = AgentEvent.objects.filter(message=message).order_by("sequence_number")
 
     blocks: list[dict] = []
+    can_merge_token = False
     for event in events:
         if event.event_type == AgentEvent.EventType.TOKEN:
             chunk = event.payload.get("content", "")
             if not chunk:
                 continue
-            if blocks and blocks[-1]["type"] == "text":
+            if can_merge_token and blocks and blocks[-1]["type"] == "text":
                 blocks[-1]["content"] += chunk
             else:
                 blocks.append({"type": "text", "content": chunk})
+            can_merge_token = True
         elif event.event_type == AgentEvent.EventType.TABLE:
             blocks.append(
                 {
@@ -147,6 +140,17 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
                     "table": prepare_table_for_render(event.payload),
                 }
             )
+            can_merge_token = False
+        elif event.event_type == AgentEvent.EventType.CHART:
+            chart = prepare_chart_for_render(event.payload)
+            blocks.append(
+                {
+                    "type": "chart",
+                    "chart": chart,
+                    "chart_id": f"chart-{message.id}-{len(blocks)}",
+                }
+            )
+            can_merge_token = False
         elif event.event_type in (
             AgentEvent.EventType.FILE_CREATED,
             AgentEvent.EventType.FILE_UPDATED,
@@ -156,15 +160,9 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
                 blocks[-1]["files"].append(file_payload)
             else:
                 blocks.append({"type": "files", "files": [file_payload]})
+            can_merge_token = False
         else:
-            chart = prepare_chart_for_render(event.payload)
-            blocks.append(
-                {
-                    "type": "chart",
-                    "chart": chart,
-                    "chart_id": f"chart-{message.id}-{len(blocks)}",
-                }
-            )
+            can_merge_token = False
 
     if blocks and message.content and not any(block["type"] == "text" for block in blocks):
         blocks.insert(0, {"type": "text", "content": message.content})

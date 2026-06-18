@@ -528,6 +528,17 @@
     return wrapper;
   }
 
+  function finalizeCurrentTextBlock() {
+    if (!currentTextEl) return;
+    if (!currentMarkdownBuffer.trim()) {
+      currentTextEl.remove();
+    } else if (window.AyronMarkdown && currentMarkdownBuffer) {
+      window.AyronMarkdown.render(currentTextEl, currentMarkdownBuffer);
+    }
+    currentTextEl = null;
+    currentMarkdownBuffer = "";
+  }
+
   function appendTokenBlock(bubble, content) {
     if (!content) return;
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
@@ -554,13 +565,7 @@
 
   function appendChartBlock(bubble, event) {
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
-    if (currentTextEl && !currentMarkdownBuffer.trim()) {
-      currentTextEl.remove();
-    } else if (currentTextEl && window.AyronMarkdown && currentMarkdownBuffer) {
-      window.AyronMarkdown.render(currentTextEl, currentMarkdownBuffer);
-    }
-    currentTextEl = null;
-    currentMarkdownBuffer = "";
+    finalizeCurrentTextBlock();
     if (window.AyronChart) {
       const chartEl = window.AyronChart.create(chartPayloadFromEvent(event));
       contentEl.appendChild(chartEl);
@@ -570,13 +575,7 @@
 
   function appendTableBlock(bubble, table) {
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
-    if (currentTextEl && !currentMarkdownBuffer.trim()) {
-      currentTextEl.remove();
-    } else if (currentTextEl && window.AyronMarkdown && currentMarkdownBuffer) {
-      window.AyronMarkdown.render(currentTextEl, currentMarkdownBuffer);
-    }
-    currentTextEl = null;
-    currentMarkdownBuffer = "";
+    finalizeCurrentTextBlock();
     contentEl.appendChild(renderDataTable(table));
   }
 
@@ -590,6 +589,7 @@
     if (event.type === "token" && bubble) {
       appendTokenBlock(bubble, event.content || "");
     } else if (event.type === "plan" && bubble) {
+      finalizeCurrentTextBlock();
       const tools = bubble.querySelector(".ay-msg-agent__tools");
       const trace = ensureToolTrace(tools);
       const todos = Array.isArray(event.todos) ? event.todos : [];
@@ -602,12 +602,14 @@
         "write_todos"
       );
     } else if (event.type === "tool_start" && bubble) {
+      finalizeCurrentTextBlock();
       const tools = bubble.querySelector(".ay-msg-agent__tools");
       const trace = ensureToolTrace(tools);
       const title = resolveToolLabel(event);
       const subtitle = resolveToolSubtitle(event);
       appendTraceItem(trace, title, subtitle, event.tool_call_id || event.tool, true, event.tool);
     } else if (event.type === "tool_end" && bubble) {
+      finalizeCurrentTextBlock();
       const tools = bubble.querySelector(".ay-msg-agent__tools");
       const trace = ensureToolTrace(tools);
       let item = findTraceItem(trace, event.tool_call_id);
@@ -622,6 +624,7 @@
     } else if (event.type === "chart" && bubble) {
       appendChartBlock(bubble, event);
     } else if ((event.type === "file_created" || event.type === "file_updated") && bubble) {
+      finalizeCurrentTextBlock();
       if (window.AyronArtifact) {
         window.AyronArtifact.handleEvent(bubble, event);
       }
