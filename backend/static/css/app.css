@@ -1067,6 +1067,14 @@ body {
   transition: none;
 }
 
+.ay-shell--sidebar-no-transition .ay-sidebar {
+  transition: none;
+}
+
+.ay-shell--sidebar-no-transition .ay-sidebar > :not(.ay-sidebar__resize) {
+  transition: none;
+}
+
 .ay-sidebar > :not(.ay-sidebar__resize) {
   min-width: var(--sidebar-width, var(--ay-sidebar, 256px));
   transition: opacity var(--ay-dur-normal) var(--ay-ease);

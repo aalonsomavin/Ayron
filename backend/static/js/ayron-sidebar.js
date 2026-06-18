@@ -32,10 +32,14 @@
         this.width = storedWidth;
       }
 
+      var self = this;
+      this.shellEl.classList.add("ay-shell--sidebar-no-transition");
       this.setWidth(this.width);
       this.open();
+      requestAnimationFrame(function () {
+        self.shellEl.classList.remove("ay-shell--sidebar-no-transition");
+      });
 
-      var self = this;
       this.initResize();
 
       var closeBtn = this.sidebarEl.querySelector("[data-sidebar-close]");

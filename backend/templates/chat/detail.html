@@ -167,6 +167,7 @@
   let caretEl = null;
   let isStreaming = false;
   let stickToBottom = true;
+  let scrollToBottomPending = false;
 
   const SCROLL_THRESHOLD = 48;
 
@@ -201,27 +202,62 @@
   function updateScrollAffordance() {
     if (!scrollBtnEl) return;
     const nearBottom = isNearBottom();
-    stickToBottom = nearBottom;
-    scrollBtnEl.classList.toggle("is-visible", !nearBottom);
-    scrollBtnEl.setAttribute("aria-hidden", nearBottom ? "true" : "false");
+    if (!scrollToBottomPending) {
+      stickToBottom = nearBottom;
+    }
+    scrollBtnEl.classList.toggle("is-visible", !nearBottom && !scrollToBottomPending);
+    scrollBtnEl.setAttribute("aria-hidden", nearBottom || scrollToBottomPending ? "true" : "false");
     schedulePinnedUserMessages();
+  }
+
+  function messagesScrollMax() {
+    if (!messagesEl) return 0;
+    return Math.max(0, messagesEl.scrollHeight - messagesEl.clientHeight);
+  }
+
+  function snapMessagesToBottom() {
+    if (!messagesEl) return;
+    updatePinnedUserMessages();
+    messagesEl.scrollTop = messagesScrollMax();
   }
 
   function scrollToBottom(force, smooth) {
     if (!messagesEl) return;
     if (!force && !stickToBottom) return;
+    if (force) {
+      stickToBottom = true;
+      scrollToBottomPending = true;
+      if (scrollBtnEl) {
+        scrollBtnEl.classList.remove("is-visible");
+        scrollBtnEl.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    function finishScroll() {
+      snapMessagesToBottom();
+      requestAnimationFrame(function () {
+        snapMessagesToBottom();
+        scrollToBottomPending = false;
+        stickToBottom = isNearBottom();
+        updateScrollAffordance();
+      });
+    }
+
     requestAnimationFrame(function () {
       if (smooth) {
-        messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
-      } else {
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-      }
-      if (force) {
-        stickToBottom = true;
-        if (scrollBtnEl) {
-          scrollBtnEl.classList.remove("is-visible");
-          scrollBtnEl.setAttribute("aria-hidden", "true");
+        messagesEl.scrollTo({ top: messagesScrollMax(), behavior: "smooth" });
+        var settled = false;
+        var finalize = function () {
+          if (settled) return;
+          settled = true;
+          finishScroll();
+        };
+        if ("onscrollend" in messagesEl) {
+          messagesEl.addEventListener("scrollend", finalize, { once: true });
         }
+        setTimeout(finalize, 500);
+      } else {
+        finishScroll();
       }
     });
   }
@@ -769,8 +805,21 @@
     });
 
     const collapsedBy = scrollHeightBefore - messagesEl.scrollHeight;
-    if (collapsedBy > 0) {
-      messagesEl.scrollTop = Math.max(0, scrollTopBefore - collapsedBy);
+    const grewBy = messagesEl.scrollHeight - scrollHeightBefore;
+
+    if (!scrollToBottomPending) {
+      const wasAtBottom = scrollHeightBefore - scrollTopBefore - messagesEl.clientHeight <= SCROLL_THRESHOLD;
+      if (collapsedBy > 0) {
+        messagesEl.scrollTop = Math.max(0, scrollTopBefore - collapsedBy);
+        if (wasAtBottom) {
+          messagesEl.scrollTop = messagesScrollMax();
+        }
+      } else if (grewBy > 0) {
+        messagesEl.scrollTop = scrollTopBefore;
+        if (wasAtBottom) {
+          messagesEl.scrollTop = messagesScrollMax();
+        }
+      }
     }
 
     if (active) {

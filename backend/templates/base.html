@@ -3,6 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+  (function () {
+    try {
+      var w = parseInt(localStorage.getItem("ayron-sidebar-width") || "", 10);
+      if (!isNaN(w)) {
+        var min = 200;
+        var max = Math.min(420, Math.max(min, Math.floor(window.innerWidth * 0.4)));
+        w = Math.min(max, Math.max(min, w));
+        document.documentElement.style.setProperty("--sidebar-width", w + "px");
+      }
+    } catch (e) {}
+  })();
+  </script>
   <title>{% block title %}Ayron{% endblock %}</title>
   <script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
   {% load static %}
