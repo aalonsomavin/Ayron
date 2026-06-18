@@ -112,9 +112,28 @@ Celdas: `.ay-dash-td-strong`, `.ay-dash-td-muted`, `.ay-dash-td-mono`, `.ay-dash
 </div>
 ```
 
+**Gráfico de torta (pie)** — una sola serie; usa `color_indices` (uno por segmento), no `color_index`:
+
+```html
+<div class="ay-dash-col ay-dash-col--6">
+  <div class="ay-chart" data-chart-id="chart-categorias">
+    <script id="chart-categorias" type="application/json">
+    {"chart_type":"pie","title":"Ventas por categoría","caption":"Mayo 2026","labels":["Rock","Jazz","Clásica"],"datasets":[{"label":"Ventas","data":[42,28,18],"color_indices":[0,1,2]}],"value_format":"percent"}
+    </script>
+    <div class="ay-chart__card">
+      <div class="ay-chart__title">Ventas por categoría</div>
+      <div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>
+      <div class="ay-chart__caption">Mayo 2026</div>
+    </div>
+  </div>
+</div>
+```
+
 Reglas del gráfico:
 - `chart_type`: `bar`, `line` o `pie`
 - `labels`: máx. 25; `datasets`: máx. 8 series (pie: una sola)
+- `bar` / `line`: `color_index` por serie (0–7)
+- `pie`: `color_indices` con un índice por segmento (`[0,1,2,…]`); si omites `color_indices`, Ayron asigna colores automáticamente
 - Valores numéricos en `data`, no strings formateados
 - `value_format`: `number`, `currency` o `percent`
 - El `id` del `<script>` debe coincidir con `data-chart-id` del wrapper

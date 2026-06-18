@@ -30,8 +30,13 @@
   }
 
   function datasetColors(chart, dataset, palette) {
-    if (chart.chart_type === "pie" && dataset.color_indices) {
-      return dataset.color_indices.map(function (idx) {
+    if (chart.chart_type === "pie") {
+      const indices =
+        dataset.color_indices ||
+        (dataset.data || []).map(function (_value, i) {
+          return i;
+        });
+      return indices.map(function (idx) {
         return palette[idx % palette.length];
       });
     }
