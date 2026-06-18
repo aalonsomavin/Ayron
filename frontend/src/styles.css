@@ -277,28 +277,6 @@
     height: 36px;
   }
 
-  @keyframes ay-caret {
-    0%,
-    45% {
-      opacity: 1;
-    }
-    55%,
-    100% {
-      opacity: 0;
-    }
-  }
-
-  .ay-msg-agent__caret {
-    display: inline-block;
-    width: 7px;
-    height: 15px;
-    background: var(--ay-accent);
-    border-radius: 1px;
-    margin-left: 1px;
-    transform: translateY(2px);
-    animation: ay-caret 1s steps(1) infinite;
-  }
-
   .ay-icon {
     display: inline-flex;
     flex: none;
@@ -1724,6 +1702,28 @@
   .ay-markdown ul,
   .ay-markdown ol {
     padding-left: 1.25em;
+  }
+
+  .ay-markdown ul {
+    list-style-type: disc;
+    list-style-position: outside;
+  }
+
+  .ay-markdown ol {
+    list-style-type: decimal;
+    list-style-position: outside;
+  }
+
+  .ay-markdown ul ul {
+    list-style-type: circle;
+  }
+
+  .ay-markdown ul ul ul {
+    list-style-type: square;
+  }
+
+  .ay-markdown li {
+    display: list-item;
   }
 
   .ay-markdown li + li {

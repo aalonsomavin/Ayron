@@ -157,7 +157,6 @@
   let currentTextEl = null;
   let currentMarkdownBuffer = "";
   let markdownRenderScheduled = false;
-  let caretEl = null;
   let isStreaming = false;
   let stickToBottom = true;
   let scrollToBottomPending = false;
@@ -275,29 +274,13 @@
     window.AyronAgentAvatar.stop(root);
   }
 
-  function getCaretEl() {
-    if (!isStreaming) return null;
-    if (!caretEl) {
-      caretEl = document.createElement("span");
-      caretEl.className = "ay-msg-agent__caret";
-      caretEl.setAttribute("aria-hidden", "true");
-    }
-    return caretEl;
-  }
-
-  function removeCaret() {
-    if (caretEl && caretEl.parentNode) caretEl.parentNode.removeChild(caretEl);
-  }
-
   function scheduleMarkdownRender() {
     if (!currentTextEl || !window.AyronMarkdown || markdownRenderScheduled) return;
     markdownRenderScheduled = true;
     requestAnimationFrame(function () {
       markdownRenderScheduled = false;
       if (!currentTextEl || !window.AyronMarkdown) return;
-      window.AyronMarkdown.renderStreaming(currentTextEl, currentMarkdownBuffer, {
-        caretEl: getCaretEl(),
-      });
+      window.AyronMarkdown.renderStreaming(currentTextEl, currentMarkdownBuffer);
     });
   }
 
@@ -321,7 +304,6 @@
     if (currentTextEl && window.AyronMarkdown && currentMarkdownBuffer) {
       window.AyronMarkdown.render(currentTextEl, currentMarkdownBuffer);
     }
-    removeCaret();
     isStreaming = false;
     agentStreamEl.parentElement.insertBefore(streamContainer, agentStreamEl);
     if (window.AyronChart) window.AyronChart.mountAll(streamContainer);
@@ -567,7 +549,6 @@
   }
 
   function appendChartBlock(bubble, event) {
-    removeCaret();
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
     if (currentTextEl && !currentMarkdownBuffer.trim()) {
       currentTextEl.remove();
@@ -584,7 +565,6 @@
   }
 
   function appendTableBlock(bubble, table) {
-    removeCaret();
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
     if (currentTextEl && !currentMarkdownBuffer.trim()) {
       currentTextEl.remove();
@@ -638,7 +618,6 @@
     } else if (event.type === "chart" && bubble) {
       appendChartBlock(bubble, event);
     } else if ((event.type === "file_created" || event.type === "file_updated") && bubble) {
-      removeCaret();
       if (window.AyronArtifact) {
         window.AyronArtifact.handleEvent(bubble, event);
       }

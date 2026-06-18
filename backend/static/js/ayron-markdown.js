@@ -77,16 +77,12 @@
     return [source, ""];
   }
 
-  function appendTailAndCaret(el, tail, caretEl) {
-    if (tail) {
-      const tailEl = document.createElement("span");
-      tailEl.className = "ay-markdown__tail";
-      tailEl.textContent = tail;
-      el.appendChild(tailEl);
-    }
-    if (caretEl) {
-      el.appendChild(caretEl);
-    }
+  function appendTail(el, tail) {
+    if (!tail) return;
+    const tailEl = document.createElement("span");
+    tailEl.className = "ay-markdown__tail";
+    tailEl.textContent = tail;
+    el.appendChild(tailEl);
   }
 
   function render(el, source, opts) {
@@ -97,9 +93,6 @@
     const markdown = source != null ? source : buffers.get(el) || el.textContent || "";
     buffers.set(el, markdown);
     el.innerHTML = parseMarkdown(markdown);
-    if (opts && opts.caretEl) {
-      el.appendChild(opts.caretEl);
-    }
     return markdown;
   }
 
@@ -114,7 +107,7 @@
     const stable = parts[0];
     const tail = parts[1];
     el.innerHTML = stable ? parseMarkdown(stable) : "";
-    appendTailAndCaret(el, tail, opts && opts.caretEl ? opts.caretEl : null);
+    appendTail(el, tail);
     return markdown;
   }
 
