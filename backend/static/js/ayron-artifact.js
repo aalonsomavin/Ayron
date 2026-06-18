@@ -8,8 +8,6 @@
         '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
       download:
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
-      copy:
-        '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
       expand:
         '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>',
       collapse:
@@ -125,6 +123,16 @@
     return btn;
   }
 
+  function downloadUrlForFile(file) {
+    if (fileKind(file) === "dashboard") {
+      return file.download_url;
+    }
+    if (file.ext === "HTML" && file.download_pdf_url) {
+      return file.download_pdf_url;
+    }
+    return file.download_url;
+  }
+
   function ensureFilesContainer(contentEl) {
     let container = contentEl.querySelector(".ay-msg-agent__files");
     if (!container) {
@@ -161,27 +169,8 @@
       });
       this.panelEl.querySelector("[data-artifact-download]").addEventListener("click", function () {
         if (!self.openFile) return;
-        const url =
-          self.openFile.ext === "HTML" && self.openFile.download_pdf_url
-            ? self.openFile.download_pdf_url
-            : self.openFile.download_url;
+        const url = downloadUrlForFile(self.openFile);
         if (url) window.location.href = url;
-      });
-      const htmlDownloadBtn = this.panelEl.querySelector("[data-artifact-download-html]");
-      if (htmlDownloadBtn) {
-        htmlDownloadBtn.addEventListener("click", function () {
-          if (self.openFile && self.openFile.download_url) {
-            window.location.href = self.openFile.download_url;
-          }
-        });
-      }
-      this.panelEl.querySelector("[data-artifact-copy]").addEventListener("click", function () {
-        const body = self.panelEl.querySelector(".ay-artifact-panel__body");
-        if (!body) return;
-        const text = body.innerText || "";
-        if (navigator.clipboard && text) {
-          navigator.clipboard.writeText(text);
-        }
       });
 
       document.addEventListener("click", function (e) {
@@ -267,16 +256,8 @@
       if (metaEl) {
         metaEl.textContent = metaSuffix(file.meta);
       }
-      const htmlDownloadBtn = this.panelEl.querySelector("[data-artifact-download-html]");
-      const downloadBtn = this.panelEl.querySelector("[data-artifact-download]");
-      const isHtml = file.ext === "HTML";
-      if (htmlDownloadBtn) {
-        htmlDownloadBtn.hidden = !isHtml;
-      }
-      if (downloadBtn) {
-        downloadBtn.title = isHtml ? "Download PDF" : "Download";
-      }
 
+      const isHtml = file.ext === "HTML";
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
       body.innerHTML = '<div class="ay-artifact-panel__loading">Loading preview…</div>';
 
