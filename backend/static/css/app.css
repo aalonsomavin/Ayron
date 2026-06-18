@@ -1555,23 +1555,24 @@ body {
   padding: 11px 12px;
   border-radius: var(--ay-radius-md);
   font-family: inherit;
-  border: 1px solid var(--ay-border-strong);
+  border: 1px solid var(--ay-border);
   background: var(--ay-surface);
-  box-shadow: var(--ay-shadow-xs);
+  box-shadow: none;
   white-space: normal;
   line-height: normal;
-  transition: background var(--ay-dur-fast) var(--ay-ease),
-      border-color var(--ay-dur-fast) var(--ay-ease);
+  transition: border-color var(--ay-dur-fast) var(--ay-ease);
 }
 
-.ay-file-card:hover {
-  background: var(--ay-surface-hover);
-}
-
-.ay-file-card--active {
-  border-color: var(--ay-ink);
-  background: var(--ay-bg-subtle);
+.ay-file-card:active,
+  .ay-file-card--active {
+  border-color: var(--ay-border);
+  background: var(--ay-surface);
   box-shadow: none;
+}
+
+.ay-file-card:focus-visible {
+  outline: 2px solid var(--ay-accent);
+  outline-offset: 2px;
 }
 
 .ay-file-card__icon {
@@ -1594,7 +1595,8 @@ body {
 .ay-file-card__name {
   display: block;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
+  color: var(--ay-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1605,13 +1607,14 @@ body {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  font-weight: 400;
   color: var(--ay-text-subtle);
   margin-top: 1px;
 }
 
 .ay-file-card__ext {
   font-family: var(--ay-font-mono);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.02em;
 }
 
