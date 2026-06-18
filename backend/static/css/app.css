@@ -2694,18 +2694,8 @@ body {
   align-items:   center;
 }
 
-.gap-2{
-  gap:   0.5rem;
-}
-
 .gap-4{
   gap:   1rem;
-}
-
-.space-y-6 > :not([hidden]) ~ :not([hidden]){
-  --tw-space-y-reverse:   0;
-  margin-top:   calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));
-  margin-bottom:   calc(1.5rem * var(--tw-space-y-reverse));
 }
 
 .text-wrap{
@@ -2714,10 +2704,6 @@ body {
 
 .border{
   border-width:   1px;
-}
-
-.pt-4{
-  padding-top:   1rem;
 }
 
 .font-mono{
@@ -2729,30 +2715,12 @@ body {
   line-height:   2rem;
 }
 
-.text-3xl{
-  font-size:   1.875rem;
-  line-height:   2.25rem;
-}
-
-.text-lg{
-  font-size:   1.125rem;
-  line-height:   1.75rem;
-}
-
-.font-bold{
-  font-weight:   700;
-}
-
 .uppercase{
   text-transform:   uppercase;
 }
 
 .underline{
   text-decoration-line:   underline;
-}
-
-.opacity-80{
-  opacity:   0.8;
 }
 
 .outline{

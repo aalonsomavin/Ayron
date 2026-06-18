@@ -12,11 +12,12 @@ class TestProtectedRoutes:
         assert response.status_code == 302
         assert reverse("accounts:login") in response.url
 
-    def test_logged_in_gets_200_on_home(self, client):
+    def test_logged_in_redirected_from_home_to_chat(self, client):
         user = User.objects.create_user(username="testuser", password="testpass123")
         client.force_login(user)
         response = client.get(reverse("core:home"))
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.url == reverse("chat:list")
 
 
 @pytest.mark.django_db
@@ -37,7 +38,7 @@ class TestLogin:
             follow=True,
         )
         assert response.status_code == 200
-        assert reverse("core:home") in [r[0] for r in response.redirect_chain]
+        assert reverse("chat:list") in [r[0] for r in response.redirect_chain]
 
     def test_login_with_next_redirects_to_next(self, client):
         User.objects.create_user(username="testuser", password="testpass123")

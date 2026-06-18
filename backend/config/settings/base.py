@@ -108,7 +108,7 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "accounts:login"
-LOGIN_REDIRECT_URL = "core:home"
+LOGIN_REDIRECT_URL = "chat:list"
 LOGOUT_REDIRECT_URL = "accounts:login"
 
 REDIS_URL = env("REDIS_URL")

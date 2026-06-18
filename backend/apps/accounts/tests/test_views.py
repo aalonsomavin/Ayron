@@ -15,5 +15,5 @@ def test_login_page_loads(client):
 def test_logout_redirects(client):
     user = User.objects.create_user(username="testuser", password="testpass123")
     client.force_login(user)
-    response = client.get(reverse("accounts:logout"), follow=True)
+    response = client.post(reverse("accounts:logout"), follow=True)
     assert response.status_code == 200

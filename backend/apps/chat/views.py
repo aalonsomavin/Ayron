@@ -49,9 +49,9 @@ def _hero_title(user) -> str:
     name = _user_display_name(user)
     options = list(HERO_TITLES) + [
         f"¡Hola, {name}!",
-        f"Hola, {name}! ¿qué hacemos?",
+        f"¡Hola, {name}! ¿qué hacemos?",
         f"¿Qué hacemos hoy, {name}?",
-        f"Hola, {name}! ¿en qué te ayudo?",
+        f"¡Hola, {name}! ¿en qué te ayudo?",
     ]
     return random.choice(options)
 

@@ -1,9 +1,9 @@
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 
 def home(request):
-    return render(request, "core/home.html")
+    return redirect("chat:list")
 
 
 def health(request):
