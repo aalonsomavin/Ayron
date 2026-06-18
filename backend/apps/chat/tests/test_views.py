@@ -473,6 +473,75 @@ class TestConversationDetail:
         assert "Mostrar tabla" in content
         assert content.index("Son 10 álbumes.") < content.index("ay-tool-trace")
 
+    def test_processing_active_assistant_not_ssr_rendered(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="First question",
+        )
+        completed_assistant = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="First answer.",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=completed_assistant,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "First answer."},
+            sequence_number=0,
+        )
+
+        conversation.status = Conversation.Status.PROCESSING
+        conversation.save()
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Second question",
+        )
+        active_assistant = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=active_assistant,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_label": "Buscando datos",
+                "tool_subtitle": 'SELECT * FROM "Album"',
+                "tool_call_id": "call_1",
+                "input": {"sql": 'SELECT * FROM "Album"'},
+            },
+            sequence_number=1,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=active_assistant,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Working on it..."},
+            sequence_number=2,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:detail", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+        content = response.content.decode()
+
+        assert (
+            f'<div class="ay-msg-agent" data-message-id="{completed_assistant.id}">'
+            in content
+        )
+        assert "First answer." in content
+        assert (
+            f'<div class="ay-msg-agent" data-message-id="{active_assistant.id}">'
+            not in content
+        )
+        assert "Working on it..." not in content
+        assert f"activeMessageId = {active_assistant.id}" in content
+
     def test_content_blocks_include_file(self, conversation):
         assistant_message = Message.objects.create(
             conversation=conversation,

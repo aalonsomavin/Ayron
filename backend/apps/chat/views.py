@@ -263,6 +263,13 @@ def conversation_start(request):
 def conversation_detail(request, conversation_id):
     conversation = _get_conversation(request, conversation_id)
     chat_messages = _messages_with_content_blocks(conversation)
+    active_id = _active_message_id(conversation)
+    if active_id:
+        for message in chat_messages:
+            if message.id == active_id:
+                message.content_blocks = []
+                message.tool_trace = None
+                break
     return render(
         request,
         "chat/detail.html",

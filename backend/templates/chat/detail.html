@@ -316,6 +316,10 @@
     if (streamContainer && streamContainer.dataset.messageId === String(messageId)) {
       return streamContainer;
     }
+    const existing = chatThreadEl.querySelector(
+      '.ay-msg-agent[data-message-id="' + messageId + '"]'
+    );
+    if (existing) existing.remove();
     finalizeStreamBubble();
     currentTextEl = null;
     currentMarkdownBuffer = "";
@@ -674,6 +678,13 @@
           if (!streamContainer) showThinking();
           openStream();
         } else {
+          if (
+            activeMessageId &&
+            !chatThreadEl.querySelector('[data-message-id="' + activeMessageId + '"]')
+          ) {
+            window.location.reload();
+            return;
+          }
           lastAppliedSeq = data.last_sequence;
           setConversationStatus(data.status === "failed" ? "failed" : "active");
         }
