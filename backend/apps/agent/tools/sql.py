@@ -4,6 +4,7 @@ import re
 import psycopg
 from langchain_core.tools import tool
 
+from apps.agent.cancellation import check_agent_not_cancelled
 from apps.agent.db import MAX_ROWS, demo_db_connection
 from apps.agent.tools.errors import build_query_error_response
 
@@ -139,6 +140,7 @@ def _rows_to_json(rows: list[dict]) -> str:
 @tool
 def list_tables() -> str:
     """List all tables in the public schema of the Chinook demo database."""
+    check_agent_not_cancelled()
     query = """
         SELECT table_name
         FROM information_schema.tables
@@ -159,6 +161,7 @@ def list_tables() -> str:
 @tool
 def describe_table(table_name: str) -> str:
     """Return columns, types, nullability, defaults, and primary keys for a table."""
+    check_agent_not_cancelled()
     try:
         name = validate_table_name(table_name)
     except ValueError as exc:
@@ -210,6 +213,7 @@ def describe_table(table_name: str) -> str:
 @tool
 def run_sql_query(sql: str) -> str:
     """Execute a read-only SELECT query against the Chinook demo database."""
+    check_agent_not_cancelled()
     try:
         query = normalize_chinook_sql(validate_select_only(sql))
     except ValueError as exc:

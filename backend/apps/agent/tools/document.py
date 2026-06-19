@@ -7,6 +7,7 @@ from typing import Annotated
 from docx import Document
 from langchain_core.tools import InjectedToolCallId, tool
 
+from apps.agent.cancellation import check_agent_not_cancelled
 from apps.agent.context import get_agent_conversation, get_agent_user
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import (
@@ -256,6 +257,7 @@ def create_document(
 
     To modify an existing document later, use update_document with the same file_id.
     """
+    check_agent_not_cancelled()
     conversation = get_agent_conversation()
     user = get_agent_user()
     if conversation is None or user is None:
@@ -337,6 +339,7 @@ def update_document(
     Provide only the fields you want to change. sections replaces all sections when provided.
     Use a descriptive `title` for the document header when updating the document name.
     """
+    check_agent_not_cancelled()
     conversation = get_agent_conversation()
     if conversation is None:
         return build_tool_error_response("No conversation context")

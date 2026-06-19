@@ -1798,6 +1798,101 @@
     display: none;
   }
 
+  .ay-msg-agent__content:empty,
+  .ay-msg-agent__tools:empty {
+    display: none;
+  }
+
+  .ay-msg-agent__cancelled {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 20px;
+    white-space: nowrap;
+    animation: ay-fade 0.22s ease both;
+  }
+
+  .ay-msg-agent__content:not(:empty) ~ .ay-msg-agent__cancelled,
+  .ay-msg-agent__tools:not(:empty) ~ .ay-msg-agent__cancelled {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--ay-neutral-150);
+  }
+
+  .ay-msg-agent__cancelled-icon {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border-radius: 6px;
+    background: var(--ay-neutral-100);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ay-msg-agent__cancelled-square {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--ay-neutral-500);
+  }
+
+  .ay-msg-agent__cancelled-text {
+    font-size: 13.5px;
+    line-height: 20px;
+    color: var(--ay-neutral-500);
+  }
+
+  .ay-msg-agent__cancelled-dot {
+    width: 3px;
+    height: 3px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--ay-neutral-300);
+  }
+
+  .ay-msg-agent__cancelled-retry {
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    background: none;
+    color: var(--ay-neutral-500);
+    font: inherit;
+    line-height: 20px;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    white-space: nowrap;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: color var(--ay-dur-fast) var(--ay-ease);
+  }
+
+  .ay-msg-agent__cancelled-retry:hover {
+    color: var(--ay-text-muted);
+  }
+
+  .ay-msg-agent__cancelled-retry-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 20px;
+  }
+
+  .ay-msg-agent__cancelled-retry .ay-icon {
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+
+  .ay-msg-agent__cancelled-retry .ay-icon svg {
+    display: block;
+  }
+
   .ay-data-table {
     white-space: normal;
   }
@@ -1964,6 +2059,12 @@
     color: var(--ay-text-disabled);
   }
 
+  .ay-composer__actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+  }
+
   .ay-composer__hint {
     text-align: center;
     font-size: 12px;
@@ -2096,5 +2197,17 @@
     font-size: 14px;
     color: var(--ay-text-muted);
     line-height: 1.5;
+  }
+}
+
+@keyframes ay-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

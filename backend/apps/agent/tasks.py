@@ -4,6 +4,7 @@ import time
 from celery import shared_task
 from openai import OpenAIError
 
+from apps.agent.cancellation import AgentCancelledError, clear_cancel, is_cancelled
 from apps.agent.context import set_agent_context
 from apps.agent.deliverable_intent import detect_deliverable_intent
 from apps.agent.events import persist_event
@@ -29,13 +30,15 @@ def is_recoverable_agent_error(exc: Exception) -> bool:
     return isinstance(exc, OpenAIError)
 
 
-def stream_agent_response(agent, agent_messages, handler) -> None:
+def stream_agent_response(agent, agent_messages, handler, conversation_id) -> None:
     for chunk in agent.stream(
         {"messages": agent_messages},
         stream_mode=["messages"],
         version="v2",
     ):
         handler.handle_chunk(chunk)
+        if is_cancelled(conversation_id):
+            raise AgentCancelledError()
 
 
 def build_agent_messages(conversation: Conversation, exclude_message_id: int) -> list[dict]:
@@ -68,6 +71,8 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
         persist_fn=persist_event,
     )
 
+    clear_cancel(conversation_id)
+
     try:
         deliverable_intent = detect_deliverable_intent(user_message.content)
         set_agent_context(
@@ -83,7 +88,7 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
 
         for attempt in range(1, MAX_LLM_RETRIES + 1):
             try:
-                stream_agent_response(agent, agent_messages, handler)
+                stream_agent_response(agent, agent_messages, handler, conversation_id)
                 break
             except OpenAIError:
                 can_retry = (
@@ -103,6 +108,10 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
                 )
                 time.sleep(min(2**attempt, 10))
 
+        conversation.refresh_from_db()
+        if conversation.status != Conversation.Status.PROCESSING:
+            return
+
         assistant_message.content = handler.get_content()
         assistant_message.save(update_fields=["content"])
 
@@ -110,6 +119,23 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
             conversation=conversation,
             event_type=AgentEvent.EventType.DONE,
             payload={},
+            message=assistant_message,
+        )
+
+        conversation.status = Conversation.Status.ACTIVE
+        conversation.save(update_fields=["status", "updated_at"])
+    except AgentCancelledError:
+        conversation.refresh_from_db()
+        if conversation.status != Conversation.Status.PROCESSING:
+            return
+
+        assistant_message.content = handler.get_content()
+        assistant_message.save(update_fields=["content"])
+
+        persist_event(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.DONE,
+            payload={"cancelled": True},
             message=assistant_message,
         )
 

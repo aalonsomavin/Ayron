@@ -19,8 +19,8 @@
               <div class="ay-msg-user__bubble">{{ turn.user.content }}</div>
             </div>
             {% if turn.assistant %}
-              {% if turn.assistant.content_blocks or turn.assistant.tool_trace %}
-                <div class="ay-msg-agent" data-message-id="{{ turn.assistant.id }}">
+              {% if turn.assistant.content_blocks or turn.assistant.tool_trace or turn.assistant.cancelled %}
+                <div class="ay-msg-agent{% if turn.assistant.cancelled %} ay-msg-agent--cancelled{% endif %}" data-message-id="{{ turn.assistant.id }}">
                   {% include "components/agent_avatar.html" %}
                   <div class="ay-msg-agent__body">
                     {% if turn.assistant.content_blocks %}
@@ -44,6 +44,9 @@
                     {% endif %}
                     {% if turn.assistant.tool_trace %}
                       {% include "components/tool_trace.html" with trace=turn.assistant.tool_trace %}
+                    {% endif %}
+                    {% if turn.assistant.cancelled %}
+                      {% include "components/cancelled_notice.html" %}
                     {% endif %}
                   </div>
                 </div>
@@ -89,11 +92,14 @@
               autocomplete="off"
               {% if conversation.status == "processing" %}disabled{% endif %}
             />
-            {% if conversation.status == "processing" %}
-              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" disabled="disabled" %}
-            {% else %}
-              {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
-            {% endif %}
+            <div class="ay-composer__actions">
+              <span id="chat-send-wrap"{% if conversation.status == "processing" %} hidden{% endif %}>
+                {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
+              </span>
+              <span id="chat-stop-wrap"{% if conversation.status != "processing" %} hidden{% endif %}>
+                {% include "components/button.html" with id="chat-stop" variant="primary" size="sm" type="button" label="Detener" left_icon="stop" %}
+              </span>
+            </div>
           </div>
         </form>
         <p class="ay-composer__hint">Ayron queries the Chinook demo database. Always verify critical figures.</p>
@@ -132,6 +138,10 @@
   </div>
 </div>
 
+<template id="cancelled-notice-template">
+  {% include "components/cancelled_notice.html" %}
+</template>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -145,6 +155,8 @@
 (function () {
   const eventsUrl = "{% url 'chat:events' conversation_id=conversation.id %}";
   const streamUrl = "{% url 'chat:stream' conversation_id=conversation.id %}";
+  const stopUrl = "{% url 'chat:stop' conversation_id=conversation.id %}";
+  const retryUrl = "{% url 'chat:retry' conversation_id=conversation.id %}";
   let lastAppliedSeq = -1;
   let eventSource = null;
   let streamContainer = null;
@@ -162,6 +174,9 @@
   const statusEl = document.getElementById("chat-status");
   const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
+  const sendWrapEl = document.getElementById("chat-send-wrap");
+  const stopEl = document.getElementById("chat-stop");
+  const stopWrapEl = document.getElementById("chat-stop-wrap");
   const messagesEl = document.getElementById("chat-messages");
   const userPillEl = document.getElementById("chat-user-pill");
   const userPillTextEl = userPillEl && userPillEl.querySelector(".ay-chat__user-pill-text");
@@ -170,7 +185,7 @@
   const mainEl = document.getElementById("ay-main");
   const artifactPanelEl = document.getElementById("artifact-panel");
   const chatThreadEl = agentStreamEl.closest(".ay-chat__thread");
-  const activeMessageId = {{ active_message_id|default:"null" }};
+  let activeMessageId = {{ active_message_id|default:"null" }};
   const TOOL_LABELS = {{ tool_labels_json|safe }};
 
   function resolveToolLabel(event) {
@@ -250,12 +265,75 @@
   }
 
   function setConversationStatus(status) {
-    inputEl.disabled = status === "processing";
-    sendEl.disabled = status === "processing";
+    const processing = status === "processing";
+    inputEl.disabled = processing;
+    if (sendWrapEl) sendWrapEl.hidden = processing;
+    if (stopWrapEl) stopWrapEl.hidden = !processing;
+    if (sendEl) sendEl.disabled = processing;
+    if (stopEl && !processing) stopEl.disabled = false;
     if (!statusEl) return;
     statusEl.textContent = status;
     const tone = status === "processing" ? "warning" : status === "failed" ? "danger" : "success";
     statusEl.className = "ay-badge ay-badge--" + tone;
+  }
+
+  function csrfToken() {
+    const input = document.querySelector('#chat-composer input[name="csrfmiddlewaretoken"]');
+    return input ? input.value : "";
+  }
+
+  function getProcessingMessageId() {
+    if (streamContainer && streamContainer.dataset.messageId) {
+      return streamContainer.dataset.messageId;
+    }
+    return activeMessageId;
+  }
+
+  function stopAgentRun() {
+    if (!stopEl || stopEl.disabled) return;
+    stopEl.disabled = true;
+    fetch(stopUrl, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken(),
+      },
+      credentials: "same-origin",
+    }).then(function (response) {
+      if (!response.ok) {
+        stopEl.disabled = false;
+        return;
+      }
+      return fetch(eventsUrl)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          const stoppedMessageId = getProcessingMessageId();
+          if (stoppedMessageId) {
+            data.events.forEach(function (event) {
+              if (
+                String(event.message_id) === String(stoppedMessageId) &&
+                event.seq > lastAppliedSeq
+              ) {
+                applyEvent(event);
+              }
+            });
+          }
+          lastAppliedSeq = data.last_sequence;
+          finalizeStreamBubble();
+          hideThinking();
+          if (stoppedMessageId) {
+            let bubble = chatThreadEl.querySelector(
+              '[data-message-id="' + stoppedMessageId + '"]'
+            );
+            if (!bubble) bubble = ensureCancelledBubble(stoppedMessageId);
+            markBubbleCancelled(bubble);
+          }
+          setConversationStatus(data.status === "failed" ? "failed" : "active");
+          closeStream();
+          scrollToBottom(true);
+        });
+    }).catch(function () {
+      stopEl.disabled = false;
+    });
   }
 
   function mountAgentAvatar(root, active) {
@@ -306,6 +384,108 @@
     currentMarkdownBuffer = "";
   }
 
+  function markBubbleCancelled(bubble) {
+    if (!bubble || bubble.querySelector(".ay-msg-agent__cancelled")) return;
+    bubble.querySelectorAll(".ay-tool-trace__item.is-running").forEach(function (item) {
+      item.classList.remove("is-running");
+    });
+    const tpl = document.getElementById("cancelled-notice-template");
+    const notice = tpl ? tpl.content.firstElementChild.cloneNode(true) : null;
+    if (!notice) return;
+    const body = bubble.querySelector(".ay-msg-agent__body");
+    if (body) body.appendChild(notice);
+    bubble.classList.add("ay-msg-agent--cancelled");
+    bindCancelledRetry(notice);
+  }
+
+  function bindCancelledRetry(noticeEl) {
+    const retryBtn = noticeEl.querySelector(".ay-msg-agent__cancelled-retry");
+    if (!retryBtn || retryBtn.dataset.bound === "true") return;
+    retryBtn.dataset.bound = "true";
+    retryBtn.addEventListener("click", function () {
+      const bubble = noticeEl.closest(".ay-msg-agent");
+      if (bubble) retryCancelledTurn(bubble);
+    });
+  }
+
+  function initCancelledNotices(root) {
+    (root || document).querySelectorAll(".ay-msg-agent__cancelled").forEach(bindCancelledRetry);
+  }
+
+  function resetBubbleForRetry(bubble) {
+    bubble.classList.remove("ay-msg-agent--cancelled");
+    const cancelled = bubble.querySelector(".ay-msg-agent__cancelled");
+    if (cancelled) cancelled.remove();
+    const content = bubble.querySelector(".ay-msg-agent__content");
+    if (content) content.innerHTML = "";
+    const tools = bubble.querySelector(".ay-msg-agent__tools");
+    if (tools) tools.innerHTML = "";
+    const avatar = bubble.querySelector(".ay-agent-avatar");
+    if (avatar) mountAgentAvatar(avatar, true);
+  }
+
+  function retryCancelledTurn(bubble) {
+    if (!bubble || !bubble.dataset.messageId) return;
+    const turn = bubble.closest(".ay-chat__turn");
+    if (!turn) return;
+    const retryBtn = bubble.querySelector(".ay-msg-agent__cancelled-retry");
+    if (retryBtn) retryBtn.disabled = true;
+
+    chatThreadEl.querySelectorAll(".ay-chat__turn--active").forEach(function (t) {
+      t.classList.remove("ay-chat__turn--active");
+    });
+    turn.classList.add("ay-chat__turn--active");
+    resetBubbleForRetry(bubble);
+
+    fetch(retryUrl, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken(),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "assistant_message_id=" + encodeURIComponent(bubble.dataset.messageId),
+      credentials: "same-origin",
+    }).then(function (response) {
+      if (!response.ok) {
+        if (retryBtn) retryBtn.disabled = false;
+        return null;
+      }
+      return response.json();
+    }).then(function (data) {
+      if (!data) return;
+      activeMessageId = data.assistant_message_id;
+      lastAppliedSeq = data.last_sequence;
+      finalizeStreamBubble();
+      currentTextEl = null;
+      currentMarkdownBuffer = "";
+      streamContainer = bubble;
+      isStreaming = true;
+      setConversationStatus("processing");
+      closeStream();
+      openStream();
+      scrollToBottom(true);
+    }).catch(function () {
+      if (retryBtn) retryBtn.disabled = false;
+    });
+  }
+
+  function ensureCancelledBubble(messageId) {
+    let bubble = chatThreadEl.querySelector('[data-message-id="' + messageId + '"]');
+    if (bubble) return bubble;
+    bubble = document.createElement("div");
+    bubble.className = "ay-msg-agent";
+    bubble.dataset.messageId = messageId;
+    bubble.innerHTML =
+      AGENT_AVATAR_HTML +
+      '<div class="ay-msg-agent__body">' +
+        '<div class="ay-msg-agent__content"></div>' +
+        '<div class="ay-msg-agent__tools"></div>' +
+      '</div>';
+    mountAgentAvatar(bubble.querySelector(".ay-agent-avatar"), false);
+    agentStreamEl.parentElement.insertBefore(bubble, agentStreamEl);
+    return bubble;
+  }
+
   function ensureStreamBubble(messageId) {
     if (streamContainer && streamContainer.dataset.messageId === String(messageId)) {
       return streamContainer;
@@ -313,7 +493,20 @@
     const existing = chatThreadEl.querySelector(
       '.ay-msg-agent[data-message-id="' + messageId + '"]'
     );
-    if (existing) existing.remove();
+    if (existing) {
+      if (streamContainer && streamContainer !== existing) {
+        finalizeStreamBubble();
+      }
+      streamContainer = existing;
+      currentTextEl = null;
+      currentMarkdownBuffer = "";
+      existing.classList.remove("ay-msg-agent--cancelled");
+      const cancelled = existing.querySelector(".ay-msg-agent__cancelled");
+      if (cancelled) cancelled.remove();
+      mountAgentAvatar(existing.querySelector(".ay-agent-avatar"), true);
+      isStreaming = true;
+      return streamContainer;
+    }
     finalizeStreamBubble();
     currentTextEl = null;
     currentMarkdownBuffer = "";
@@ -577,7 +770,7 @@
     if (event.seq <= lastAppliedSeq) return;
     lastAppliedSeq = event.seq;
 
-    const messageId = event.message_id || activeMessageId;
+    const messageId = event.message_id || getProcessingMessageId();
     const bubble = messageId ? ensureStreamBubble(messageId) : null;
 
     if (event.type === "token" && bubble) {
@@ -632,6 +825,15 @@
       setConversationStatus("failed");
       closeStream();
     } else if (event.type === "done") {
+      if (event.cancelled) {
+        const doneMessageId = event.message_id || getProcessingMessageId();
+        if (streamContainer) {
+          markBubbleCancelled(streamContainer);
+        } else if (doneMessageId) {
+          markBubbleCancelled(ensureCancelledBubble(doneMessageId));
+        }
+      }
+      activeMessageId = null;
       finalizeStreamBubble();
       hideThinking();
       setConversationStatus("active");
@@ -762,6 +964,18 @@
     const content = inputEl.value.trim();
     if (!content) return;
 
+    try {
+      const payload = JSON.parse(e.detail.xhr.responseText);
+      if (payload.assistant_message_id) {
+        activeMessageId = payload.assistant_message_id;
+      }
+      if (typeof payload.last_sequence === "number") {
+        lastAppliedSeq = payload.last_sequence;
+      }
+    } catch (err) {
+      /* ignore non-json responses */
+    }
+
     const row = document.createElement("div");
     row.className = "ay-msg-user";
     row.innerHTML = '<div class="ay-msg-user__bubble"></div>';
@@ -793,6 +1007,10 @@
     });
   }
 
+  if (stopEl) {
+    stopEl.addEventListener("click", stopAgentRun);
+  }
+
   if (messagesEl) {
     messagesEl.addEventListener("scroll", updateScrollAffordance, { passive: true });
   }
@@ -804,6 +1022,7 @@
   scrollToBottom(true);
   updateFloatingUserPill();
   initToolTraces(chatThreadEl);
+  initCancelledNotices(chatThreadEl);
   if (window.AyronMarkdown) window.AyronMarkdown.mountAll(chatThreadEl);
   window.AyronAgentAvatar.mountAll(chatThreadEl);
   if (window.AyronChart) window.AyronChart.mountAll(chatThreadEl);

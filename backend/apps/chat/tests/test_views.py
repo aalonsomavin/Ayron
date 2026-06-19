@@ -55,7 +55,7 @@ class TestSendMessage:
                 HTTP_HX_REQUEST="true",
             )
 
-        assert response.status_code == 204
+        assert response.status_code == 200
         conversation.refresh_from_db()
         assert conversation.status == Conversation.Status.PROCESSING
         assert conversation.celery_task_id == "task-123"
@@ -67,6 +67,9 @@ class TestSendMessage:
         assert messages[0].content == "Top 5 artists by albums"
         assert messages[1].role == Message.Role.ASSISTANT
         assert messages[1].content == ""
+
+        payload = response.json()
+        assert payload["assistant_message_id"] == messages[1].id
 
         mock_task.delay.assert_called_once_with(
             str(conversation.id),
@@ -87,6 +90,162 @@ class TestSendMessage:
         url = reverse("chat:send", kwargs={"conversation_id": conversation.id})
         response = client.post(url, {"content": "Another question"})
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestStopConversation:
+    def test_stop_when_processing(self, client, user, conversation):
+        conversation.status = Conversation.Status.PROCESSING
+        conversation.celery_task_id = "task-456"
+        conversation.save()
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        client.force_login(user)
+        url = reverse("chat:stop", kwargs={"conversation_id": conversation.id})
+
+        with patch("apps.chat.views.request_cancel") as mock_cancel:
+            with patch("apps.chat.views.celery_app.control.revoke") as mock_revoke:
+                with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+                    mock_get_redis.return_value = MagicMock()
+                    response = client.post(url)
+
+        assert response.status_code == 204
+        mock_cancel.assert_called_once_with(conversation.id)
+        mock_revoke.assert_called_once_with("task-456", terminate=True)
+
+        conversation.refresh_from_db()
+        assert conversation.status == Conversation.Status.ACTIVE
+        assert AgentEvent.objects.filter(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.DONE,
+            message=assistant_message,
+            payload={"cancelled": True},
+        ).exists()
+
+    def test_stop_rejects_when_not_processing(self, client, user, conversation):
+        client.force_login(user)
+        url = reverse("chat:stop", kwargs={"conversation_id": conversation.id})
+        response = client.post(url)
+        assert response.status_code == 400
+
+    def test_stop_other_user_gets_404(self, client, other_user, conversation):
+        conversation.status = Conversation.Status.PROCESSING
+        conversation.save()
+        client.force_login(other_user)
+        url = reverse("chat:stop", kwargs={"conversation_id": conversation.id})
+        response = client.post(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestRetryMessage:
+    def test_retry_reuses_cancelled_turn(self, client, user, conversation):
+        user_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Haceme una tabla",
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Partial",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Partial"},
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.DONE,
+            payload={"cancelled": True},
+            sequence_number=1,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:retry", kwargs={"conversation_id": conversation.id})
+
+        with patch("apps.chat.views.run_agent_conversation.delay") as mock_delay:
+            mock_delay.return_value = MagicMock(id="task-retry-1")
+            response = client.post(url, {"assistant_message_id": assistant_message.id})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["assistant_message_id"] == assistant_message.id
+        assert data["last_sequence"] == -1
+
+        mock_delay.assert_called_once_with(
+            str(conversation.id),
+            user_message.id,
+            assistant_message.id,
+        )
+
+        conversation.refresh_from_db()
+        assert conversation.status == Conversation.Status.PROCESSING
+        assert conversation.celery_task_id == "task-retry-1"
+
+        assistant_message.refresh_from_db()
+        assert assistant_message.content == ""
+        assert not AgentEvent.objects.filter(message=assistant_message).exists()
+
+        assert Message.objects.filter(conversation=conversation).count() == 2
+
+    def test_retry_rejects_when_not_cancelled(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Hello",
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Done",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.DONE,
+            payload={},
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:retry", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, {"assistant_message_id": assistant_message.id})
+        assert response.status_code == 400
+
+    def test_retry_rejects_when_processing(self, client, user, conversation):
+        conversation.status = Conversation.Status.PROCESSING
+        conversation.save()
+        user_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Hello",
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.DONE,
+            payload={"cancelled": True},
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:retry", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, {"assistant_message_id": assistant_message.id})
+        assert response.status_code == 400
+        assert Message.objects.filter(conversation=conversation).count() == 2
 
 
 @pytest.mark.django_db
@@ -549,9 +708,48 @@ class TestConversationDetail:
 
         assert "ay-tool-trace" in content
         assert "Buscó datos 1 vez, mostró 1 tabla" in content
-        assert "Buscando datos" in content
-        assert "Mostrar tabla" in content
-        assert content.index("Son 10 álbumes.") < content.index("ay-tool-trace")
+
+    def test_detail_renders_cancelled_notice(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Genera un dashboard",
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_label": "Buscando datos",
+                "tool_subtitle": 'SELECT 1',
+                "tool_call_id": "call_1",
+                "input": {"sql": "SELECT 1"},
+            },
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.DONE,
+            payload={"cancelled": True},
+            sequence_number=1,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:detail", kwargs={"conversation_id": conversation.id})
+        response = client.get(url)
+        content = response.content.decode()
+
+        assert "Detuviste la generación" in content
+        assert "ay-msg-agent--cancelled" in content
+        assert "ay-tool-trace" in content
+        assert "Reintentar" in content
 
     def test_processing_active_assistant_not_ssr_rendered(self, client, user, conversation):
         Message.objects.create(

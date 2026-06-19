@@ -6,13 +6,15 @@ from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, Stre
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.agent.events import get_redis_client
+from apps.agent.cancellation import clear_cancel, request_cancel
+from apps.agent.events import get_redis_client, persist_event
 from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_display
 from apps.agent.tools.chart import prepare_chart_for_render
 from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.chat.tool_trace import tool_trace_for_message
+from config.celery import app as celery_app
 
 
 HERO_TITLES = (
@@ -172,12 +174,33 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
     return blocks
 
 
+def _message_was_cancelled(message: Message) -> bool:
+    return AgentEvent.objects.filter(
+        message=message,
+        event_type=AgentEvent.EventType.DONE,
+        payload__cancelled=True,
+    ).exists()
+
+
+def _user_message_for_assistant(assistant_message: Message) -> Message | None:
+    return (
+        Message.objects.filter(
+            conversation_id=assistant_message.conversation_id,
+            role=Message.Role.USER,
+            created_at__lt=assistant_message.created_at,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
 def _messages_with_content_blocks(conversation: Conversation) -> list[Message]:
     messages = list(conversation.messages.select_related().order_by("created_at"))
     for message in messages:
         if message.role == Message.Role.ASSISTANT:
             message.content_blocks = _content_blocks_for_message(message)
             message.tool_trace = tool_trace_for_message(message)
+            message.cancelled = _message_was_cancelled(message)
     return messages
 
 
@@ -217,6 +240,7 @@ def _enqueue_user_message(conversation: Conversation, content: str) -> tuple[Mes
         update_fields.append("title")
 
     conversation.status = Conversation.Status.PROCESSING
+    clear_cancel(conversation.id)
     task = run_agent_conversation.delay(
         str(conversation.id),
         user_message.id,
@@ -225,6 +249,46 @@ def _enqueue_user_message(conversation: Conversation, content: str) -> tuple[Mes
     conversation.celery_task_id = task.id
     conversation.save(update_fields=update_fields)
     return user_message, assistant_message
+
+
+def _aggregate_message_content(message: Message) -> str:
+    parts = []
+    for event in AgentEvent.objects.filter(
+        message=message,
+        event_type=AgentEvent.EventType.TOKEN,
+    ).order_by("sequence_number"):
+        chunk = event.payload.get("content", "")
+        if chunk:
+            parts.append(chunk)
+    return "".join(parts)
+
+
+def _finalize_cancelled_conversation(conversation: Conversation) -> bool:
+    conversation.refresh_from_db()
+    if conversation.status != Conversation.Status.PROCESSING:
+        return False
+
+    assistant_message_id = _active_message_id(conversation)
+    if assistant_message_id is None:
+        conversation.status = Conversation.Status.ACTIVE
+        conversation.save(update_fields=["status", "updated_at"])
+        return True
+
+    assistant_message = Message.objects.get(id=assistant_message_id, conversation=conversation)
+    content = _aggregate_message_content(assistant_message)
+    if content:
+        assistant_message.content = content
+        assistant_message.save(update_fields=["content"])
+
+    persist_event(
+        conversation=conversation,
+        event_type=AgentEvent.EventType.DONE,
+        payload={"cancelled": True},
+        message=assistant_message,
+    )
+    conversation.status = Conversation.Status.ACTIVE
+    conversation.save(update_fields=["status", "updated_at"])
+    return True
 
 
 @require_GET
@@ -297,12 +361,85 @@ def send_message(request, conversation_id):
     if not content:
         return HttpResponseBadRequest("Message content is required.")
 
-    _enqueue_user_message(conversation, content)
+    user_message, assistant_message = _enqueue_user_message(conversation, content)
 
     if request.headers.get("HX-Request"):
-        return HttpResponse(status=204)
+        return JsonResponse(
+            {
+                "assistant_message_id": assistant_message.id,
+                "last_sequence": _conversation_last_sequence(conversation),
+            }
+        )
 
     return redirect("chat:detail", conversation_id=conversation.id)
+
+
+@require_POST
+def stop_conversation(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+
+    if conversation.status != Conversation.Status.PROCESSING:
+        return HttpResponseBadRequest("Conversation is not processing a message.")
+
+    request_cancel(conversation.id)
+    _finalize_cancelled_conversation(conversation)
+    if conversation.celery_task_id:
+        celery_app.control.revoke(conversation.celery_task_id, terminate=True)
+
+    return HttpResponse(status=204)
+
+
+@require_POST
+def retry_message(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+
+    if conversation.status == Conversation.Status.PROCESSING:
+        return HttpResponseBadRequest("Conversation is already processing a message.")
+
+    assistant_param = request.POST.get("assistant_message_id")
+    if not assistant_param:
+        return HttpResponseBadRequest("Assistant message id is required.")
+
+    try:
+        assistant_message_id = int(assistant_param)
+    except ValueError:
+        return HttpResponseBadRequest("Invalid assistant message id.")
+
+    assistant_message = get_object_or_404(
+        Message,
+        id=assistant_message_id,
+        conversation=conversation,
+        role=Message.Role.ASSISTANT,
+    )
+
+    if not _message_was_cancelled(assistant_message):
+        return HttpResponseBadRequest("Message was not cancelled.")
+
+    user_message = _user_message_for_assistant(assistant_message)
+    if user_message is None:
+        return HttpResponseBadRequest("User message not found.")
+
+    AgentEvent.objects.filter(message=assistant_message).delete()
+    assistant_message.content = ""
+    assistant_message.save(update_fields=["content"])
+
+    update_fields = ["status", "updated_at", "celery_task_id"]
+    conversation.status = Conversation.Status.PROCESSING
+    clear_cancel(conversation.id)
+    task = run_agent_conversation.delay(
+        str(conversation.id),
+        user_message.id,
+        assistant_message.id,
+    )
+    conversation.celery_task_id = task.id
+    conversation.save(update_fields=update_fields)
+
+    return JsonResponse(
+        {
+            "assistant_message_id": assistant_message.id,
+            "last_sequence": _conversation_last_sequence(conversation),
+        }
+    )
 
 
 @require_GET

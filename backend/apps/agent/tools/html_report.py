@@ -7,6 +7,7 @@ from typing import Annotated
 from django.conf import settings
 from langchain_core.tools import InjectedToolCallId, tool
 
+from apps.agent.cancellation import check_agent_not_cancelled
 from apps.agent.context import get_agent_conversation, get_agent_user
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import footer_attribution_text
@@ -308,6 +309,7 @@ def create_html_report(
 
     To modify an existing report later, use update_html_report with the same file_id.
     """
+    check_agent_not_cancelled()
     conversation = get_agent_conversation()
     user = get_agent_user()
     if conversation is None or user is None:
@@ -381,6 +383,7 @@ def update_html_report(
     Provide only the fields you want to change. `html` replaces all markup when provided.
     `html_kind` is re-inferred when `html` changes.
     """
+    check_agent_not_cancelled()
     conversation = get_agent_conversation()
     if conversation is None:
         return build_tool_error_response("No conversation context")

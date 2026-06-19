@@ -160,6 +160,75 @@ class TestRunAgentConversation:
         )
         assert tool_end.payload["tool_label"] == "Listar tablas"
 
+    def test_run_agent_conversation_stops_when_cancelled(self, conversation_with_messages):
+        conversation, user_message, assistant_message = conversation_with_messages
+        stream_chunks = [
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (AIMessageChunk(content="Partial "), {}),
+            },
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (AIMessageChunk(content="response"), {}),
+            },
+        ]
+        mock_agent = MagicMock()
+        mock_agent.stream.return_value = stream_chunks
+
+        with patch("apps.agent.tasks.create_agent", return_value=mock_agent):
+            with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+                mock_get_redis.return_value = MagicMock()
+                with patch(
+                    "apps.agent.tasks.is_cancelled",
+                    side_effect=[False, True],
+                ):
+                    run_agent_conversation(
+                        str(conversation.id),
+                        user_message.id,
+                        assistant_message.id,
+                    )
+
+        assistant_message.refresh_from_db()
+        conversation.refresh_from_db()
+
+        assert assistant_message.content == "Partial response"
+        assert conversation.status == Conversation.Status.ACTIVE
+
+        done_event = AgentEvent.objects.get(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.DONE,
+        )
+        assert done_event.payload == {"cancelled": True}
+
+    def test_run_agent_conversation_skips_finalize_if_already_stopped(self, conversation_with_messages):
+        conversation, user_message, assistant_message = conversation_with_messages
+        conversation.status = Conversation.Status.ACTIVE
+        conversation.save()
+        mock_agent = MagicMock()
+        mock_agent.stream.return_value = [
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (AIMessageChunk(content="Late token"), {}),
+            },
+        ]
+
+        with patch("apps.agent.tasks.create_agent", return_value=mock_agent):
+            with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+                mock_get_redis.return_value = MagicMock()
+                run_agent_conversation(
+                    str(conversation.id),
+                    user_message.id,
+                    assistant_message.id,
+                )
+
+        assert not AgentEvent.objects.filter(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.DONE,
+        ).exists()
+
     def test_run_agent_conversation_marks_failed_on_error(self, conversation_with_messages):
         conversation, user_message, assistant_message = conversation_with_messages
         mock_agent = MagicMock()
