@@ -10,6 +10,7 @@ from apps.agent.events import persist_event
 from apps.agent.streaming import StreamEventHandler
 from apps.agent.tasks import (
     LLM_RETRY_MESSAGE,
+    build_stream_input,
     format_agent_error,
     run_agent_conversation,
 )
@@ -75,6 +76,31 @@ class TestPersistEvent:
 
 
 @pytest.mark.django_db
+class TestBuildStreamInput:
+    def test_bootstrap_when_no_checkpoint(self, conversation_with_messages):
+        conversation, user_message, assistant_message = conversation_with_messages
+        with patch("apps.agent.tasks.has_checkpoint", return_value=False):
+            input_state, config = build_stream_input(
+                conversation,
+                user_message,
+                assistant_message.id,
+            )
+        assert config == {"configurable": {"thread_id": str(conversation.id)}}
+        assert input_state["messages"] == [{"role": "user", "content": "Top 5 artists"}]
+
+    def test_incremental_when_checkpoint_exists(self, conversation_with_messages):
+        conversation, user_message, assistant_message = conversation_with_messages
+        with patch("apps.agent.tasks.has_checkpoint", return_value=True):
+            input_state, config = build_stream_input(
+                conversation,
+                user_message,
+                assistant_message.id,
+            )
+        assert config == {"configurable": {"thread_id": str(conversation.id)}}
+        assert input_state["messages"] == [{"role": "user", "content": "Top 5 artists"}]
+
+
+@pytest.mark.django_db
 class TestRunAgentConversation:
     def test_run_agent_conversation_persists_stream_and_done(self, conversation_with_messages):
         conversation, user_message, assistant_message = conversation_with_messages
@@ -118,14 +144,20 @@ class TestRunAgentConversation:
         mock_agent = MagicMock()
         mock_agent.stream.return_value = stream_chunks
 
-        with patch("apps.agent.tasks.create_agent", return_value=mock_agent):
-            with patch("apps.agent.events.get_redis_client") as mock_get_redis:
-                mock_get_redis.return_value = MagicMock()
-                run_agent_conversation(
-                    str(conversation.id),
-                    user_message.id,
-                    assistant_message.id,
-                )
+        with patch("apps.agent.tasks.has_checkpoint", return_value=False):
+            with patch("apps.agent.tasks.create_agent", return_value=mock_agent):
+                with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+                    mock_get_redis.return_value = MagicMock()
+                    run_agent_conversation(
+                        str(conversation.id),
+                        user_message.id,
+                        assistant_message.id,
+                    )
+
+        mock_agent.stream.assert_called_once()
+        stream_args, stream_kwargs = mock_agent.stream.call_args
+        assert stream_kwargs["config"] == {"configurable": {"thread_id": str(conversation.id)}}
+        assert stream_args[0]["messages"] == [{"role": "user", "content": "Top 5 artists"}]
 
         assistant_message.refresh_from_db()
         conversation.refresh_from_db()
@@ -184,11 +216,19 @@ class TestRunAgentConversation:
                     "apps.agent.tasks.is_cancelled",
                     side_effect=[False, True],
                 ):
-                    run_agent_conversation(
-                        str(conversation.id),
-                        user_message.id,
-                        assistant_message.id,
-                    )
+                    with patch("apps.agent.tasks.rollback_thread_to_turn") as mock_rollback:
+                        run_agent_conversation(
+                            str(conversation.id),
+                            user_message.id,
+                            assistant_message.id,
+                        )
+
+        mock_rollback.assert_called_once_with(
+            conversation,
+            user_message,
+            include_user_message=True,
+            agent=mock_agent,
+        )
 
         assistant_message.refresh_from_db()
         conversation.refresh_from_db()
@@ -237,12 +277,20 @@ class TestRunAgentConversation:
         with patch("apps.agent.tasks.create_agent", return_value=mock_agent):
             with patch("apps.agent.events.get_redis_client") as mock_get_redis:
                 mock_get_redis.return_value = MagicMock()
-                with pytest.raises(RuntimeError, match="LLM unavailable"):
-                    run_agent_conversation(
-                        str(conversation.id),
-                        user_message.id,
-                        assistant_message.id,
-                    )
+                with patch("apps.agent.tasks.rollback_thread_to_turn") as mock_rollback:
+                    with pytest.raises(RuntimeError, match="LLM unavailable"):
+                        run_agent_conversation(
+                            str(conversation.id),
+                            user_message.id,
+                            assistant_message.id,
+                        )
+
+        mock_rollback.assert_called_once_with(
+            conversation,
+            user_message,
+            include_user_message=True,
+            agent=mock_agent,
+        )
 
         conversation.refresh_from_db()
         assert conversation.status == Conversation.Status.FAILED

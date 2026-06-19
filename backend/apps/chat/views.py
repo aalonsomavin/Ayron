@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.agent.cancellation import clear_cancel, request_cancel
+from apps.agent.checkpoint import rollback_thread_to_turn
 from apps.agent.events import get_redis_client, persist_event
 from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_display
 from apps.agent.tools.chart import prepare_chart_for_render
@@ -280,6 +281,14 @@ def _finalize_cancelled_conversation(conversation: Conversation) -> bool:
         assistant_message.content = content
         assistant_message.save(update_fields=["content"])
 
+    user_message = _user_message_for_assistant(assistant_message)
+    if user_message is not None:
+        rollback_thread_to_turn(
+            conversation,
+            user_message,
+            include_user_message=True,
+        )
+
     persist_event(
         conversation=conversation,
         event_type=AgentEvent.EventType.DONE,
@@ -422,6 +431,12 @@ def retry_message(request, conversation_id):
     AgentEvent.objects.filter(message=assistant_message).delete()
     assistant_message.content = ""
     assistant_message.save(update_fields=["content"])
+
+    rollback_thread_to_turn(
+        conversation,
+        user_message,
+        include_user_message=False,
+    )
 
     update_fields = ["status", "updated_at", "celery_task_id"]
     conversation.status = Conversation.Status.PROCESSING

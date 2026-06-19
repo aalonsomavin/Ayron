@@ -77,6 +77,7 @@ project-root/
 |---------|-------------|
 | `docker compose up --build` | Start dev: Django + Postgres + Tailwind watch |
 | `docker compose run --rm web python manage.py migrate` | Run migrations |
+| `docker compose run --rm web python manage.py setup_langgraph_checkpoints` | Create LangGraph checkpoint tables |
 | `docker compose run --rm web python manage.py createsuperuser` | Create admin user |
 | `docker compose run --rm web pytest` | Run tests |
 | `docker compose run --rm web pytest --cov` | Run tests with coverage |

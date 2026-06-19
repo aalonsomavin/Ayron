@@ -108,13 +108,15 @@ class TestStopConversation:
 
         with patch("apps.chat.views.request_cancel") as mock_cancel:
             with patch("apps.chat.views.celery_app.control.revoke") as mock_revoke:
-                with patch("apps.agent.events.get_redis_client") as mock_get_redis:
-                    mock_get_redis.return_value = MagicMock()
-                    response = client.post(url)
+                with patch("apps.chat.views.rollback_thread_to_turn") as mock_rollback:
+                    with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+                        mock_get_redis.return_value = MagicMock()
+                        response = client.post(url)
 
         assert response.status_code == 204
         mock_cancel.assert_called_once_with(conversation.id)
         mock_revoke.assert_called_once_with("task-456", terminate=True)
+        mock_rollback.assert_not_called()
 
         conversation.refresh_from_db()
         assert conversation.status == Conversation.Status.ACTIVE
@@ -124,6 +126,36 @@ class TestStopConversation:
             message=assistant_message,
             payload={"cancelled": True},
         ).exists()
+
+    def test_stop_rolls_back_checkpoint_when_user_message_exists(self, client, user, conversation):
+        user_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Cancel me",
+        )
+        conversation.status = Conversation.Status.PROCESSING
+        conversation.save()
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        client.force_login(user)
+        url = reverse("chat:stop", kwargs={"conversation_id": conversation.id})
+
+        with patch("apps.chat.views.request_cancel"):
+            with patch("apps.chat.views.celery_app.control.revoke"):
+                with patch("apps.chat.views.rollback_thread_to_turn") as mock_rollback:
+                    with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+                        mock_get_redis.return_value = MagicMock()
+                        response = client.post(url)
+
+        assert response.status_code == 204
+        mock_rollback.assert_called_once_with(
+            conversation,
+            user_message,
+            include_user_message=True,
+        )
 
     def test_stop_rejects_when_not_processing(self, client, user, conversation):
         client.force_login(user)
@@ -172,10 +204,16 @@ class TestRetryMessage:
         url = reverse("chat:retry", kwargs={"conversation_id": conversation.id})
 
         with patch("apps.chat.views.run_agent_conversation.delay") as mock_delay:
-            mock_delay.return_value = MagicMock(id="task-retry-1")
-            response = client.post(url, {"assistant_message_id": assistant_message.id})
+            with patch("apps.chat.views.rollback_thread_to_turn") as mock_rollback:
+                mock_delay.return_value = MagicMock(id="task-retry-1")
+                response = client.post(url, {"assistant_message_id": assistant_message.id})
 
         assert response.status_code == 200
+        mock_rollback.assert_called_once_with(
+            conversation,
+            user_message,
+            include_user_message=False,
+        )
         data = response.json()
         assert data["assistant_message_id"] == assistant_message.id
         assert data["last_sequence"] == -1

@@ -5,6 +5,7 @@ from celery import shared_task
 from openai import OpenAIError
 
 from apps.agent.cancellation import AgentCancelledError, clear_cancel, is_cancelled
+from apps.agent.checkpoint import agent_config, has_checkpoint, rollback_thread_to_turn
 from apps.agent.context import set_agent_context
 from apps.agent.deliverable_intent import detect_deliverable_intent
 from apps.agent.events import persist_event
@@ -30,9 +31,10 @@ def is_recoverable_agent_error(exc: Exception) -> bool:
     return isinstance(exc, OpenAIError)
 
 
-def stream_agent_response(agent, agent_messages, handler, conversation_id) -> None:
+def stream_agent_response(agent, input_state, config, handler, conversation_id) -> None:
     for chunk in agent.stream(
-        {"messages": agent_messages},
+        input_state,
+        config=config,
         stream_mode=["messages"],
         version="v2",
     ):
@@ -51,6 +53,24 @@ def build_agent_messages(conversation: Conversation, exclude_message_id: int) ->
         role = "user" if message.role == Message.Role.USER else "assistant"
         messages.append({"role": role, "content": message.content})
     return messages
+
+
+def build_stream_input(
+    conversation: Conversation,
+    user_message: Message,
+    assistant_message_id: int,
+) -> tuple[dict, dict]:
+    config = agent_config(conversation.id)
+    if has_checkpoint(conversation.id):
+        input_state = {"messages": [{"role": "user", "content": user_message.content}]}
+    else:
+        input_state = {
+            "messages": build_agent_messages(
+                conversation,
+                exclude_message_id=assistant_message_id,
+            )
+        }
+    return input_state, config
 
 
 @shared_task(bind=True)
@@ -73,6 +93,7 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
 
     clear_cancel(conversation_id)
 
+    agent = None
     try:
         deliverable_intent = detect_deliverable_intent(user_message.content)
         set_agent_context(
@@ -81,14 +102,15 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
             deliverable_intent=deliverable_intent,
         )
         agent = create_agent(conversation, user_message=user_message.content)
-        agent_messages = build_agent_messages(
+        input_state, config = build_stream_input(
             conversation,
-            exclude_message_id=assistant_message.id,
+            user_message,
+            assistant_message.id,
         )
 
         for attempt in range(1, MAX_LLM_RETRIES + 1):
             try:
-                stream_agent_response(agent, agent_messages, handler, conversation_id)
+                stream_agent_response(agent, input_state, config, handler, conversation_id)
                 break
             except OpenAIError:
                 can_retry = (
@@ -132,6 +154,14 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
         assistant_message.content = handler.get_content()
         assistant_message.save(update_fields=["content"])
 
+        if agent is not None:
+            rollback_thread_to_turn(
+                conversation,
+                user_message,
+                include_user_message=True,
+                agent=agent,
+            )
+
         persist_event(
             conversation=conversation,
             event_type=AgentEvent.EventType.DONE,
@@ -151,6 +181,14 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
                 "task_id": self.request.id,
             },
         )
+        if agent is not None:
+            rollback_thread_to_turn(
+                conversation,
+                user_message,
+                include_user_message=True,
+                agent=agent,
+            )
+
         persist_event(
             conversation=conversation,
             event_type=AgentEvent.EventType.ERROR,

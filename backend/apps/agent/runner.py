@@ -9,6 +9,7 @@ from apps.agent.deliverable_intent import (
 from apps.agent.middleware.deliverable_guard import DeliverableGuardMiddleware
 from apps.agent.middleware.tool_errors import ToolFailureFeedbackMiddleware
 
+from apps.agent.checkpoint import get_checkpointer
 from apps.agent.skills import (
     build_agent_backend,
     get_platform_skill_permissions,
@@ -183,4 +184,5 @@ def create_agent(conversation: Conversation, user_message: str = ""):
             DeliverableGuardMiddleware(),
             ToolFailureFeedbackMiddleware(),
         ],
+        checkpointer=get_checkpointer(),
     )
