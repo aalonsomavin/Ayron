@@ -363,11 +363,7 @@
       }
 
       const container = ensureFilesContainer(contentEl);
-      const card = this.renderFileCard(file, container);
-      if (file.open_expanded) {
-        this.open(file);
-        this.setActiveCard(card);
-      }
+      this.renderFileCard(file, container);
     },
   };
 })();
