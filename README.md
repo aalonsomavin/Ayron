@@ -93,7 +93,7 @@ All pages require login by default. Public routes are configured in `apps.core.m
 - `/accounts/logout/`
 - `/admin/`
 - `/static/`
-j- `/health`
+- `/health`
 
 To add a public route, append to `PUBLIC_PATHS` in `backend/apps/core/middleware.py`.
 

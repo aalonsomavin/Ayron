@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Callable
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
@@ -25,6 +26,8 @@ DISPLAY_TOOLS = {
 }
 TABLE_DISPLAY_TOOL = "show_data_table"
 CHART_DISPLAY_TOOL = "show_chart"
+CHART_TYPE_PATTERN = re.compile(r'"chart_type"\s*:\s*"(bar|line|pie)"')
+VALID_CHART_TYPES = frozenset({"bar", "line", "pie"})
 CREATE_DOCUMENT_TOOL = "create_document"
 UPDATE_DOCUMENT_TOOL = "update_document"
 CREATE_HTML_REPORT_TOOL = "create_html_report"
@@ -105,6 +108,7 @@ class StreamEventHandler:
         self.pending_table_displays: dict[str, dict] = {}
         self.pending_chart_displays: dict[str, dict] = {}
         self.tool_call_inputs: dict[str, dict] = {}
+        self.tool_call_args_text: dict[str, str] = {}
 
     def get_content(self) -> str:
         return "".join(self.content_parts)
@@ -132,20 +136,83 @@ class StreamEventHandler:
             if content and not tool_call_chunks:
                 self._emit_token(content)
 
+    def _accumulate_tool_args(self, tool_call_id: str, args) -> str:
+        if isinstance(args, dict):
+            fragment = json.dumps(args)
+        elif isinstance(args, str):
+            fragment = args
+        else:
+            fragment = ""
+        if fragment:
+            self.tool_call_args_text[tool_call_id] = (
+                self.tool_call_args_text.get(tool_call_id, "") + fragment
+            )
+        return self.tool_call_args_text.get(tool_call_id, "")
+
+    def _resolve_chart_type_hint(
+        self,
+        tool_call_id: str,
+        tool_input: dict,
+        args_text: str = "",
+    ) -> str | None:
+        staged = self.pending_chart_displays.get(tool_call_id)
+        if staged:
+            chart_type = str(staged.get("chart_type", "")).strip().lower()
+            if chart_type in VALID_CHART_TYPES:
+                return chart_type
+
+        chart_type = str(tool_input.get("chart_type", "")).strip().lower()
+        if chart_type in VALID_CHART_TYPES:
+            return chart_type
+
+        match = CHART_TYPE_PATTERN.search(args_text or "")
+        if match:
+            return match.group(1)
+        return None
+
+    def _chart_tool_start_ready(
+        self,
+        tool_call_id: str,
+        tool_input: dict,
+        args_text: str = "",
+    ) -> bool:
+        return self._resolve_chart_type_hint(tool_call_id, tool_input, args_text) is not None
+
+    def _maybe_emit_tool_start(
+        self,
+        name: str,
+        tool_call_id: str,
+        tool_input: dict,
+        args_text: str = "",
+    ) -> None:
+        if tool_call_id in self.started_tool_calls:
+            return
+
+        self.started_tool_calls.add(tool_call_id)
+        resolved_input = self.tool_call_inputs.get(tool_call_id, tool_input)
+        self._emit_tool_start(name, resolved_input, tool_call_id, args_text)
+
+    def _ensure_chart_tool_start(self, tool_call_id: str | None) -> None:
+        if not tool_call_id or tool_call_id in self.started_tool_calls:
+            return
+        tool_input = self.tool_call_inputs.get(tool_call_id, {})
+        args_text = self.tool_call_args_text.get(tool_call_id, "")
+        if not self._chart_tool_start_ready(tool_call_id, tool_input, args_text):
+            return
+        self.started_tool_calls.add(tool_call_id)
+        self._emit_tool_start(CHART_DISPLAY_TOOL, tool_input, tool_call_id, args_text)
+
     def _handle_tool_call_chunk(self, tool_chunk: dict) -> None:
         tool_call_id = tool_chunk.get("id")
         name = tool_chunk.get("name")
         if not tool_call_id or not name:
             return
 
-        tool_input = self._record_tool_input(tool_call_id, parse_tool_input(tool_chunk.get("args")))
+        raw_args = tool_chunk.get("args")
+        args_text = self._accumulate_tool_args(tool_call_id, raw_args)
+        tool_input = self._record_tool_input(tool_call_id, parse_tool_input(raw_args))
         self._stage_display_tool(name, tool_input, tool_call_id)
-
-        if tool_call_id in self.started_tool_calls:
-            return
-
-        self.started_tool_calls.add(tool_call_id)
-        self._emit_tool_start(name, tool_input, tool_call_id)
+        self._maybe_emit_tool_start(name, tool_call_id, tool_input, args_text)
 
     def _handle_complete_tool_call(self, tool_call: dict) -> None:
         tool_call_id = tool_call.get("id")
@@ -153,14 +220,11 @@ class StreamEventHandler:
         if not tool_call_id or not name:
             return
 
-        tool_input = self._record_tool_input(tool_call_id, parse_tool_input(tool_call.get("args")))
+        raw_args = tool_call.get("args")
+        args_text = self._accumulate_tool_args(tool_call_id, raw_args)
+        tool_input = self._record_tool_input(tool_call_id, parse_tool_input(raw_args))
         self._stage_display_tool(name, tool_input, tool_call_id)
-
-        if tool_call_id in self.started_tool_calls:
-            return
-
-        self.started_tool_calls.add(tool_call_id)
-        self._emit_tool_start(name, tool_input, tool_call_id)
+        self._maybe_emit_tool_start(name, tool_call_id, tool_input, args_text)
 
     def _record_tool_input(self, tool_call_id: str, tool_input: dict) -> dict:
         if tool_input:
@@ -215,17 +279,24 @@ class StreamEventHandler:
                 self.persist(
                     conversation=self.conversation,
                     event_type=AgentEvent.EventType.TABLE,
-                    payload=prepare_table_for_render(result),
+                    payload={
+                        **prepare_table_for_render(result),
+                        "tool_call_id": tool_call_id,
+                    },
                     message=self.message,
                 )
             output_summary = "Tabla mostrada" if result.get("ok") else "Error al mostrar tabla"
         elif name == CHART_DISPLAY_TOOL:
+            self._ensure_chart_tool_start(tool_call_id)
             result = self._resolve_chart_display_result(output, tool_call_id)
             if result.get("ok") and result.get("labels"):
                 self.persist(
                     conversation=self.conversation,
                     event_type=AgentEvent.EventType.CHART,
-                    payload=prepare_chart_for_render(result),
+                    payload={
+                        **prepare_chart_for_render(result),
+                        "tool_call_id": tool_call_id,
+                    },
                     message=self.message,
                 )
             output_summary = "Gráfico mostrado" if result.get("ok") else "Error al mostrar gráfico"
@@ -382,7 +453,13 @@ class StreamEventHandler:
     ) -> dict:
         return self._resolve_file_display_result(output, tool_call_id)
 
-    def _emit_tool_start(self, name: str, tool_input: dict, tool_call_id: str) -> None:
+    def _emit_tool_start(
+        self,
+        name: str,
+        tool_input: dict,
+        tool_call_id: str,
+        args_text: str = "",
+    ) -> None:
         if name in PLAN_TOOLS:
             todos = tool_input.get("todos", tool_input)
             self.persist(
@@ -398,18 +475,23 @@ class StreamEventHandler:
             )
             return
 
+        payload = {
+            "tool": name,
+            "input": tool_input,
+            "tool_call_id": tool_call_id,
+            **get_tool_display(name, tool_input),
+        }
+        if name == CHART_DISPLAY_TOOL:
+            chart_type = self._resolve_chart_type_hint(tool_call_id, tool_input, args_text)
+            if chart_type:
+                payload["chart_type"] = chart_type
+
         self.persist(
             conversation=self.conversation,
             event_type=AgentEvent.EventType.TOOL_START,
-            payload={
-                "tool": name,
-                "input": tool_input,
-                "tool_call_id": tool_call_id,
-                **get_tool_display(name, tool_input),
-            },
+            payload=payload,
             message=self.message,
         )
-        self._stage_display_tool(name, tool_input, tool_call_id)
 
     def _stage_display_tool(self, name: str, tool_input: dict, tool_call_id: str) -> None:
         if name == TABLE_DISPLAY_TOOL:

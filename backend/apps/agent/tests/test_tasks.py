@@ -625,6 +625,7 @@ class TestStreamEventHandler:
         assert emitted[0]["event_type"] == AgentEvent.EventType.TABLE
         assert emitted[0]["payload"]["columns"] == ["Artist", "Revenue"]
         assert emitted[0]["payload"]["render_rows"][0][1]["mono"] is True
+        assert emitted[0]["payload"]["tool_call_id"] == "call_table"
         assert emitted[1]["event_type"] == AgentEvent.EventType.TOOL_END
         assert emitted[1]["payload"]["tool"] == "show_data_table"
         assert emitted[1]["payload"]["output_summary"] == "Tabla mostrada"
@@ -842,8 +843,111 @@ class TestStreamEventHandler:
         )
         assert chart_event["payload"]["labels"] == ["EMEA", "APAC"]
         assert chart_event["payload"]["datasets"][0]["data"] == [100.0, 200.0]
+        assert chart_event["payload"]["tool_call_id"] == "call_chart"
         assert tool_end["payload"]["tool"] == "show_chart"
         assert tool_end["payload"]["output_summary"] == "Gráfico mostrado"
+
+    def test_show_chart_tool_start_includes_chart_type(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_line",
+                                "name": "show_chart",
+                                "args": '{"chart_type": "line", "labels":',
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        tool_start = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.TOOL_START
+        )
+        assert tool_start["payload"]["chart_type"] == "line"
+
+    def test_show_chart_tool_start_emits_immediately_without_chart_type(
+        self, conversation_with_messages
+    ):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[{"id": "call_pie", "name": "show_chart", "args": ""}],
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        tool_start = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.TOOL_START
+        )
+        assert tool_start["payload"]["tool"] == "show_chart"
+        assert "chart_type" not in tool_start["payload"]
+
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_pie",
+                                "name": "show_chart",
+                                "args": '{"chart_type":"pie","labels":["A"]',
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        assert (
+            sum(
+                1
+                for item in emitted
+                if item["event_type"] == AgentEvent.EventType.TOOL_START
+            )
+            == 1
+        )
 
     def test_stream_handler_emits_file_created(self, conversation_with_messages):
         conversation, _, assistant_message = conversation_with_messages

@@ -213,25 +213,41 @@
     return wrapper;
   }
 
+  function scheduleResize(instance) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        instance.resize();
+      });
+    });
+  }
+
   function mount(node) {
     if (!node) return;
-    destroyChart(node);
+    const existing = instances.get(node);
+    if (existing) {
+      scheduleResize(existing);
+      return;
+    }
     const chart = readPayload(node);
     const canvas = node.querySelector(".ay-chart__canvas");
     if (!chart || !canvas) return;
     const instance = createChart(canvas, chart);
     if (instance) {
       instances.set(node, instance);
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          instance.resize();
-        });
-      });
+      scheduleResize(instance);
     }
   }
 
   function mountAll(root) {
     (root || document).querySelectorAll(".ay-chart").forEach(mount);
+  }
+
+  function resizeAll(root) {
+    (root || document).querySelectorAll(".ay-chart").forEach(function (node) {
+      const instance = instances.get(node);
+      if (instance) scheduleResize(instance);
+      else mount(node);
+    });
   }
 
   function destroyAll(root) {
@@ -249,6 +265,7 @@
     render: render,
     mount: mount,
     mountAll: mountAll,
+    resizeAll: resizeAll,
     destroyAll: destroyAll,
   };
 })();

@@ -147,6 +147,7 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="{% static 'js/ayron-avatar.js' %}"></script>
 <script src="{% static 'js/ayron-chart.js' %}"></script>
+<script src="{% static 'js/ayron-content-skeleton.js' %}"></script>
 <script src="{% static 'js/ayron-markdown.js' %}"></script>
 <script src="{% static 'js/ayron-doc-preview.js' %}"></script>
 <script src="{% static 'js/ayron-artifact.js' %}"></script>
@@ -166,6 +167,7 @@
   let isStreaming = false;
   let stickToBottom = true;
   let scrollToBottomPending = false;
+  let isReplayingEvents = false;
 
   const SCROLL_THRESHOLD = 48;
 
@@ -378,7 +380,7 @@
     }
     isStreaming = false;
     agentStreamEl.parentElement.insertBefore(streamContainer, agentStreamEl);
-    if (window.AyronChart) window.AyronChart.mountAll(streamContainer);
+    if (window.AyronChart) window.AyronChart.resizeAll(streamContainer);
     streamContainer = null;
     currentTextEl = null;
     currentMarkdownBuffer = "";
@@ -750,20 +752,118 @@
     };
   }
 
+  function revealOptions() {
+    return { animate: !isReplayingEvents };
+  }
+
+  function resolveChartType(event) {
+    const input = event.input || {};
+    const fromEvent = (event.chart_type || input.chart_type || "").toLowerCase();
+    if (fromEvent === "line" || fromEvent === "bar" || fromEvent === "pie") {
+      return fromEvent;
+    }
+    const subtitle = (event.tool_subtitle || "").toLowerCase();
+    if (subtitle.indexOf("línea") >= 0 || subtitle.indexOf("linea") >= 0) return "line";
+    if (subtitle.indexOf("torta") >= 0) return "pie";
+    if (subtitle.indexOf("barras") >= 0 || subtitle.indexOf("barra") >= 0) return "bar";
+    return null;
+  }
+
+  function chartTypeFromPayload(event, chartPayload) {
+    const direct = (event.chart_type || (chartPayload && chartPayload.chart_type) || "").toLowerCase();
+    if (direct === "line" || direct === "bar" || direct === "pie") return direct;
+    return resolveChartType(event);
+  }
+
+  function ensureChartPlaceholder(bubble, event, chartPayload) {
+    if (!window.AyronContentSkeleton) return null;
+    const contentEl = bubble.querySelector(".ay-msg-agent__content");
+    if (!contentEl) return null;
+    let placeholder = window.AyronContentSkeleton.findPlaceholder(
+      bubble,
+      "chart",
+      event.tool_call_id
+    );
+    if (placeholder) return placeholder;
+    const chartType = chartTypeFromPayload(event, chartPayload);
+    if (!chartType) return null;
+    placeholder = window.AyronContentSkeleton.createPlaceholder({
+      kind: "chart",
+      chartType: chartType,
+      toolCallId: event.tool_call_id,
+    });
+    if (placeholder) contentEl.appendChild(placeholder);
+    return placeholder;
+  }
+
+  function appendContentPlaceholder(bubble, event) {
+    if (!window.AyronContentSkeleton) return;
+    const contentEl = bubble.querySelector(".ay-msg-agent__content");
+    if (!contentEl) return;
+    const input = event.input || {};
+    if (event.tool === "show_chart") {
+      if (
+        window.AyronContentSkeleton.findPlaceholder(
+          bubble,
+          "chart",
+          event.tool_call_id
+        )
+      ) {
+        return;
+      }
+      const chartType = resolveChartType(event) || "bar";
+      const placeholder = window.AyronContentSkeleton.createPlaceholder({
+        kind: "chart",
+        chartType: chartType,
+        toolCallId: event.tool_call_id,
+      });
+      if (placeholder) contentEl.appendChild(placeholder);
+    } else if (event.tool === "show_data_table") {
+      contentEl.appendChild(window.AyronContentSkeleton.createPlaceholder({
+        kind: "table",
+        columnCount: (input.columns || []).length || 3,
+        toolCallId: event.tool_call_id,
+      }));
+    }
+  }
+
+  function removeContentPlaceholder(bubble, event) {
+    if (!window.AyronContentSkeleton) return;
+    const kind = event.tool === "show_chart" ? "chart" : "table";
+    window.AyronContentSkeleton.removePendingForTool(
+      bubble,
+      kind,
+      event.tool_call_id
+    );
+  }
+
   function appendChartBlock(bubble, event) {
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
     finalizeCurrentTextBlock();
-    if (window.AyronChart) {
-      const chartEl = window.AyronChart.create(chartPayloadFromEvent(event));
+    if (!window.AyronChart) return;
+    const chartPayload = chartPayloadFromEvent(event);
+    const chartEl = window.AyronChart.create(chartPayload);
+    const placeholder = ensureChartPlaceholder(bubble, event, chartPayload);
+    if (placeholder) {
+      window.AyronContentSkeleton.reveal(placeholder, chartEl, revealOptions());
+    } else {
       contentEl.appendChild(chartEl);
-      window.AyronChart.mount(chartEl);
     }
+    window.AyronChart.mount(chartEl);
   }
 
   function appendTableBlock(bubble, table) {
     const contentEl = bubble.querySelector(".ay-msg-agent__content");
     finalizeCurrentTextBlock();
-    contentEl.appendChild(renderDataTable(table));
+    const tableEl = renderDataTable(table);
+    const placeholder = window.AyronContentSkeleton
+      ? window.AyronContentSkeleton.findPlaceholder(bubble, "table", table.tool_call_id)
+      : null;
+    if (placeholder) {
+      window.AyronContentSkeleton.reveal(placeholder, tableEl, revealOptions());
+    } else {
+      contentEl.appendChild(tableEl);
+    }
   }
 
   function applyEvent(event) {
@@ -795,6 +895,7 @@
       const title = resolveToolLabel(event);
       const subtitle = resolveToolSubtitle(event);
       appendTraceItem(trace, title, subtitle, event.tool_call_id || event.tool, true, event.tool);
+      appendContentPlaceholder(bubble, event);
     } else if (event.type === "tool_end" && bubble) {
       finalizeCurrentTextBlock();
       const tools = bubble.querySelector(".ay-msg-agent__tools");
@@ -806,6 +907,9 @@
       }
       item.classList.remove("is-running");
       updateTraceSummary(trace);
+      if (event.tool === "show_chart" || event.tool === "show_data_table") {
+        removeContentPlaceholder(bubble, event);
+      }
     } else if (event.type === "table" && bubble) {
       appendTableBlock(bubble, event);
     } else if (event.type === "chart" && bubble) {
@@ -850,40 +954,79 @@
     }
   }
 
+  function finishIdleState(status) {
+    finalizeStreamBubble();
+    hideThinking();
+    setConversationStatus(status === "failed" ? "failed" : "active");
+    activeMessageId = null;
+    closeStream();
+  }
+
+  function reconcileProcessingState() {
+    return fetch(eventsUrl)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        data.events.forEach(function (event) {
+          if (event.seq > lastAppliedSeq) {
+            applyEvent(event);
+          }
+        });
+        if (data.status !== "processing") {
+          finishIdleState(data.status);
+        }
+        lastAppliedSeq = Math.max(lastAppliedSeq, data.last_sequence);
+      })
+      .catch(function () {});
+  }
+
   function openStream() {
     closeStream();
     eventSource = new EventSource(streamUrl + "?after=" + lastAppliedSeq);
     ["token", "plan", "tool_start", "tool_end", "table", "chart", "file_created", "file_updated", "error", "done"].forEach(function (type) {
       eventSource.addEventListener(type, function (e) {
-        applyEvent(JSON.parse(e.data));
+        try {
+          applyEvent(JSON.parse(e.data));
+        } catch (err) {
+          reconcileProcessingState();
+        }
       });
     });
     eventSource.onerror = function () {
       closeStream();
+      reconcileProcessingState();
     };
+  }
+
+  function replayActiveMessageEvents(events) {
+    events.forEach(function (event) {
+      if (String(event.message_id) === String(activeMessageId)) {
+        applyEvent(event);
+      }
+    });
   }
 
   function loadEvents() {
     return fetch(eventsUrl)
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        if (data.status === "processing" && activeMessageId) {
-          data.events.forEach(function (event) {
-            if (event.message_id === activeMessageId) {
-              applyEvent(event);
+        if (activeMessageId) {
+          isReplayingEvents = true;
+          replayActiveMessageEvents(data.events);
+          isReplayingEvents = false;
+
+          if (data.status === "processing") {
+            setConversationStatus("processing");
+            if (!streamContainer) showThinking();
+            openStream();
+          } else {
+            const replayedMessageId = activeMessageId;
+            finishIdleState(data.status);
+            if (!chatThreadEl.querySelector('[data-message-id="' + replayedMessageId + '"]')) {
+              window.location.reload();
+              return;
             }
-          });
-          setConversationStatus("processing");
-          if (!streamContainer) showThinking();
-          openStream();
-        } else {
-          if (
-            activeMessageId &&
-            !chatThreadEl.querySelector('[data-message-id="' + activeMessageId + '"]')
-          ) {
-            window.location.reload();
-            return;
           }
+        } else {
           lastAppliedSeq = data.last_sequence;
           setConversationStatus(data.status === "failed" ? "failed" : "active");
         }
