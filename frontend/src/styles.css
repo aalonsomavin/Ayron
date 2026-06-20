@@ -787,12 +787,44 @@
     background: var(--ay-neutral-150);
   }
 
-  .ay-artifact-panel__loading,
+  .ay-artifact-panel__body:has(> .ay-artifact-panel__loading:only-child) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .ay-artifact-panel__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 100%;
+    flex: 1;
+  }
+
   .ay-artifact-panel__error {
     padding: 24px;
     text-align: center;
     color: var(--ay-text-muted);
     font-size: 14px;
+  }
+
+  .ay-artifact-panel__loading .ay-spinner {
+    display: block;
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--ay-border);
+    border-top-color: var(--ay-text-muted);
+    border-radius: 50%;
+    animation: ay-spin 0.65s linear infinite;
+  }
+
+  @keyframes ay-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .ay-msg-agent__files {

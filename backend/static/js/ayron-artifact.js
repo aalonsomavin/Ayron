@@ -280,7 +280,10 @@
 
       const isHtml = file.ext === "HTML";
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
-      body.innerHTML = '<div class="ay-artifact-panel__loading">Loading preview…</div>';
+      body.innerHTML =
+        '<div class="ay-artifact-panel__loading" role="status" aria-label="Loading preview">' +
+        '<span class="ay-spinner" aria-hidden="true"></span>' +
+        "</div>";
 
       fetch(file.preview_url, { credentials: "same-origin" })
         .then(function (r) {
@@ -288,13 +291,12 @@
           return r.text();
         })
         .then(function (html) {
-          if (self.openFile && self.openFile.file_id === file.file_id) {
-            body.innerHTML = html;
-            if (isHtml && window.AyronChart) {
-              window.AyronChart.mountAll(body);
-            } else if (!isHtml && window.AyronDocPreview) {
-              window.AyronDocPreview.mount(body);
-            }
+          if (!self.openFile || self.openFile.file_id !== file.file_id) return;
+          body.innerHTML = html;
+          if (isHtml && window.AyronChart) {
+            window.AyronChart.mountAll(body);
+          } else if (!isHtml && window.AyronDocPreview) {
+            window.AyronDocPreview.mount(body);
           }
         })
         .catch(function () {
