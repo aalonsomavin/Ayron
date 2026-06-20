@@ -15,6 +15,7 @@ from apps.agent.tools.document import (
     update_document,
     validate_content_json,
 )
+from apps.agent.tools.report_content import revalidate_docx_content_json
 from apps.chat.models import Conversation
 from apps.files.models import File
 
@@ -173,10 +174,182 @@ class TestDocumentTool:
         assert 'data-page-width-px="816"' in html
         assert 'data-page-height-px="1056"' in html
         assert 'data-page-margin-px="72"' in html
+        assert 'data-page-header-title="Informe de ventas"' in html
+        assert 'data-page-header-subtitle="Mayo 2026"' in html
         assert "ay-doc-preview__callout" in html
         assert "ay-doc-preview__separator" in html
         assert "Generado con Ayron" in html
         assert "data-footer-attribution=" in html
+
+    def test_validate_rich_table_content(self):
+        content = validate_content_json(
+            "Informe financiero",
+            "Q1 2026",
+            [
+                {
+                    "heading": "Resultados",
+                    "blocks": [
+                        {
+                            "type": "table",
+                            "caption": "Variación trimestral",
+                            "headers": ["Concepto", "Valor", "Variación"],
+                            "rows": [
+                                [
+                                    "Ingresos",
+                                    {"value": "$100.000", "align": "right"},
+                                    {"value": "+12 %", "tone": "success", "align": "right"},
+                                ],
+                                {
+                                    "style": "total",
+                                    "cells": ["Total", {"value": "$100.000", "align": "right"}, ""],
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+        table = content["sections"][0]["blocks"][0]
+        assert table["caption"] == "Variación trimestral"
+        assert table["rows"][0]["cells"][2]["tone"] == "success"
+        assert table["rows"][1]["style"] == "total"
+        assert table["rows"][1]["cells"][0]["bold"] is True
+
+    def test_build_preview_html_rich_table(self):
+        content = validate_content_json(
+            "Informe financiero",
+            "",
+            [
+                {
+                    "heading": "Resultados",
+                    "blocks": [
+                        {
+                            "type": "table",
+                            "headers": ["Concepto", "Variación"],
+                            "rows": [
+                                [
+                                    "Margen",
+                                    {"value": "-2,1 %", "tone": "danger", "align": "right"},
+                                ],
+                                {"style": "total", "cells": ["Total", ""]},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+        html = build_preview_html(content)
+        assert "ay-doc-preview__table-cell--danger" in html
+        assert "ay-doc-preview__table-row--total" in html
+        assert "ay-doc-preview__table-cell--right" in html
+
+    def test_build_docx_includes_page_header(self, sample_content):
+        content = validate_content_json(
+            sample_content["title"],
+            sample_content["subtitle"],
+            sample_content["sections"],
+        )
+        docx_bytes = build_docx(content)
+        header_xml = ZipFile(BytesIO(docx_bytes)).read("word/header1.xml").decode()
+        assert "Informe de ventas" in header_xml
+        assert "Mayo 2026" in header_xml
+
+    def test_repair_stringified_table_cells(self):
+        broken = {
+            "title": "Informe",
+            "subtitle": "",
+            "sections": [
+                {
+                    "heading": "Datos",
+                    "blocks": [
+                        {
+                            "type": "table",
+                            "headers": ["País", "Ingresos"],
+                            "rows": [
+                                [
+                                    "USA",
+                                    "{'value': '$523.06', 'align': 'right', 'bold': True}",
+                                ]
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        content = revalidate_docx_content_json(broken)
+        cell = content["sections"][0]["blocks"][0]["rows"][0]["cells"][1]
+        assert cell["value"] == "$523.06"
+        assert cell["align"] == "right"
+        assert cell["bold"] is True
+
+        docx_bytes = build_docx(broken)
+        document_xml = ZipFile(BytesIO(docx_bytes)).read("word/document.xml").decode()
+        assert "$523.06" in document_xml
+        assert "'value'" not in document_xml
+
+        html = build_preview_html(broken)
+        assert "$523.06" in html
+        assert "ay-doc-preview__table-cell--right" in html
+        assert "'value'" not in html
+
+    def test_build_preview_html_styled_total_row(self):
+        content = validate_content_json(
+            "Informe financiero",
+            "",
+            [
+                {
+                    "heading": "Ingresos",
+                    "blocks": [
+                        {
+                            "type": "table",
+                            "headers": ["Año", "Ingresos"],
+                            "rows": [
+                                ["2011", "$469.58"],
+                                ["2012", "$477.53"],
+                                ["2013", "$450.58"],
+                                {"style": "total", "cells": ["Total", "$1,397.69"]},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        )
+        html = build_preview_html(content)
+        assert "Total" in html
+        assert "$1,397.69" in html
+        assert "ay-doc-preview__table-row--total" in html
+        assert ">style<" not in html
+        assert ">cells<" not in html
+
+    def test_repair_corrupted_styled_row_keys(self):
+        broken = {
+            "title": "Informe",
+            "subtitle": "",
+            "sections": [
+                {
+                    "heading": "Ingresos",
+                    "blocks": [
+                        {
+                            "type": "table",
+                            "headers": ["Año", "Ingresos"],
+                            "rows": [
+                                ["2011", "$469.58"],
+                                ["style", "cells"],
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        content = revalidate_docx_content_json(broken)
+        rows = content["sections"][0]["blocks"][0]["rows"]
+        assert len(rows) == 1
+        assert rows[0]["cells"][0]["value"] == "2011"
+
+        html = build_preview_html(broken)
+        assert "2011" in html
+        assert ">style<" not in html
+        assert ">cells<" not in html
 
     def test_create_document(self, user, conversation, sample_content):
         set_agent_context(conversation, user)

@@ -28,7 +28,12 @@ from apps.agent.tools.document_style import (
     footer_attribution_text,
     preview_px,
 )
-from apps.agent.tools.report_content import validate_docx_content_json
+from apps.agent.tools.report_content import (
+    _parse_embedded_cell,
+    normalize_docx_cell,
+    revalidate_docx_content_json,
+    validate_docx_content_json,
+)
 from apps.files.services import (
     get_file_for_conversation,
     save_generated_file,
@@ -78,7 +83,7 @@ def _render_block_docx(doc: Document, block: dict) -> None:
         for item in block["items"]:
             add_bullet_item(doc, item)
     elif block_type == "table":
-        add_styled_table(doc, block["headers"], block["rows"])
+        add_styled_table(doc, block)
     elif block_type == "separator":
         add_separator(doc)
     elif block_type == "callout":
@@ -91,10 +96,16 @@ def _render_block_docx(doc: Document, block: dict) -> None:
 
 
 def build_docx(content_json: dict) -> bytes:
+    content_json = revalidate_docx_content_json(content_json)
     doc = Document()
     generated_on = date.today()
     configure_document_styles(doc)
-    configure_document_header(doc)
+    configure_document_header(
+        doc,
+        content_json.get("title", ""),
+        content_json.get("subtitle", ""),
+        generated_on,
+    )
     configure_document_footer(doc, generated_on)
 
     add_document_header(doc, content_json.get("title", ""), content_json.get("subtitle", ""))
@@ -109,22 +120,57 @@ def build_docx(content_json: dict) -> bytes:
     return buffer.getvalue()
 
 
+def _render_table_cell_html(cell: dict) -> str:
+    value = esc(cell.get("value", ""))
+    classes = []
+    tone = cell.get("tone", "default")
+    if tone != "default":
+        classes.append(f"ay-doc-preview__table-cell--{tone}")
+    align = cell.get("align", "left")
+    if align != "left":
+        classes.append(f"ay-doc-preview__table-cell--{align}")
+    if cell.get("bold"):
+        classes.append("ay-doc-preview__table-cell--bold")
+    cls_attr = f' class="{" ".join(classes)}"' if classes else ""
+    return f"<td{cls_attr}>{value}</td>"
+
+
 def _render_table_html(table_data: dict) -> str:
     headers = table_data.get("headers", [])
     rows = table_data.get("rows", [])
+    caption = str(table_data.get("caption", "")).strip()
     if not headers:
         return ""
     head_cells = "".join(f"<th>{esc(h)}</th>" for h in headers)
     body_rows = []
     for row_idx, row in enumerate(rows):
-        row_class = "ay-doc-preview__table-row--alt" if row_idx % 2 else ""
-        padded = list(row[: len(headers)])
+        row_style = row.get("style", "default")
+        cells = row.get("cells", [])
+        row_classes = []
+        if row_style != "default":
+            row_classes.append(f"ay-doc-preview__table-row--{row_style}")
+        elif row_idx % 2:
+            row_classes.append("ay-doc-preview__table-row--alt")
+        padded = list(cells[: len(headers)])
         while len(padded) < len(headers):
-            padded.append("")
-        cells = "".join(f"<td>{esc(cell)}</td>" for cell in padded)
-        cls_attr = f' class="{row_class}"' if row_class else ""
-        body_rows.append(f"<tr{cls_attr}>{cells}</tr>")
+            padded.append({"value": ""})
+        rendered_cells = []
+        for cell in padded:
+            if isinstance(cell, dict):
+                rendered_cells.append(_render_table_cell_html(cell))
+            else:
+                embedded = _parse_embedded_cell(cell)
+                if embedded is not None:
+                    rendered_cells.append(_render_table_cell_html(normalize_docx_cell(embedded)))
+                else:
+                    rendered_cells.append(f"<td>{esc(cell)}</td>")
+        cls_attr = f' class="{" ".join(row_classes)}"' if row_classes else ""
+        body_rows.append(f"<tr{cls_attr}>{''.join(rendered_cells)}</tr>")
+    caption_html = (
+        f'<div class="ay-doc-preview__table-caption">{esc(caption)}</div>' if caption else ""
+    )
     return (
+        f"{caption_html}"
         f'<table class="ay-doc-preview__table"><thead><tr>{head_cells}</tr></thead>'
         f"<tbody>{''.join(body_rows)}</tbody></table>"
     )
@@ -171,6 +217,7 @@ def _render_block_html(block: dict) -> str:
 
 
 def build_preview_html(content_json: dict) -> str:
+    content_json = revalidate_docx_content_json(content_json)
     title = esc(content_json.get("title", ""))
     subtitle = esc(content_json.get("subtitle", ""))
     generated_on = date.today()
@@ -180,7 +227,9 @@ def build_preview_html(content_json: dict) -> str:
             f' data-page-width-px="{preview_px(PAGE_WIDTH_IN)}"'
             f' data-page-height-px="{preview_px(PAGE_HEIGHT_IN)}"'
             f' data-page-margin-px="{preview_px(PAGE_MARGIN_IN)}"'
-            f' data-footer-attribution="{esc(footer_attribution_text(generated_on))}">'
+            f' data-footer-attribution="{esc(footer_attribution_text(generated_on))}"'
+            f' data-page-header-title="{title}"'
+            f' data-page-header-subtitle="{subtitle}">'
         ),
         '<div class="ay-doc-preview__source">',
         _render_document_header_html(title, subtitle),
@@ -253,6 +302,8 @@ def create_document(
     Use `subtitle` for one line of context under the title (period, scope, audience).
     Each section supports blocks: paragraph, bullets, table, separator, callout.
     Callout variants: info, success, warning, danger.
+    Tables support rich cells with tone (success, danger, warning, muted), align,
+    bold, row styles (total, subtotal), and optional caption.
     The document appears in the chat; do not repeat its content in your text response.
 
     To modify an existing document later, use update_document with the same file_id.

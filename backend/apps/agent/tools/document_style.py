@@ -61,6 +61,20 @@ CALLOUT_VARIANTS = {
     "danger": {"bg": COLORS["danger_bg"], "border": COLORS["danger_border"], "label": "Importante"},
 }
 
+CELL_TONE_COLORS = {
+    "default": COLORS["text"],
+    "success": COLORS["success_border"],
+    "danger": COLORS["danger_border"],
+    "warning": COLORS["warning_border"],
+    "muted": COLORS["text_muted"],
+}
+
+ROW_STYLE_FILLS = {
+    "default": None,
+    "subtotal": COLORS["bg_subtle"],
+    "total": COLORS["bg_muted"],
+}
+
 PAGE_WIDTH_IN = 8.5
 PAGE_HEIGHT_IN = 11.0
 PAGE_MARGIN_IN = 0.75
@@ -133,12 +147,48 @@ def _clear_paragraph(paragraph):
             element.remove(child)
 
 
-def configure_document_header(doc):
+def configure_document_header(doc, title: str = "", subtitle: str = "", generated_on: date | None = None):
     section = doc.sections[0]
     header = section.header
     header.is_linked_to_previous = False
     for paragraph in header.paragraphs:
         _clear_paragraph(paragraph)
+
+    title_text = str(title or "").strip()
+    if not title_text:
+        return
+
+    table = header.add_table(rows=1, cols=2, width=Inches(CONTENT_WIDTH_IN))
+    table.autofit = False
+    left_cell = table.rows[0].cells[0]
+    right_cell = table.rows[0].cells[1]
+    left_cell.width = Inches(4.75)
+    right_cell.width = Inches(1.75)
+
+    left_paragraph = left_cell.paragraphs[0]
+    left_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    title_run = left_paragraph.add_run(title_text)
+    set_run_font(title_run, size_pt=FONT_FOOTER_PT, bold=True, color=COLORS["emphasis"])
+
+    right_paragraph = right_cell.paragraphs[0]
+    right_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    meta_text = str(subtitle or "").strip() or format_document_date(generated_on)
+    meta_run = right_paragraph.add_run(meta_text)
+    set_run_font(meta_run, size_pt=FONT_FOOTER_PT, color=COLORS["text_subtle"])
+
+    rule_paragraph = header.add_paragraph()
+    _clear_paragraph(rule_paragraph)
+    rule_paragraph.paragraph_format.space_before = Pt(8)
+    rule_paragraph.paragraph_format.space_after = Pt(0)
+    p_pr = rule_paragraph._p.get_or_add_pPr()
+    border = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "4")
+    bottom.set(qn("w:space"), "1")
+    bottom.set(qn("w:color"), COLORS["border"])
+    border.append(bottom)
+    p_pr.append(border)
 
 
 def configure_document_footer(doc, generated_on: date | None = None):
@@ -347,17 +397,82 @@ def _set_row_repeat_header(row):
     tr_pr.append(header)
 
 
-def add_styled_table(doc, headers: list[str], rows: list[list[str]]):
+def _paragraph_alignment(align: str):
+    if align == "right":
+        return WD_ALIGN_PARAGRAPH.RIGHT
+    if align == "center":
+        return WD_ALIGN_PARAGRAPH.CENTER
+    return WD_ALIGN_PARAGRAPH.LEFT
+
+
+def _render_table_cell(
+    cell,
+    *,
+    cell_data: dict,
+    row_style: str,
+    row_idx: int,
+):
+    value = cell_data.get("value", "")
+    tone = cell_data.get("tone", "default")
+    align = cell_data.get("align", "left")
+    bold = bool(cell_data.get("bold", False))
+    row_fill = ROW_STYLE_FILLS.get(row_style)
+    if row_fill:
+        fill = row_fill
+    else:
+        fill = COLORS["bg_subtle"] if row_idx % 2 == 0 else "FFFFFF"
+    text_color = CELL_TONE_COLORS.get(tone, COLORS["text"])
+    border_color = COLORS["border"] if row_style == "total" else COLORS["border_subtle"]
+    border_size = "8" if row_style == "total" else "4"
+
+    cell.text = ""
+    paragraph = cell.paragraphs[0]
+    paragraph.alignment = _paragraph_alignment(align)
+    run = paragraph.add_run(str(value))
+    set_run_font(run, size_pt=FONT_TABLE_PT, bold=bold, color=text_color)
+    _set_cell_shading(cell, fill)
+    _set_cell_border(cell, color=border_color, size=border_size)
+    _set_cell_margins(cell)
+
+
+def _table_body_rows(rows: list) -> list[tuple[str, list]]:
+    body_rows = []
+    for row in rows:
+        if isinstance(row, dict):
+            body_rows.append((row.get("style", "default"), row.get("cells", [])))
+        elif isinstance(row, list):
+            body_rows.append(("default", row))
+    return body_rows
+
+
+def _coerce_table_cell_data(cell, *, default_bold: bool = False) -> dict:
+    from apps.agent.tools.report_content import normalize_docx_cell
+
+    return normalize_docx_cell(cell, default_bold=default_bold)
+
+
+def add_styled_table(doc, table: dict):
+    headers = table["headers"]
+    rows = _table_body_rows(table["rows"])
+    caption = str(table.get("caption", "")).strip()
+
+    if caption:
+        caption_paragraph = doc.add_paragraph()
+        caption_paragraph.paragraph_format.space_before = Pt(0)
+        caption_paragraph.paragraph_format.space_after = Pt(2)
+        caption_run = caption_paragraph.add_run(caption)
+        set_run_font(caption_run, size_pt=FONT_TABLE_PT, bold=True, color=COLORS["emphasis"])
+
     lead = doc.add_paragraph()
     lead.paragraph_format.space_before = Pt(0)
     lead.paragraph_format.space_after = TABLE_SPACE_BEFORE
 
-    table = doc.add_table(rows=1 + len(rows), cols=len(headers))
-    table.autofit = True
-    table.allow_autofit = True
+    table_el = doc.add_table(rows=1 + len(rows), cols=len(headers))
+    table_el.autofit = True
+    table_el.allow_autofit = True
 
     for col_idx, header in enumerate(headers):
-        cell = table.rows[0].cells[col_idx]
+        cell = table_el.rows[0].cells[col_idx]
         cell.text = ""
         paragraph = cell.paragraphs[0]
         run = paragraph.add_run(header)
@@ -367,20 +482,20 @@ def add_styled_table(doc, headers: list[str], rows: list[list[str]]):
         _set_cell_border(cell, color=COLORS["border"], size="4")
         _set_cell_margins(cell)
 
-    _set_row_repeat_header(table.rows[0])
+    _set_row_repeat_header(table_el.rows[0])
 
-    for row_idx, row in enumerate(rows):
-        fill = COLORS["bg_subtle"] if row_idx % 2 == 0 else "FFFFFF"
-        for col_idx, header in enumerate(headers):
-            cell = table.rows[row_idx + 1].cells[col_idx]
-            value = row[col_idx] if col_idx < len(row) else ""
-            cell.text = ""
-            paragraph = cell.paragraphs[0]
-            run = paragraph.add_run(str(value))
-            set_run_font(run, size_pt=FONT_TABLE_PT, color=COLORS["text"])
-            _set_cell_shading(cell, fill)
-            _set_cell_border(cell, color=COLORS["border_subtle"], size="4")
-            _set_cell_margins(cell)
+    for row_idx, (row_style, cells) in enumerate(rows):
+        default_bold = row_style in ("total", "subtotal")
+        for col_idx, _header in enumerate(headers):
+            cell = table_el.rows[row_idx + 1].cells[col_idx]
+            raw_cell = cells[col_idx] if col_idx < len(cells) else ""
+            cell_data = _coerce_table_cell_data(raw_cell, default_bold=default_bold)
+            _render_table_cell(
+                cell,
+                cell_data=cell_data,
+                row_style=row_style,
+                row_idx=row_idx,
+            )
 
     gap = doc.add_paragraph()
     gap.paragraph_format.space_before = Pt(0)

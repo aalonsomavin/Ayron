@@ -152,6 +152,11 @@ def update_generated_file(
 
 
 def open_file_stream(file_obj: File) -> BytesIO:
+    if file_obj.format_key == "docx":
+        from apps.agent.tools.document import build_docx
+
+        return BytesIO(build_docx(file_obj.content_json))
+
     file_obj.file.open("rb")
     try:
         return BytesIO(file_obj.file.read())

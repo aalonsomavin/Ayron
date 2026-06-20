@@ -34,9 +34,10 @@ No uses esta skill para:
   `html-reports` si el usuario quiere un informe exportable con esos elementos
 - PDFs, Excel, Google Docs u otros formatos
 - Edición XML, cambios rastreados, comentarios Word, imágenes incrustadas,
-  índice (TOC), encabezados/pies de página o saltos de página — **no están soportados**
-  por las tools actuales. Si el usuario los pide, explica la limitación y ofrece
-  la mejor alternativa dentro del esquema soportado.
+  índice (TOC) o saltos de página — **no están soportados**. Los encabezados y pies
+  de página del documento (título en cada página, «Generado con Ayron · fecha» y
+  paginación) se aplican automáticamente. Si el usuario pide funciones no soportadas,
+  explica la limitación y ofrece la mejor alternativa dentro del esquema soportado.
 
 ## Tools de Ayron
 
@@ -66,7 +67,11 @@ Cada sección tiene un `heading` y contenido en `blocks` (recomendado) o en camp
         {"type": "paragraph", "text": "Las ventas crecieron un 12 % respecto al mes anterior."},
         {"type": "callout", "variant": "info", "title": "Alcance", "text": "Datos de facturación Chinook, mayo 2026."},
         {"type": "separator"},
-        {"type": "table", "headers": ["Región", "Ingresos"], "rows": [["EMEA", "$124.500"], ["LATAM", "$89.200"]]},
+        {"type": "table", "caption": "Ingresos por región", "headers": ["Región", "Ingresos", "Variación"], "rows": [
+          ["EMEA", {"value": "$124.500", "align": "right"}, {"value": "+12 %", "tone": "success", "align": "right"}],
+          ["LATAM", {"value": "$89.200", "align": "right"}, {"value": "-3,2 %", "tone": "danger", "align": "right"}],
+          {"style": "total", "cells": ["Total", {"value": "$213.700", "align": "right"}, ""]}
+        ]},
         {"type": "bullets", "items": ["Mayor crecimiento en EMEA", "LATAM estable"]},
         {"type": "callout", "variant": "warning", "text": "Los datos excluyen devoluciones pendientes."}
       ]
@@ -81,7 +86,7 @@ Cada sección tiene un `heading` y contenido en `blocks` (recomendado) o en camp
 |------|--------|-----|
 | `paragraph` | `text` | Párrafo de cuerpo |
 | `bullets` | `items` | Lista con viñetas |
-| `table` | `headers`, `rows` | Tabla de datos |
+| `table` | `headers`, `rows`, `caption?` | Tabla de datos con formato opcional |
 | `separator` | — | Línea divisoria entre bloques |
 | `callout` | `variant`, `text`, `title?` | Destacado visual |
 
@@ -90,7 +95,8 @@ Variantes de callout: `info`, `success`, `warning`, `danger`.
 **Límites:** máx. 20 secciones, 40 blocks por sección, 50 filas por tabla, 8 callouts por sección.
 
 **Estilo Ayron (aplicado automáticamente):** encabezado del documento con `title`
-(descriptivo) y `subtitle` opcional, separador bajo el encabezado, footer con
+(descriptivo) y `subtitle` opcional, separador bajo el encabezado, encabezado de
+página en cada hoja (título a la izquierda, subtítulo o fecha a la derecha), footer con
 «Generado con Ayron · fecha» y paginación «N de M», fuente Geist, tablas con encabezado gris y filas alternadas,
 callouts con borde lateral de color y fondo suave, separadores hairline. El agente
 no configura la marca manualmente.
@@ -152,10 +158,20 @@ Principios adaptados para documentos profesionales generados con las tools de Ay
 - Alinea filas con el número de columnas de los encabezados.
 - Formatea números, moneda y porcentajes en las celdas **antes** de enviar (ej. `$1.234,56`,
   `15,3 %`, `1.250 unidades`).
+- Usa celdas enriquecidas para resaltar valores:
+  - `{"value": "+12 %", "tone": "success", "align": "right"}` — verde para positivos
+  - `{"value": "-3,2 %", "tone": "danger", "align": "right"}` — rojo para negativos
+  - `{"value": "Pendiente", "tone": "warning"}` — ámbar para alertas
+  - `{"value": "N/D", "tone": "muted"}` — gris para datos secundarios
+  - `"bold": true` para énfasis puntual
+- Añade filas de total o subtotal con `{"style": "total", "cells": [...]}` o
+  `{"style": "subtotal", "cells": [...]}`. Las celdas de estas filas van en negrita por defecto.
+- Opcional: `caption` encima de la tabla para titularla (ej. «Top 5 clientes»).
+- Las filas simples siguen siendo listas de strings: `["EMEA", "$124.500"]`.
 - Una tabla por sección cuando sea posible; no mezcles tablas gigantes con muchas columnas
   si un resumen en párrafos comunica mejor el mensaje.
 - Para datos extensos: muestra un top-N en la tabla y menciona el total en un párrafo
-  de la misma sección.
+  de la misma sección, o usa una fila `total`.
 
 ### Tipografía y tono
 

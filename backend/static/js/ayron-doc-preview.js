@@ -135,6 +135,16 @@
     body.style.overflow = "visible";
   }
 
+  function headerMarkup() {
+    return (
+      '<div class="ay-doc-preview__page-header-row">' +
+        '<span class="ay-doc-preview__page-header-title"></span>' +
+        '<span class="ay-doc-preview__page-header-meta"></span>' +
+      "</div>" +
+      '<div class="ay-doc-preview__page-header-rule"></div>'
+    );
+  }
+
   function footerMarkup() {
     return (
       '<div class="ay-doc-preview__page-footer-rule"></div>' +
@@ -151,6 +161,11 @@
   function createPage(metrics) {
     var page = document.createElement("article");
     page.className = "ay-doc-preview__page";
+
+    var header = document.createElement("div");
+    header.className = "ay-doc-preview__page-header";
+    header.innerHTML = headerMarkup();
+    page.appendChild(header);
 
     var body = document.createElement("div");
     body.className = "ay-doc-preview__page-body";
@@ -333,7 +348,23 @@
 
     var total = pagesHost.children.length;
     var attribution = preview.getAttribute("data-footer-attribution") || "Generado con Ayron";
+    var headerTitle = preview.getAttribute("data-page-header-title") || "";
+    var headerSubtitle = preview.getAttribute("data-page-header-subtitle") || "";
     Array.prototype.forEach.call(pagesHost.querySelectorAll(".ay-doc-preview__page"), function (pageEl, index) {
+      var pageHeader = pageEl.querySelector(".ay-doc-preview__page-header");
+      if (pageHeader) {
+        var titleEl = pageHeader.querySelector(".ay-doc-preview__page-header-title");
+        var metaEl = pageHeader.querySelector(".ay-doc-preview__page-header-meta");
+        if (titleEl) {
+          titleEl.textContent = headerTitle;
+        }
+        if (metaEl) {
+          metaEl.textContent = headerSubtitle;
+        }
+        if (!headerTitle) {
+          pageHeader.style.display = "none";
+        }
+      }
       var footer = pageEl.querySelector(".ay-doc-preview__page-footer");
       if (footer) {
         var attributionEl = footer.querySelector(".ay-doc-preview__page-footer-attribution");
