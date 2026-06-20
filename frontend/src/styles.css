@@ -766,7 +766,8 @@
   }
 
   .ay-artifact-panel__btn[hidden],
-  .ay-artifact-panel__divider[hidden] {
+  .ay-artifact-panel__divider[hidden],
+  .ay-artifact-panel__meta-line[hidden] {
     display: none !important;
   }
 

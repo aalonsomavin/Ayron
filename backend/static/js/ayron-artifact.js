@@ -31,7 +31,8 @@
   function fileKind(file) {
     if (file.kind === "dashboard") return "dashboard";
     if (file.kind === "doc") return "doc";
-    if ((file.meta || "").indexOf("Dashboard ·") === 0) return "dashboard";
+    const meta = file.meta || "";
+    if (meta === "Dashboard" || meta.indexOf("Dashboard ·") === 0) return "dashboard";
     if (file.open_expanded && (file.ext || "") === "HTML") return "dashboard";
     return "doc";
   }
@@ -112,6 +113,12 @@
     return (meta || "").replace(/^Document · /, "").replace(/^Report · /, "").replace(/^Dashboard · /, "");
   }
 
+  function displayFileName(file) {
+    const name = file.name || "";
+    if (fileKind(file) !== "dashboard") return name;
+    return /\.html$/i.test(name) ? name.slice(0, -5) : name;
+  }
+
   function createFileCard(file, active) {
     const kind = fileKind(file);
     const btn = document.createElement("button");
@@ -128,22 +135,28 @@
     btn.dataset.previewUrl = file.preview_url;
     btn.dataset.openExpanded = file.open_expanded ? "true" : "false";
     const metaSuffixText = metaSuffix(file.meta);
+    const bodyHtml =
+      kind === "dashboard"
+        ? '<span class="ay-file-card__body"><span class="ay-file-card__name"></span></span>'
+        : '<span class="ay-file-card__body">' +
+            '<span class="ay-file-card__name"></span>' +
+            '<span class="ay-file-card__meta">' +
+              '<span class="ay-file-card__ext"></span>' +
+              "<span>· " + metaSuffixText + "</span>" +
+            "</span>" +
+          "</span>";
     btn.innerHTML =
       '<span class="ay-file-card__icon ay-file-card__icon--' +
       kind +
       '">' +
       iconSvg(fileIconName(kind), 19) +
       "</span>" +
-      '<span class="ay-file-card__body">' +
-        '<span class="ay-file-card__name"></span>' +
-        '<span class="ay-file-card__meta">' +
-          '<span class="ay-file-card__ext"></span>' +
-          "<span>· " + metaSuffixText + "</span>" +
-        "</span>" +
-      "</span>" +
+      bodyHtml +
       '<span class="ay-file-card__chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>';
-    btn.querySelector(".ay-file-card__name").textContent = file.name;
-    btn.querySelector(".ay-file-card__ext").textContent = file.ext || "DOCX";
+    btn.querySelector(".ay-file-card__name").textContent = displayFileName(file);
+    if (kind !== "dashboard") {
+      btn.querySelector(".ay-file-card__ext").textContent = file.ext || "DOCX";
+    }
     return btn;
   }
 
@@ -271,11 +284,18 @@
       this.panelEl.setAttribute("aria-hidden", "false");
       applyPanelExpandVisibility(this.panelEl, file, this.expanded);
       applyPanelFileIcon(this.panelEl, fileKind(file));
-      this.panelEl.querySelector(".ay-artifact-panel__name").textContent = file.name;
-      this.panelEl.querySelector(".ay-artifact-panel__ext").textContent = file.ext || "DOCX";
-      const metaEl = this.panelEl.querySelector(".ay-artifact-panel__meta-suffix");
-      if (metaEl) {
-        metaEl.textContent = metaSuffix(file.meta);
+      const panelKind = fileKind(file);
+      this.panelEl.querySelector(".ay-artifact-panel__name").textContent = displayFileName(file);
+      const metaLine = this.panelEl.querySelector(".ay-artifact-panel__meta-line");
+      if (metaLine) {
+        metaLine.hidden = panelKind === "dashboard";
+      }
+      if (panelKind !== "dashboard") {
+        this.panelEl.querySelector(".ay-artifact-panel__ext").textContent = file.ext || "DOCX";
+        const metaEl = this.panelEl.querySelector(".ay-artifact-panel__meta-suffix");
+        if (metaEl) {
+          metaEl.textContent = metaSuffix(file.meta);
+        }
       }
 
       const isHtml = file.ext === "HTML";
@@ -327,6 +347,8 @@
       this.panelEl.setAttribute("aria-hidden", "true");
       this.setActiveCard(null);
       resetPanelExpandVisibility(this.panelEl);
+      const metaLine = this.panelEl.querySelector(".ay-artifact-panel__meta-line");
+      if (metaLine) metaLine.hidden = false;
     },
 
     toggleExpand: function () {
@@ -358,7 +380,7 @@
         existingInBubble.dataset.fileVersion = String(file.version || 1);
         existingInBubble.dataset.fileName = file.name;
         existingInBubble.dataset.fileMeta = file.meta || "";
-        existingInBubble.querySelector(".ay-file-card__name").textContent = file.name;
+        existingInBubble.querySelector(".ay-file-card__name").textContent = displayFileName(file);
         applyFileCardIcon(existingInBubble, fileKind(file));
         this.refreshIfOpen(file);
         return;

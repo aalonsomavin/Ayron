@@ -6,6 +6,7 @@ from apps.files.models import File
 from apps.files.services import (
     format_agent_file_index_block,
     get_agent_file_index,
+    normalize_file_payload_for_ui,
     save_generated_file,
     serialize_file_for_ui,
     update_generated_file,
@@ -180,5 +181,19 @@ class TestFileServices:
         )
         data = serialize_file_for_ui(file_obj)
         assert data["kind"] == "dashboard"
-        assert data["meta"] == "Dashboard · HTML"
+        assert data["name"] == "Ventas"
+        assert data["meta"] == "Dashboard"
         assert data["open_expanded"] is True
+
+    def test_normalize_legacy_dashboard_payload(self):
+        payload = {
+            "file_id": "abc",
+            "name": "Ventas.html",
+            "ext": "HTML",
+            "meta": "Dashboard · HTML",
+            "kind": "dashboard",
+        }
+        normalized = normalize_file_payload_for_ui(payload)
+        assert normalized["name"] == "Ventas"
+        assert normalized["meta"] == "Dashboard"
+        assert normalized["kind"] == "dashboard"

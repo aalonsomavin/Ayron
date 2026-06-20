@@ -27,7 +27,7 @@ def _file_meta(content_json: dict) -> str:
     format_key = content_json.get("format", "docx")
     if format_key == "html":
         if _html_kind(content_json) == "dashboard":
-            return "Dashboard · HTML"
+            return "Dashboard"
         return "Report · HTML"
     sections = _section_count(content_json)
     page_word = "sección" if sections == 1 else "secciones"
@@ -48,11 +48,36 @@ def _file_kind(content_json: dict) -> str:
     return "doc"
 
 
+def _display_name(original_name: str, content_json: dict) -> str:
+    name = original_name or ""
+    if _file_kind(content_json) == "dashboard" and name.lower().endswith(".html"):
+        return name[:-5]
+    return name
+
+
+def normalize_file_payload_for_ui(payload: dict) -> dict:
+    normalized = dict(payload)
+    meta = normalized.get("meta") or ""
+    is_dashboard = (
+        normalized.get("kind") == "dashboard"
+        or meta == "Dashboard"
+        or meta.startswith("Dashboard ·")
+    )
+    if not is_dashboard:
+        return normalized
+    normalized["kind"] = "dashboard"
+    normalized["meta"] = "Dashboard"
+    name = normalized.get("name") or ""
+    if name.lower().endswith(".html"):
+        normalized["name"] = name[:-5]
+    return normalized
+
+
 def serialize_file_for_ui(file_obj: File) -> dict:
     format_key = file_obj.format_key
     payload = {
         "file_id": str(file_obj.id),
-        "name": file_obj.original_name,
+        "name": _display_name(file_obj.original_name, file_obj.content_json),
         "ext": _file_ext(file_obj.content_json, file_obj.mime_type),
         "format": format_key,
         "kind": _file_kind(file_obj.content_json),

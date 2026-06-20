@@ -230,7 +230,7 @@ class TestHtmlReportTool:
         file_obj = File.objects.get(id=result["file_id"])
         assert file_obj.content_json["html_kind"] == "dashboard"
         ui = serialize_file_for_ui(file_obj)
-        assert ui["meta"] == "Dashboard · HTML"
+        assert ui["meta"] == "Dashboard"
         assert ui["open_expanded"] is True
 
     def test_create_report_open_expanded_false(self, user, conversation):

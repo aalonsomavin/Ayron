@@ -15,6 +15,7 @@ from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.chat.tool_trace import tool_trace_for_message
+from apps.files.services import normalize_file_payload_for_ui
 from config.celery import app as celery_app
 
 
@@ -158,7 +159,7 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
             AgentEvent.EventType.FILE_CREATED,
             AgentEvent.EventType.FILE_UPDATED,
         ):
-            file_payload = dict(event.payload)
+            file_payload = normalize_file_payload_for_ui(dict(event.payload))
             if blocks and blocks[-1]["type"] == "files":
                 blocks[-1]["files"].append(file_payload)
             else:
