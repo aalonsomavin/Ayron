@@ -6,8 +6,10 @@ from apps.agent.tools.document import (
     update_document,
 )
 from apps.agent.tools.html_report import (
+    append_html_report_block,
     create_html_report,
     get_html_report,
+    publish_html_report,
     update_html_report,
 )
 from apps.agent.tools.sql import describe_table, list_tables, run_sql_query
@@ -21,6 +23,8 @@ AGENT_TOOLS = [
     show_chart,
     create_document,
     create_html_report,
+    append_html_report_block,
+    publish_html_report,
     list_conversation_files,
     get_document,
     get_html_report,
@@ -40,6 +44,8 @@ __all__ = [
     "SQL_TOOLS",
     "create_document",
     "create_html_report",
+    "append_html_report_block",
+    "publish_html_report",
     "describe_table",
     "get_document",
     "get_html_report",

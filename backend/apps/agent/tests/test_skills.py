@@ -27,16 +27,23 @@ class TestPlatformSkills:
         assert (skills_dir / "starter-dashboard.html").is_file()
 
     def test_html_reports_skill_references_guidelines(self):
-        skill_path = get_platform_skills_dir() / "html-reports" / "SKILL.md"
+        skills_dir = get_platform_skills_dir() / "html-reports"
+        skill_path = skills_dir / "SKILL.md"
         body = skill_path.read_text(encoding="utf-8")
         assert "GUIDELINES.md" in body
         assert "create_html_report" in body
         assert "write_todos" in body
-        assert "append_html_report_block" not in body
+        assert "append_html_report_block" in body
+        assert "publish_html_report" in body
+        assert "ay-dash-tabs--section" in body
+        assert "ay-dash-calculator" in (skills_dir / "GUIDELINES.md").read_text(encoding="utf-8")
+        guidelines = (skills_dir / "GUIDELINES.md").read_text(encoding="utf-8")
+        assert "ay-dash-tabs--section" in guidelines
+        assert "data-panels-target" in guidelines
         assert "create_html_dashboard_report" not in body
         assert "ay-dash-page" in body or "ay-dash-" in body
         assert "Dos tipos de entregable" in body
-        assert "expandido" in body.lower()
+        assert "expandida" in body.lower()
 
     def test_docx_skill_frontmatter(self):
         skill_path = get_platform_skills_dir() / "docx-documents" / "SKILL.md"

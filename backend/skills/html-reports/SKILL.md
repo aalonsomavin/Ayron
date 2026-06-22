@@ -31,52 +31,62 @@ No uses para: Word (`.docx`), respuestas solo en chat. Para datos sueltos en el 
 
 | Tool | Uso |
 |------|-----|
-| `create_html_report` | Crear reporte con HTML (`html=...`) — **una sola llamada** |
-| `update_html_report` | Actualizar reporte por `file_id` |
+| `create_html_report` | Crear reporte o shell de dashboard (`build_mode="complete"` o `"incremental"`) |
+| `append_html_report_block` | Añadir bloque a un dashboard en borrador |
+| `publish_html_report` | Publicar dashboard borrador (visible al usuario) |
+| `update_html_report` | Actualizar reporte publicado por `file_id` |
 | `get_html_report` | Leer reporte — devuelve `html` para editar |
 | `list_conversation_files` | Listar archivos con `file_id` |
 
-## Flujo único
+## Flujos
 
-0. **Planifica** con `write_todos` antes de consultar datos. El último paso debe ser \
-**Generar archivo con create_html_report**. No cierres el turno con solo análisis en chat.
-1. Identifica el modo: **dashboard** (KPIs, tablas, cifras) o **prosa** (explainer, postmortem, brief)
-2. Lee **`/skills/html-reports/GUIDELINES.md`**
-3. Si es dashboard, lee también **`/skills/html-reports/starter-dashboard.html`** como plantilla
-4. Escribe HTML con clases del design system y llama **`create_html_report(title, html, ...)`** — todo el informe en **una tool call**
-5. No repitas contenido en el chat
+### Reporte pequeño o dashboard simple
 
-Para editar: `get_html_report` → modifica `html` → `update_html_report`
+0. **Planifica** con `write_todos`. El último paso: **Generar archivo**.
+1. Lee **`/skills/html-reports/GUIDELINES.md`**
+2. Llama **`create_html_report(title, html, ...)`** con todo el contenido — una tool call
+3. No repitas contenido en el chat
+
+### Dashboard grande (incremental)
+
+Usa cuando hay **más de ~4 bloques**, varias páginas/tabs, o muchos datos.
+
+1. `create_html_report(..., build_mode="incremental", html_kind="dashboard")` — shell con header y grid/tabs vacíos (**no visible aún**)
+2. `append_html_report_block(file_id, html, target="grid"|"tabs")` por cada sección
+3. **`publish_html_report(file_id)`** — el usuario ve el artifact **solo aquí**
+4. Mensaje breve al final
+
+Para editar un archivo ya publicado: `get_html_report` → `update_html_report`
 
 ## Dos tipos de entregable
 
-No son solo estilos distintos — cada tipo tiene **UX distinta** en el chat:
-
 | Tipo | Cuándo | Wrapper raíz | Al hacer click |
 |------|--------|--------------|----------------|
-| **Reporte** | Explainers, postmortems, briefs, aprendizaje | `.ay-report-prose` | Panel lateral (como documento), export PDF |
-| **Dashboard** | Ventas, KPIs, status con cifras, informes analíticos | `.ay-dash-page` | Vista expandida a pantalla completa |
+| **Reporte** | Explainers, postmortems, briefs | `.ay-report-prose` | Panel lateral, export PDF |
+| **Dashboard** | KPIs, tablas, status analítico | `.ay-dash-page` | Vista expandida |
 
-Ayron infiere el tipo del markup (`.ay-dash-page` → dashboard). Opcionalmente puedes pasar `html_kind="report"` o `html_kind="dashboard"` si quieres reforzar la intención.
+## Interactividad declarativa
 
-## Dos modos de reporte
+**Prefiere dashboards interactivos** cuando haya varias vistas, periodos o escenarios. Usa:
 
-| Modo | Cuándo | Wrapper raíz | UX |
-|------|--------|--------------|-----|
-| **Dashboard** | Ventas, KPIs, status con cifras | `.ay-dash-page` | Se abre expandido al click |
-| **Prosa** | «Cómo funciona X», postmortem, brief | `.ay-report-prose` | Panel lateral, export PDF |
+- **Tabs de página** — capítulos grandes (`append_html_report_block(..., target="tabs")`)
+- **Tabs por sección** — `.ay-dash-tabs--section` dentro de una columna del grid
+- **Tabs en header** — `.ay-dash-tabs--header` + `data-panels-target` dentro de `.ay-dash-tab-scope`
+- **Filtros** — `.ay-dash-filter-bar` + JSON
+- **Tablas ordenables** — `ay-dash-table--sortable`
+- **Calculadoras what-if** — `.ay-dash-calculator` con slots `[data-calc-input]` / `[data-calc-output]`
 
-Ayron inyecta fuentes Geist y CSS (`ay-dash-*`, `ay-report-prose`, `.ay-chart`). **No repitas `<link>` ni `<style>` del sistema** en el fragmento — solo clases documentadas en GUIDELINES.
+Ver GUIDELINES para markup exacto. No escribas `<input>`, `<button>` ni handlers en HTML.
 
 ## Gráficos en el reporte
 
-Incrusta gráficos Chart.js con bloques `.ay-chart` y JSON en `<script type="application/json">` — mismo formato que el chat. Léelo en GUIDELINES. No uses `show_chart` aparte si el gráfico va dentro del informe.
+Incrusta gráficos Chart.js con bloques `.ay-chart` y JSON en `<script type="application/json">`. No uses `show_chart` aparte si el gráfico va dentro del informe.
 
 ## Insight primero
 
-En dashboards, el bloque **insight** va **al inicio del grid** (después del título), antes de KPIs y tablas. En prosa, el **TL;DR** cumple ese rol al principio.
+En dashboards, el bloque **insight** va **al inicio del grid**, antes de KPIs y tablas.
 
-## Ejemplo dashboard
+## Ejemplo dashboard one-shot
 
 ```python
 create_html_report(
@@ -89,13 +99,7 @@ create_html_report(
     <h1 class="ay-dash-title">Ventas Mayo 2026</h1>
     <div class="ay-dash-grid">
       <div class="ay-dash-col ay-dash-col--12">
-        <div class="ay-dash-card ay-dash-card--insight">…insight al inicio…</div>
-      </div>
-      <div class="ay-dash-col ay-dash-col--3">
-        <div class="ay-dash-card">
-          <div class="ay-dash-kpi-label">Ingresos</div>
-          <div class="ay-dash-kpi-value">$1.28M</div>
-        </div>
+        <div class="ay-dash-card ay-dash-card--insight">…</div>
       </div>
     </div>
   </div>
@@ -104,55 +108,35 @@ create_html_report(
 )
 ```
 
-## Ejemplo prosa
+## Ejemplo dashboard incremental
 
 ```python
 create_html_report(
-    title="Rate limiter — explicación",
-    subtitle="Cómo funciona el token bucket en Ayron",
-    filename="rate-limiter-explicacion.html",
+    title="Ventas Q2",
+    build_mode="incremental",
+    html_kind="dashboard",
     html=\"\"\"
-<div class="ay-report-prose">
-  <header>
-    <h1>Rate limiter</h1>
-    <p class="ay-report-prose__lead">Token bucket por IP — una lectura.</p>
-  </header>
-  <section class="ay-report-prose__tldr"><strong>TL;DR</strong> — Cada IP tiene un bucket.</section>
-  <section>
-    <h2>Flujo</h2>
-    <svg viewBox="0 0 400 120" width="100%" height="120" role="img">...</svg>
-  </section>
+<div class="ay-dash-page">
+  <div class="ay-dash-inner">
+    <h1 class="ay-dash-title">Ventas Q2</h1>
+    <div class="ay-dash-grid"></div>
+  </div>
 </div>
 \"\"\",
 )
+# file_id del resultado → append_html_report_block(...) × N → publish_html_report(file_id)
 ```
-
-## Patrones
-
-| Patrón | Cuándo | Enfoque |
-|--------|--------|---------|
-| A Explicador | «Cómo funciona X» | Prosa: TL;DR + SVG + snippets |
-| B Status | «Qué entregamos esta semana» | Dashboard: insight + KPIs + tablas |
-| C Incidente | Postmortem | Prosa: timeline, secciones |
-| D Deep-dive | Aprendizaje | Prosa: secciones + tablas |
-| E Decisión | «¿Hacemos X?» | Prosa: recomendación primero |
-| F Dashboard | Informe de datos / ventas | Dashboard: insight + KPIs + `.ay-chart` + tablas |
 
 ## Anti-patrones
 
-- Completar el análisis en el chat sin llamar a `create_html_report`
-- Volcar el informe en markdown en el chat
-- CSS inline duplicado en cada elemento — usa clases de GUIDELINES
-- Bloques JSON o múltiples tool calls para armar un informe
-- Sparklines o SVG de datos hechos a mano — usa `.ay-chart` dentro del HTML del reporte
-- Llamar `show_chart` y además duplicar el gráfico en el reporte
+- Terminar sin `publish_html_report` en flujo incremental
+- Mostrar contenido parcial al usuario (append sin publish al final)
 - `<script>` o handlers inline
-- Estética genérica (Inter, purple gradients, emoji)
+- Volcar el informe en markdown en el chat
 
 ## Reglas en el chat
 
-- El entregable aparece como tarjeta de archivo HTML
-- **Dashboard**: al click se abre en vista expandida (ideal para KPIs y tablas anchas)
-- **Reporte**: al click se abre en el panel lateral, exportable a PDF
+- El artifact aparece como tarjeta HTML **solo al publicar o crear completo**
+- **Dashboard**: vista expandida al click
+- **Reporte**: panel lateral, export PDF
 - No repitas el contenido en tu respuesta
-- Una frase breve de contexto o silencio

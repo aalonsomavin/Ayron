@@ -313,8 +313,13 @@
         .then(function (html) {
           if (!self.openFile || self.openFile.file_id !== file.file_id) return;
           body.innerHTML = html;
-          if (isHtml && window.AyronChart) {
-            window.AyronChart.mountAll(body);
+          if (isHtml) {
+            if (window.AyronDashboard) {
+              window.AyronDashboard.mountAll(body);
+            }
+            if (window.AyronChart) {
+              window.AyronChart.mountAll(body);
+            }
           } else if (!isHtml && window.AyronDocPreview) {
             window.AyronDocPreview.mount(body);
           }

@@ -101,6 +101,7 @@ def serialize_file_for_agent(file_obj: File) -> dict:
         "version": file_obj.version,
         "updated_at": file_obj.updated_at.isoformat(),
         "summary": file_obj.content_json.get("title", ""),
+        "status": file_obj.content_json.get("status", "published"),
     }
 
 

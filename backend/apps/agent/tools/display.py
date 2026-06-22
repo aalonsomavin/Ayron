@@ -78,6 +78,8 @@ TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "list_conversation_files": ("Listar documentos", None),
     "get_document": ("Leer documento", None),
     "create_html_report": ("Crear reporte HTML", _html_report_subtitle),
+    "append_html_report_block": ("Añadir bloque al dashboard", None),
+    "publish_html_report": ("Publicar dashboard", lambda _: "Dashboard"),
     "update_html_report": ("Actualizar reporte HTML", _html_report_subtitle),
     "get_html_report": ("Leer reporte HTML", None),
     "write_todos": ("Planificar", None),

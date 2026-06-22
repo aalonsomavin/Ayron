@@ -32,7 +32,7 @@ class TestDetectDeliverableIntent:
 class TestDeliverableHelpers:
     def test_required_tools_for_create_html(self):
         assert required_tools_for_intent(DeliverableIntent.CREATE_HTML) == frozenset(
-            {"create_html_report"}
+            {"create_html_report", "publish_html_report"}
         )
 
     def test_required_tools_for_update_file(self):

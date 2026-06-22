@@ -23,6 +23,8 @@ DISPLAY_TOOLS = {
     "update_document",
     "create_html_report",
     "update_html_report",
+    "append_html_report_block",
+    "publish_html_report",
 }
 TABLE_DISPLAY_TOOL = "show_data_table"
 CHART_DISPLAY_TOOL = "show_chart"
@@ -32,6 +34,8 @@ CREATE_DOCUMENT_TOOL = "create_document"
 UPDATE_DOCUMENT_TOOL = "update_document"
 CREATE_HTML_REPORT_TOOL = "create_html_report"
 UPDATE_HTML_REPORT_TOOL = "update_html_report"
+APPEND_HTML_REPORT_BLOCK_TOOL = "append_html_report_block"
+PUBLISH_HTML_REPORT_TOOL = "publish_html_report"
 OUTPUT_SUMMARY_MAX_LEN = 500
 
 
@@ -300,14 +304,22 @@ class StreamEventHandler:
                     message=self.message,
                 )
             output_summary = "Gráfico mostrado" if result.get("ok") else "Error al mostrar gráfico"
+        elif name == APPEND_HTML_REPORT_BLOCK_TOOL:
+            parsed = merge_tool_output_status({}, output)
+            output_summary = (
+                "Bloque añadido al dashboard"
+                if parsed.get("ok")
+                else "Error al añadir bloque"
+            )
         elif name in (
             CREATE_DOCUMENT_TOOL,
             UPDATE_DOCUMENT_TOOL,
             CREATE_HTML_REPORT_TOOL,
             UPDATE_HTML_REPORT_TOOL,
+            PUBLISH_HTML_REPORT_TOOL,
         ):
             result = self._resolve_file_display_result(output, tool_call_id)
-            if result.get("file_id"):
+            if result.get("file_id") and not result.get("skip_chat_event"):
                 event_type = (
                     AgentEvent.EventType.FILE_UPDATED
                     if result.get("updated")
@@ -320,7 +332,13 @@ class StreamEventHandler:
                     message=self.message,
                 )
             is_html = result.get("format") == "html" or result.get("ext") == "HTML"
-            if is_html:
+            if name == PUBLISH_HTML_REPORT_TOOL:
+                output_summary = (
+                    "Dashboard publicado"
+                    if result.get("file_id") and not result.get("skip_chat_event")
+                    else "Error al publicar dashboard"
+                )
+            elif is_html:
                 output_summary = (
                     "Reporte actualizado"
                     if result.get("updated")

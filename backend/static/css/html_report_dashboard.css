@@ -65,7 +65,9 @@
   min-width: 0;
 }
 
+.ay-dash-col--2 { grid-column: span 2; }
 .ay-dash-col--3 { grid-column: span 3; }
+.ay-dash-col--4 { grid-column: span 4; }
 .ay-dash-col--5 { grid-column: span 5; }
 .ay-dash-col--6 { grid-column: span 6; }
 .ay-dash-col--7 { grid-column: span 7; }
@@ -427,12 +429,298 @@
   margin-top: 2px;
 }
 
+.ay-dash-tabs {
+  margin-top: 8px;
+}
+
+.ay-dash-tabs--section {
+  margin-top: 0;
+}
+
+.ay-dash-tabs--section > .ay-dash-tab-nav {
+  margin-bottom: 16px;
+}
+
+.ay-dash-tabs--header {
+  margin-top: 0;
+}
+
+.ay-dash-tabs--header .ay-dash-tab-nav {
+  margin-bottom: 0;
+}
+
+.ay-dash-tab-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.ay-dash-tab-scope > .ay-dash-tab-panels {
+  margin-top: 16px;
+}
+
+.ay-dash-tab-scope > .ay-dash-card--flush + .ay-dash-tab-panels {
+  margin-top: 0;
+}
+
+.ay-dash-card-header--with-tabs {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ay-dash-card-header--with-tabs .ay-dash-tabs--header {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.ay-dash-tab-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.ay-dash-tabs--section .ay-dash-tab-btn,
+.ay-dash-tabs--header .ay-dash-tab-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+.ay-dash-tab-btn {
+  appearance: none;
+  border: 1px solid #e6e6e8;
+  background: #fff;
+  color: #62626b;
+  font-family: "Geist", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ay-dash-tab-btn--active {
+  color: #18181b;
+  border-color: #c8d9fc;
+  background: #eef3fe;
+}
+
+.ay-dash-tab-panel[hidden] {
+  display: none !important;
+}
+
+.ay-dash-filter-bar {
+  margin-bottom: 20px;
+}
+
+.ay-dash-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ay-dash-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ay-dash-filter__label {
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a92;
+}
+
+.ay-dash-filter__select {
+  appearance: none;
+  border: 1px solid #e6e6e8;
+  background: #fff;
+  color: #18181b;
+  font-family: "Geist", system-ui, sans-serif;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  min-width: 140px;
+}
+
+.ay-dash-th-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.ay-dash-th-sortable--asc::after,
+.ay-dash-th-sortable--desc::after {
+  content: " ↑";
+  color: #8a8a92;
+  font-size: 11px;
+}
+
+.ay-dash-th-sortable--desc::after {
+  content: " ↓";
+}
+
+.ay-dash-calculator {
+  margin-bottom: 20px;
+}
+
+.ay-dash-calculator__controls,
+.ay-dash-calculator__controls-inner,
+.ay-dash-calculator__controls-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #e6e6e8;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 16, 20, 0.04);
+}
+
+.ay-dash-calculator__controls[hidden] {
+  display: none !important;
+}
+
+.ay-dash-calc-slot {
+  min-width: 0;
+}
+
+.ay-dash-card--calc-input,
+.ay-dash-calc-slot.ay-dash-card {
+  min-height: 96px;
+}
+
+.ay-dash-card--calc-input:focus-within,
+.ay-dash-calc-slot.ay-dash-card:focus-within {
+  border-color: #3b6ef6;
+  box-shadow: 0 0 0 3px rgba(59, 110, 246, 0.12);
+}
+
+.ay-dash-card--calc-input .ay-dash-calc-field,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-field {
+  height: 100%;
+  min-width: 0;
+  width: 100%;
+  gap: 8px;
+}
+
+.ay-dash-card--calc-input .ay-dash-calc-label,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-label {
+  font-family: "Geist", system-ui, sans-serif;
+  font-size: 13px;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #62626b;
+}
+
+.ay-dash-card--calc-input .ay-dash-calc-number,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-number {
+  border: none;
+  padding: 0;
+  background: transparent;
+  font-family: "Geist Mono", monospace;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  margin-top: 2px;
+  width: 100%;
+  min-width: 0;
+  color: #18181b;
+  box-shadow: none;
+}
+
+.ay-dash-card--calc-input .ay-dash-calc-number:focus,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-number:focus {
+  outline: none;
+}
+
+.ay-dash-card--calc-input .ay-dash-calc-number::-webkit-outer-spin-button,
+.ay-dash-card--calc-input .ay-dash-calc-number::-webkit-inner-spin-button,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-number::-webkit-outer-spin-button,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-number::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.ay-dash-card--calc-input .ay-dash-calc-select,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-select {
+  border: none;
+  padding: 0;
+  background: transparent;
+  font-family: "Geist Mono", monospace;
+  font-size: 22px;
+  font-weight: 600;
+  width: 100%;
+  min-width: 0;
+  color: #18181b;
+}
+
+.ay-dash-card--calc-input .ay-dash-calc-range,
+.ay-dash-calc-slot.ay-dash-card .ay-dash-calc-range {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.ay-dash-card--calc-output .ay-dash-kpi-value--calc,
+[data-calc-output] .ay-dash-kpi-value--calc {
+  min-height: 34px;
+}
+
+.ay-dash-calc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.ay-dash-calc-label {
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a92;
+}
+
+.ay-dash-calc-input {
+  appearance: none;
+  border: 1px solid #e6e6e8;
+  background: #fff;
+  color: #18181b;
+  font-family: "Geist", system-ui, sans-serif;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  min-width: 140px;
+}
+
+.ay-dash-calc-number {
+  font-family: "Geist Mono", monospace;
+}
+
+.ay-dash-calc-range {
+  width: 100%;
+  min-width: 180px;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.ay-dash-kpi-value--calc {
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 900px) {
   .ay-dash-page {
     padding: 32px 16px 64px;
   }
 
+  .ay-dash-col--2,
   .ay-dash-col--3,
+  .ay-dash-col--4,
   .ay-dash-col--5,
   .ay-dash-col--6,
   .ay-dash-col--7,

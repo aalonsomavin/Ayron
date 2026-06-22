@@ -4,25 +4,47 @@
     <h1 class="ay-dash-title">Título del reporte</h1>
     <p class="ay-dash-subtitle">Subtítulo o contexto de una línea.</p>
     <hr class="ay-dash-divider">
-    <div class="ay-dash-grid">
 
-      <div class="ay-dash-col ay-dash-col--12">
-        <div class="ay-dash-card ay-dash-card--insight">
-          <div class="ay-dash-insight-head">
-            <div class="ay-dash-insight-logo" aria-hidden="true"></div>
-            <span class="ay-dash-insight-brand">Ayron</span>
-            <span class="ay-dash-insight-kind">insight</span>
+    <div class="ay-dash-calculator">
+      <script type="application/json">
+      {"inputs":[{"id":"units","label":"Unidades","type":"number","default":1000,"min":0},{"id":"price","label":"Precio unitario","type":"number","default":42.5,"min":0,"step":0.01}],"constants":{"fixed_cost":30000},"outputs":[{"id":"revenue","label":"Ingresos","expr":"units * price","format":"currency"},{"id":"margin","label":"Margen","expr":"(revenue - fixed_cost) / revenue","format":"percent"}]}
+      </script>
+      <div class="ay-dash-grid">
+        <div class="ay-dash-col ay-dash-col--12">
+          <div class="ay-dash-card ay-dash-card--insight">
+            <div class="ay-dash-insight-head">
+              <div class="ay-dash-insight-logo" aria-hidden="true"></div>
+              <span class="ay-dash-insight-brand">Ayron</span>
+              <span class="ay-dash-insight-kind">insight</span>
+            </div>
+            <div class="ay-dash-insight-text">Ajusta unidades y precio para ver ingresos y margen al instante.</div>
           </div>
-          <div class="ay-dash-insight-text">Texto del insight con cifras concretas.</div>
-          <div class="ay-dash-tags">
-            <span class="ay-dash-tag ay-dash-tag--accent">EE. UU. · $523</span>
+        </div>
+        <div class="ay-dash-col ay-dash-col--3" data-calc-input="units">
+          <div class="ay-dash-card ay-dash-card--calc-input"></div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--3" data-calc-input="price">
+          <div class="ay-dash-card ay-dash-card--calc-input"></div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--3" data-calc-output="revenue">
+          <div class="ay-dash-card ay-dash-card--calc-output">
+            <div class="ay-dash-kpi-label">Ingresos</div>
+            <div class="ay-dash-kpi-value ay-dash-kpi-value--calc">—</div>
+          </div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--3" data-calc-output="margin">
+          <div class="ay-dash-card ay-dash-card--calc-output">
+            <div class="ay-dash-kpi-label">Margen</div>
+            <div class="ay-dash-kpi-value ay-dash-kpi-value--calc">—</div>
           </div>
         </div>
       </div>
+    </div>
 
+    <div class="ay-dash-grid">
       <div class="ay-dash-col ay-dash-col--3">
         <div class="ay-dash-card">
-          <div class="ay-dash-kpi-label">Ingresos</div>
+          <div class="ay-dash-kpi-label">Ingresos históricos</div>
           <div class="ay-dash-kpi-value">$1.28M</div>
           <div class="ay-dash-delta ay-dash-delta--up">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path></svg>
@@ -33,17 +55,44 @@
       </div>
 
       <div class="ay-dash-col ay-dash-col--12">
+        <div class="ay-dash-tabs ay-dash-tabs--section">
+          <div class="ay-dash-tab-panels">
+            <div class="ay-dash-tab-panel" data-page="q1" data-label="Q1">
+              <div class="ay-dash-grid">
+                <div class="ay-dash-col ay-dash-col--3">
+                  <div class="ay-dash-card">
+                    <div class="ay-dash-kpi-label">Ingresos Q1</div>
+                    <div class="ay-dash-kpi-value">$420K</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="ay-dash-tab-panel" data-page="q2" data-label="Q2">
+              <div class="ay-dash-grid">
+                <div class="ay-dash-col ay-dash-col--3">
+                  <div class="ay-dash-card">
+                    <div class="ay-dash-kpi-label">Ingresos Q2</div>
+                    <div class="ay-dash-kpi-value">$486K</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ay-dash-col ay-dash-col--12">
         <div class="ay-dash-card ay-dash-card--flush">
           <div class="ay-dash-card-header">
             <span class="ay-dash-card-header__title">Clientes principales</span>
             <span class="ay-dash-card-header__meta">59 totales</span>
           </div>
-          <table class="ay-dash-table">
+          <table class="ay-dash-table ay-dash-table--sortable">
             <thead>
               <tr>
                 <th>Cliente</th>
                 <th>País</th>
-                <th class="ay-dash-td-right">Total</th>
+                <th class="ay-dash-td-right ay-dash-th-numeric">Total</th>
               </tr>
             </thead>
             <tbody>

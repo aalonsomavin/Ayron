@@ -35,7 +35,9 @@ _ANALYTICAL_ONLY_RE = re.compile(
 )
 
 REQUIRED_TOOLS: dict[DeliverableIntent, frozenset[str]] = {
-    DeliverableIntent.CREATE_HTML: frozenset({"create_html_report"}),
+    DeliverableIntent.CREATE_HTML: frozenset(
+        {"create_html_report", "publish_html_report"}
+    ),
     DeliverableIntent.CREATE_DOCX: frozenset({"create_document"}),
     DeliverableIntent.UPDATE_FILE: frozenset({"update_html_report", "update_document"}),
 }
@@ -73,13 +75,15 @@ def format_deliverable_prompt_block(intent: DeliverableIntent) -> str:
 El usuario pidió un archivo compartible (informe, dashboard o reporte HTML).
 
 1. Planifica con `write_todos` antes de consultar datos. El último paso debe ser \
-**Generar archivo con create_html_report**.
+**Generar archivo** (`create_html_report` o flujo incremental + `publish_html_report`).
 2. Consulta datos con SQL si hace falta; `show_data_table` y `show_chart` son pasos \
 intermedios, no sustituyen el archivo.
 3. Lee la skill `html-reports` y `GUIDELINES.md` antes de escribir HTML.
-4. Llama `create_html_report` con todo el contenido en una sola invocación.
-5. No des por terminada la tarea hasta que `create_html_report` devuelva `"ok": true`.
-6. Tras crear el archivo, no repitas su contenido en el chat."""
+4. Dashboards pequeños: `create_html_report` con todo el contenido en una invocación.
+5. Dashboards grandes: `create_html_report(..., build_mode="incremental")` → \
+`append_html_report_block` por sección → `publish_html_report` al final.
+6. No des por terminada la tarea hasta publicar o crear el archivo completo (`"ok": true`, sin `"draft": true`).
+7. Tras entregar el archivo, no repitas su contenido en el chat."""
 
     if intent == DeliverableIntent.CREATE_DOCX:
         return """\
@@ -118,7 +122,8 @@ def format_deliverable_nudge(intent: DeliverableIntent) -> str:
     if intent == DeliverableIntent.CREATE_HTML:
         return (
             "Aún no generaste el entregable. El usuario pidió un informe o dashboard HTML. "
-            "Llama a create_html_report con el contenido ya analizado. No respondas solo en texto."
+            "Llama a create_html_report (completo) o publica el borrador con publish_html_report. "
+            "No respondas solo en texto."
         )
     if intent == DeliverableIntent.CREATE_DOCX:
         return (

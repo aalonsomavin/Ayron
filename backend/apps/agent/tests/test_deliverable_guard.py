@@ -23,6 +23,31 @@ def _reset_guard_state():
 
 
 class TestDeliverableSatisfied:
+    def test_not_satisfied_with_draft_create_only(self):
+        messages = [
+            ToolMessage(
+                content=json.dumps({"ok": True, "file_id": "abc", "draft": True}),
+                tool_call_id="call_1",
+                name="create_html_report",
+            )
+        ]
+        assert deliverable_satisfied(messages, DeliverableIntent.CREATE_HTML) is False
+
+    def test_satisfied_after_publish_html_report(self):
+        messages = [
+            ToolMessage(
+                content=json.dumps({"ok": True, "file_id": "abc", "draft": True}),
+                tool_call_id="call_1",
+                name="create_html_report",
+            ),
+            ToolMessage(
+                content=json.dumps({"ok": True, "file_id": "abc"}),
+                tool_call_id="call_2",
+                name="publish_html_report",
+            ),
+        ]
+        assert deliverable_satisfied(messages, DeliverableIntent.CREATE_HTML) is True
+
     def test_satisfied_after_successful_create_html_report(self):
         messages = [
             ToolMessage(

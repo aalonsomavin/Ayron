@@ -92,8 +92,28 @@ ALLOWED_TAGS = frozenset(
 )
 
 ALLOWED_ATTRIBUTES = {
-    "*": ["class", "id", "title", "role", "aria-label", "aria-hidden", "lang"],
-    "div": ["data-chart-id", "data-ay-chart-script"],
+    "*": [
+        "class",
+        "id",
+        "title",
+        "role",
+        "aria-label",
+        "aria-hidden",
+        "lang",
+        "data-page",
+        "data-label",
+        "data-region",
+        "data-filter-id",
+        "data-calc-output",
+        "data-calc-input",
+        "hidden",
+    ],
+    "div": [
+        "data-chart-id",
+        "data-ay-chart-script",
+        "data-ay-json-script",
+        "data-panels-target",
+    ],
     "canvas": ["class", "width", "height"],
     "a": ["href", "rel", "target"],
     "img": ["src", "alt", "width", "height", "loading"],
@@ -103,6 +123,7 @@ ALLOWED_ATTRIBUTES = {
     "colgroup": ["span"],
     "td": ["colspan", "rowspan"],
     "th": ["colspan", "rowspan", "scope"],
+    "tr": ["data-region"],
     "svg": ["viewBox", "width", "height", "xmlns", "fill", "stroke", "role"],
     "g": ["fill", "stroke", "transform", "opacity"],
     "path": ["d", "fill", "stroke", "stroke-width", "opacity"],
@@ -191,8 +212,8 @@ def _preserve_json_scripts(html: str) -> tuple[str, list[str]]:
         try:
             json.loads(body)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid chart JSON script: {exc}") from exc
-        token = f'<div data-ay-chart-script="{len(stored)}"></div>'
+            raise ValueError(f"Invalid JSON script: {exc}") from exc
+        token = f'<div data-ay-json-script="{len(stored)}"></div>'
         stored.append(match.group(0))
         return token
 
@@ -208,6 +229,7 @@ def _preserve_json_scripts(html: str) -> tuple[str, list[str]]:
 
 def _restore_json_scripts(html: str, stored: list[str]) -> str:
     for idx, script in enumerate(stored):
+        html = html.replace(f'<div data-ay-json-script="{idx}"></div>', script, 1)
         html = html.replace(f'<div data-ay-chart-script="{idx}"></div>', script, 1)
     return html
 

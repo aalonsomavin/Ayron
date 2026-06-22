@@ -12,7 +12,7 @@ from apps.agent.context import get_agent_conversation, get_agent_user
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import footer_attribution_text
 from apps.agent.tools.html_insight import normalize_insight_markup
-from apps.agent.tools.html_sanitize import normalize_agent_html
+from apps.agent.tools.html_sanitize import normalize_agent_html, sanitize_html_report
 from apps.files.models import HTML_MIME
 from apps.files.services import (
     escape_preview_text as esc,
@@ -31,6 +31,35 @@ AGENT_INSTRUCTION_AFTER_HTML_REPORT = (
     "Solo añade una frase breve si aporta contexto, o termina sin texto."
 )
 
+AGENT_INSTRUCTION_AFTER_DRAFT_CREATE = (
+    "Dashboard en borrador (no visible aún). "
+    "Añade bloques con append_html_report_block y publica con publish_html_report. "
+    "Prefiere tabs por sección, filtros, tablas ordenables o calculadoras cuando el "
+    "informe tenga varias vistas o datos comparables."
+)
+
+HTML_KIND_REPORT = "report"
+HTML_KIND_DASHBOARD = "dashboard"
+HTML_KINDS = {HTML_KIND_REPORT, HTML_KIND_DASHBOARD}
+
+STATUS_DRAFT = "draft"
+STATUS_PUBLISHED = "published"
+
+BUILD_MODE_COMPLETE = "complete"
+BUILD_MODE_INCREMENTAL = "incremental"
+BUILD_MODES = {BUILD_MODE_COMPLETE, BUILD_MODE_INCREMENTAL}
+
+APPEND_TARGETS = {
+    "grid": "ay-dash-grid",
+    "tabs": "ay-dash-tab-panels",
+    "prose": "ay-report-prose",
+}
+
+_ROOT_WRAPPER_RE = re.compile(
+    r'\bclass="[^"]*\b(?:ay-dash-page|ay-report-prose)\b',
+    re.IGNORECASE,
+)
+
 
 def pop_html_report_display(tool_call_id: str | None) -> dict | None:
     if not tool_call_id:
@@ -45,11 +74,6 @@ def _sanitize_filename(name: str, fallback: str) -> str:
     if not cleaned.lower().endswith(".html"):
         cleaned = f"{cleaned}.html"
     return cleaned[:200]
-
-
-HTML_KIND_REPORT = "report"
-HTML_KIND_DASHBOARD = "dashboard"
-HTML_KINDS = {HTML_KIND_REPORT, HTML_KIND_DASHBOARD}
 
 
 def infer_html_kind(body_html: str) -> str:
@@ -78,12 +102,14 @@ def validate_html_report_content(
     html: str,
     subtitle: str = "",
     html_kind: str | None = None,
+    *,
+    status: str | None = None,
 ) -> dict:
     if not title or not str(title).strip():
         raise ValueError("title is required")
     normalized = normalize_agent_html(html)
     body_html = normalized["body_html"]
-    return {
+    result = {
         "format": "html",
         "html_kind": resolve_html_kind(body_html, html_kind),
         "title": str(title).strip(),
@@ -91,7 +117,9 @@ def validate_html_report_content(
         "html": normalized["html"],
         "body_html": body_html,
         "full_document": normalized["full_document"],
+        "status": status or STATUS_PUBLISHED,
     }
+    return result
 
 
 def _load_export_css() -> str:
@@ -117,6 +145,11 @@ def _load_ayron_chart_js() -> str:
     return js_path.read_text(encoding="utf-8")
 
 
+def _load_ayron_dashboard_js() -> str:
+    js_path = Path(settings.BASE_DIR) / "static" / "js" / "ayron-dashboard.js"
+    return js_path.read_text(encoding="utf-8")
+
+
 def _load_report_css(*, include_charts: bool = False) -> str:
     css = f"{_load_export_css()}\n{_load_dashboard_css()}"
     if include_charts:
@@ -126,6 +159,16 @@ def _load_report_css(*, include_charts: bool = False) -> str:
 
 def _body_has_charts(body_html: str) -> bool:
     return "ay-chart" in body_html
+
+
+def _body_has_interactive_dashboard(body_html: str) -> bool:
+    markers = (
+        "ay-dash-tabs",
+        "ay-dash-filter-bar",
+        "ay-dash-table--sortable",
+        "ay-dash-calculator",
+    )
+    return any(marker in body_html for marker in markers)
 
 
 def _report_chart_scripts(*, inline_mount: bool = False) -> str:
@@ -142,6 +185,18 @@ def _report_chart_scripts(*, inline_mount: bool = False) -> str:
         f"<script>{ayron_js}</script>"
         f"{mount}"
     )
+
+
+def _report_dashboard_scripts(*, inline_mount: bool = False) -> str:
+    ayron_js = _load_ayron_dashboard_js()
+    mount = (
+        "<script>document.addEventListener('DOMContentLoaded',function(){"
+        "if(window.AyronDashboard){AyronDashboard.mountAll(document);}"
+        "});</script>"
+        if inline_mount
+        else ""
+    )
+    return f"<script>{ayron_js}</script>{mount}"
 
 
 def _report_font_links() -> str:
@@ -169,6 +224,15 @@ def _wrap_export_body(body_html: str) -> str:
     if _uses_report_shell(body_html):
         return f"{body_html}{_footer_html()}"
     return f'<div class="ay-html-report">{body_html}{_footer_html()}</div>'
+
+
+def _export_runtime_scripts(body_html: str) -> str:
+    scripts = ""
+    if _body_has_charts(body_html):
+        scripts += _report_chart_scripts(inline_mount=True)
+    if _body_has_interactive_dashboard(body_html):
+        scripts += _report_dashboard_scripts(inline_mount=True)
+    return scripts
 
 
 def build_preview_fragment(content_json: dict) -> str:
@@ -205,7 +269,7 @@ def build_export_html(content_json: dict) -> str:
     body_html = normalize_insight_markup(body_html)
     wrapped_body = _wrap_export_body(body_html)
     include_charts = _body_has_charts(body_html)
-    chart_scripts = _report_chart_scripts(inline_mount=True) if include_charts else ""
+    runtime_scripts = _export_runtime_scripts(body_html)
     return (
         "<!DOCTYPE html>"
         '<html lang="es">'
@@ -218,7 +282,7 @@ def build_export_html(content_json: dict) -> str:
         "</head>"
         "<body>"
         f"{wrapped_body}"
-        f"{chart_scripts}"
+        f"{runtime_scripts}"
         "</body>"
         "</html>"
     )
@@ -231,8 +295,99 @@ def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
     return preview_html or ""
 
 
+def _find_div_inner_bounds(html: str, after_open: int) -> tuple[int, int]:
+    start = after_open
+    depth = 1
+    pos = start
+    while pos < len(html) and depth > 0:
+        next_open = html.find("<div", pos)
+        next_close = html.find("</div>", pos)
+        if next_close == -1:
+            raise ValueError("Unclosed container div")
+        if next_open != -1 and next_open < next_close:
+            depth += 1
+            pos = next_open + 4
+        else:
+            depth -= 1
+            if depth == 0:
+                return start, next_close
+            pos = next_close + 6
+    raise ValueError("Could not locate end of container div")
+
+
+def _find_div_container_bounds(html: str, container_class: str) -> tuple[int, int]:
+    pattern = re.compile(
+        rf'<div\b[^>]*\bclass="[^"]*\b{re.escape(container_class)}\b[^"]*"[^>]*>',
+        re.IGNORECASE,
+    )
+    match = pattern.search(html)
+    if not match:
+        raise ValueError(f"Container .{container_class} not found in HTML")
+    return _find_div_inner_bounds(html, match.end())
+
+
+def _tabs_opening_is_page_level(opening_tag: str) -> bool:
+    return (
+        "ay-dash-tabs--section" not in opening_tag
+        and "ay-dash-tabs--header" not in opening_tag
+    )
+
+
+def _find_page_tab_panels_bounds(html: str) -> tuple[int, int]:
+    tabs_re = re.compile(
+        r'<div\b[^>]*\bclass="[^"]*\bay-dash-tabs\b[^"]*"[^>]*>',
+        re.IGNORECASE,
+    )
+    panels_re = re.compile(
+        r'<div\b[^>]*\bclass="[^"]*\bay-dash-tab-panels\b[^"]*"[^>]*>',
+        re.IGNORECASE,
+    )
+    for tabs_match in tabs_re.finditer(html):
+        if not _tabs_opening_is_page_level(tabs_match.group(0)):
+            continue
+        panels_match = panels_re.search(html, tabs_match.end())
+        if not panels_match:
+            continue
+        between = html[tabs_match.end() : panels_match.start()]
+        if between.strip():
+            continue
+        return _find_div_inner_bounds(html, panels_match.end())
+    return _find_div_container_bounds(html, "ay-dash-tab-panels")
+
+
+def append_to_container(body_html: str, container_class: str, fragment: str) -> str:
+    if container_class == "ay-dash-tab-panels":
+        _inner_start, close_tag_start = _find_page_tab_panels_bounds(body_html)
+    else:
+        _inner_start, close_tag_start = _find_div_container_bounds(
+            body_html, container_class
+        )
+    return body_html[:close_tag_start] + fragment + body_html[close_tag_start:]
+
+
+def _validate_append_fragment(fragment: str) -> str:
+    if _ROOT_WRAPPER_RE.search(fragment):
+        raise ValueError(
+            "Append fragment must not include root wrapper (.ay-dash-page or .ay-report-prose)"
+        )
+    cleaned = sanitize_html_report(fragment)
+    if not cleaned.strip():
+        raise ValueError("Append fragment is empty after sanitization")
+    return cleaned
+
+
+def _resolve_append_target(target: str) -> str:
+    normalized = (target or "grid").strip().lower()
+    container_class = APPEND_TARGETS.get(normalized)
+    if not container_class:
+        allowed = ", ".join(sorted(APPEND_TARGETS))
+        raise ValueError(f"target must be one of: {allowed}")
+    return container_class
+
+
 def _merge_content_json(existing: dict, title, subtitle, html, html_kind=None) -> dict:
     merged = dict(existing)
+    preserved_status = merged.get("status", STATUS_PUBLISHED)
     if title is not None:
         merged["title"] = str(title).strip()
     if subtitle is not None:
@@ -244,31 +399,89 @@ def _merge_content_json(existing: dict, title, subtitle, html, html_kind=None) -
         merged["full_document"] = normalized["full_document"]
         merged.pop("html_kind", None)
     kind = html_kind if html_kind is not None else merged.get("html_kind")
-    return validate_html_report_content(
+    result = validate_html_report_content(
         merged.get("title", ""),
         merged.get("html") or merged.get("body_html", ""),
         merged.get("subtitle", ""),
         html_kind=kind,
+        status=preserved_status,
     )
+    return result
 
 
-def _build_agent_tool_response(file_obj, action: str) -> str:
-    return json.dumps(
-        {
-            "ok": True,
-            "action": action,
-            "file_id": str(file_obj.id),
-            "name": file_obj.original_name,
-            "version": file_obj.version,
-            "agent_instruction": AGENT_INSTRUCTION_AFTER_HTML_REPORT,
-        }
-    )
+def _build_agent_tool_response(
+    file_obj,
+    action: str,
+    *,
+    draft: bool = False,
+    agent_instruction: str | None = None,
+) -> str:
+    payload = {
+        "ok": True,
+        "action": action,
+        "file_id": str(file_obj.id),
+        "name": file_obj.original_name,
+        "version": file_obj.version,
+        "status": file_obj.content_json.get("status", STATUS_PUBLISHED),
+        "agent_instruction": agent_instruction or AGENT_INSTRUCTION_AFTER_HTML_REPORT,
+    }
+    if draft:
+        payload["draft"] = True
+    return json.dumps(payload)
 
 
-def _register_display(tool_call_id: str, file_obj, updated: bool = False) -> None:
+def _register_display(
+    tool_call_id: str,
+    file_obj,
+    *,
+    updated: bool = False,
+    skip_chat_event: bool = False,
+    force_created: bool = False,
+) -> None:
     payload = serialize_file_for_ui(file_obj)
-    payload["updated"] = updated
+    payload["updated"] = updated and not force_created
+    payload["status"] = file_obj.content_json.get("status", STATUS_PUBLISHED)
+    if skip_chat_event or payload["status"] == STATUS_DRAFT:
+        payload["skip_chat_event"] = True
+    if force_created:
+        payload["updated"] = False
     _HTML_REPORT_DISPLAY_REGISTRY[tool_call_id] = payload
+
+
+def _resolve_build_mode(build_mode: str | None) -> str:
+    normalized = (build_mode or BUILD_MODE_COMPLETE).strip().lower()
+    if normalized not in BUILD_MODES:
+        allowed = ", ".join(sorted(BUILD_MODES))
+        raise ValueError(f"build_mode must be one of: {allowed}")
+    return normalized
+
+
+def _persist_html_file(
+    *,
+    conversation,
+    user,
+    content_json: dict,
+    original_name: str,
+    file_obj=None,
+):
+    export_html = build_export_html(content_json)
+    preview_html = build_preview_fragment(content_json)
+    if file_obj is None:
+        return save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name=original_name,
+            content_json=content_json,
+            file_bytes=export_html.encode("utf-8"),
+            preview_html=preview_html,
+            mime_type=HTML_MIME,
+        )
+    return update_generated_file(
+        file_obj=file_obj,
+        content_json=content_json,
+        file_bytes=export_html.encode("utf-8"),
+        preview_html=preview_html,
+    )
 
 
 @tool
@@ -278,6 +491,7 @@ def create_html_report(
     subtitle: str = "",
     filename: str = "",
     html_kind: str = "",
+    build_mode: str = "complete",
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Create an HTML report or dashboard for the user in the chat.
@@ -291,6 +505,10 @@ def create_html_report(
     - `report`: prose document (`.ay-report-prose`), opens in the artifact panel,
       exportable as PDF.
     - `dashboard`: analytics layout (`.ay-dash-page`), opens expanded on click.
+
+    For large dashboards, use `build_mode="incremental"`: creates a draft shell
+    (not visible to the user), then call `append_html_report_block` for each
+    section and `publish_html_report` when done.
 
     For charts, embed `.ay-chart` blocks with a JSON payload in
     `<script type="application/json">` (see GUIDELINES). Do not use `<script>`
@@ -317,28 +535,149 @@ def create_html_report(
 
     try:
         kind = html_kind.strip() if html_kind else None
+        mode = _resolve_build_mode(build_mode)
         content_json = validate_html_report_content(title, html, subtitle, html_kind=kind)
+        if mode == BUILD_MODE_INCREMENTAL:
+            if content_json["html_kind"] != HTML_KIND_DASHBOARD:
+                raise ValueError("build_mode=incremental is only valid for dashboards")
+            content_json["status"] = STATUS_DRAFT
+        else:
+            content_json["status"] = STATUS_PUBLISHED
     except ValueError as exc:
         return build_tool_error_response(str(exc))
 
     try:
         original_name = _sanitize_filename(filename, content_json["title"])
-        export_html = build_export_html(content_json)
-        preview_html = build_preview_fragment(content_json)
-        file_obj = save_generated_file(
+        file_obj = _persist_html_file(
             conversation=conversation,
             user=user,
-            original_name=original_name,
             content_json=content_json,
-            file_bytes=export_html.encode("utf-8"),
-            preview_html=preview_html,
-            mime_type=HTML_MIME,
+            original_name=original_name,
         )
     except Exception as exc:
         return build_tool_error_response(str(exc))
 
-    _register_display(tool_call_id, file_obj, updated=False)
-    return _build_agent_tool_response(file_obj, "created")
+    is_draft = content_json["status"] == STATUS_DRAFT
+    _register_display(tool_call_id, file_obj, skip_chat_event=is_draft)
+    return _build_agent_tool_response(
+        file_obj,
+        "created",
+        draft=is_draft,
+        agent_instruction=AGENT_INSTRUCTION_AFTER_DRAFT_CREATE if is_draft else None,
+    )
+
+
+@tool
+def append_html_report_block(
+    file_id: str,
+    html: str,
+    target: str = "grid",
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> str:
+    """Append a sanitized HTML block to a draft dashboard or report.
+
+    Use after `create_html_report(..., build_mode="incremental")`. The user does
+    not see updates until `publish_html_report`.
+
+    `target`:
+    - `grid`: append inside `.ay-dash-grid` (KPI cards, tables, charts, **tabs de sección**)
+    - `tabs`: append a `.ay-dash-tab-panel` inside the **page-level** `.ay-dash-tab-panels` only (capítulos grandes). No uses esto para años, regiones ni sub-vistas — esas van en `.ay-dash-tabs--section` con `target="grid"`.
+    - `prose`: append inside `.ay-report-prose`
+
+    Do not include root wrappers (`.ay-dash-page`, `.ay-report-prose`) in `html`.
+    """
+    check_agent_not_cancelled()
+    conversation = get_agent_conversation()
+    if conversation is None:
+        return build_tool_error_response("No conversation context")
+
+    file_obj = get_file_for_conversation(file_id, conversation)
+    if file_obj is None or file_obj.format_key != "html":
+        return build_tool_error_response("HTML report not found in this conversation")
+
+    if file_obj.content_json.get("status") != STATUS_DRAFT:
+        return build_tool_error_response(
+            "Can only append to draft files; use update_html_report on published files"
+        )
+
+    try:
+        container_class = _resolve_append_target(target)
+        fragment = _validate_append_fragment(html)
+        body_html = file_obj.content_json.get("body_html") or file_obj.content_json.get("html", "")
+        updated_body = append_to_container(body_html, container_class, fragment)
+        content_json = validate_html_report_content(
+            file_obj.content_json.get("title", ""),
+            updated_body,
+            file_obj.content_json.get("subtitle", ""),
+            html_kind=file_obj.content_json.get("html_kind"),
+            status=STATUS_DRAFT,
+        )
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
+
+    try:
+        file_obj = _persist_html_file(
+            conversation=conversation,
+            user=get_agent_user(),
+            content_json=content_json,
+            original_name=file_obj.original_name,
+            file_obj=file_obj,
+        )
+    except Exception as exc:
+        return build_tool_error_response(str(exc))
+
+    return json.dumps(
+        {
+            "ok": True,
+            "action": "appended",
+            "file_id": str(file_obj.id),
+            "version": file_obj.version,
+            "draft": True,
+            "target": target.strip().lower() or "grid",
+        }
+    )
+
+
+@tool
+def publish_html_report(
+    file_id: str,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> str:
+    """Publish a draft HTML dashboard so it becomes visible to the user.
+
+    Call after all `append_html_report_block` steps are complete.
+    """
+    check_agent_not_cancelled()
+    conversation = get_agent_conversation()
+    if conversation is None:
+        return build_tool_error_response("No conversation context")
+
+    file_obj = get_file_for_conversation(file_id, conversation)
+    if file_obj is None or file_obj.format_key != "html":
+        return build_tool_error_response("HTML report not found in this conversation")
+
+    if file_obj.content_json.get("status") != STATUS_DRAFT:
+        return build_tool_error_response("File is already published")
+
+    if file_obj.content_json.get("html_kind") != HTML_KIND_DASHBOARD:
+        return build_tool_error_response("Only draft dashboards can be published with this tool")
+
+    content_json = dict(file_obj.content_json)
+    content_json["status"] = STATUS_PUBLISHED
+
+    try:
+        file_obj = _persist_html_file(
+            conversation=conversation,
+            user=get_agent_user(),
+            content_json=content_json,
+            original_name=file_obj.original_name,
+            file_obj=file_obj,
+        )
+    except Exception as exc:
+        return build_tool_error_response(str(exc))
+
+    _register_display(tool_call_id, file_obj, force_created=True)
+    return _build_agent_tool_response(file_obj, "published")
 
 
 @tool
@@ -364,6 +703,7 @@ def get_html_report(file_id: str) -> str:
         "subtitle": file_obj.content_json.get("subtitle", ""),
         "html_kind": file_obj.content_json.get("html_kind")
         or infer_html_kind(body_html),
+        "status": file_obj.content_json.get("status", STATUS_PUBLISHED),
         "html": file_obj.content_json.get("html") or body_html,
     }
     return json.dumps(payload)
@@ -381,7 +721,7 @@ def update_html_report(
     """Update an existing HTML report by file_id.
 
     Provide only the fields you want to change. `html` replaces all markup when provided.
-    `html_kind` is re-inferred when `html` changes.
+    `html_kind` is re-inferred when `html` changes. Only works on published files.
     """
     check_agent_not_cancelled()
     conversation = get_agent_conversation()
@@ -392,22 +732,27 @@ def update_html_report(
     if file_obj is None or file_obj.format_key != "html":
         return build_tool_error_response("HTML report not found in this conversation")
 
+    if file_obj.content_json.get("status") == STATUS_DRAFT:
+        return build_tool_error_response(
+            "Cannot update a draft file; use append_html_report_block or publish_html_report"
+        )
+
     try:
         kind = html_kind.strip() if isinstance(html_kind, str) and html_kind.strip() else None
         content_json = _merge_content_json(
             file_obj.content_json, title, subtitle, html, html_kind=kind
         )
+        content_json["status"] = STATUS_PUBLISHED
     except ValueError as exc:
         return build_tool_error_response(str(exc))
 
     try:
-        export_html = build_export_html(content_json)
-        preview_html = build_preview_fragment(content_json)
-        file_obj = update_generated_file(
-            file_obj=file_obj,
+        file_obj = _persist_html_file(
+            conversation=conversation,
+            user=get_agent_user(),
             content_json=content_json,
-            file_bytes=export_html.encode("utf-8"),
-            preview_html=preview_html,
+            original_name=file_obj.original_name,
+            file_obj=file_obj,
         )
     except Exception as exc:
         return build_tool_error_response(str(exc))

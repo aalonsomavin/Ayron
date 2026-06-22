@@ -53,6 +53,20 @@ def _extract_tool_message_content(content) -> dict | None:
 
 
 def deliverable_satisfied(messages: Sequence, intent: DeliverableIntent) -> bool:
+    if intent == DeliverableIntent.CREATE_HTML:
+        for message in messages:
+            if not isinstance(message, ToolMessage):
+                continue
+            parsed = _extract_tool_message_content(message.content)
+            if not parsed or parsed.get("ok") is not True:
+                continue
+            tool_name = message.name or ""
+            if tool_name == "publish_html_report":
+                return True
+            if tool_name == "create_html_report" and not parsed.get("draft"):
+                return True
+        return False
+
     required = required_tools_for_intent(intent)
     if not required:
         return True
