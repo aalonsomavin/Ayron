@@ -7,10 +7,14 @@ import yaml
 from apps.agent.runner import create_agent
 from apps.agent.skills import (
     PLATFORM_SKILLS_PATH,
+    WORKSPACE_ROOT,
+    build_agent_backend,
     get_platform_skill_sources,
     get_platform_skills_dir,
 )
 from apps.chat.models import Conversation
+from deepagents.backends import CompositeBackend, StateBackend
+from deepagents.backends.filesystem import FilesystemBackend
 
 
 @pytest.mark.django_db
@@ -31,10 +35,11 @@ class TestPlatformSkills:
         skill_path = skills_dir / "SKILL.md"
         body = skill_path.read_text(encoding="utf-8")
         assert "GUIDELINES.md" in body
-        assert "create_html_report" in body
+        assert "publish_html_artifact" in body
+        assert "hydrate_html_artifact" in body
+        assert "validate_html_artifact" in body
         assert "write_todos" in body
-        assert "append_html_report_block" in body
-        assert "publish_html_report" in body
+        assert "append_html_report_block" not in body
         assert "ay-dash-tabs--section" in body
         assert "ay-dash-calculator" in (skills_dir / "GUIDELINES.md").read_text(encoding="utf-8")
         guidelines = (skills_dir / "GUIDELINES.md").read_text(encoding="utf-8")
@@ -73,7 +78,11 @@ class TestPlatformSkills:
 
         kwargs = mock_create.call_args.kwargs
         assert kwargs["skills"] == [PLATFORM_SKILLS_PATH]
-        assert kwargs["backend"].virtual_mode is True
+        backend = kwargs["backend"]
+        assert isinstance(backend, CompositeBackend)
+        assert isinstance(backend.default, StateBackend)
+        assert isinstance(backend.routes[PLATFORM_SKILLS_PATH], FilesystemBackend)
+        assert backend.artifacts_root == WORKSPACE_ROOT
         assert kwargs["permissions"]
         assert len(kwargs["middleware"]) == 2
         assert kwargs["middleware"][0].__class__.__name__ == "DeliverableGuardMiddleware"

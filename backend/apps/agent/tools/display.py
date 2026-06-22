@@ -57,14 +57,13 @@ def _chart_subtitle(tool_input: ToolInput) -> str:
     return f"{type_label} · {count} {point_word}"
 
 
-def _html_report_subtitle(tool_input: ToolInput) -> str:
+def _html_artifact_subtitle(tool_input: ToolInput) -> str:
     if not tool_input:
-        return "PDF"
-    html = tool_input.get("html") or ""
-    kind = str(tool_input.get("html_kind") or "").strip().lower()
-    if kind == "dashboard" or "ay-dash-page" in html:
+        return "HTML"
+    path = str(tool_input.get("path") or "").strip()
+    if "ay-dash-page" in path or str(tool_input.get("html_kind") or "") == "dashboard":
         return "Dashboard"
-    return "PDF"
+    return "HTML"
 
 
 TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
@@ -77,11 +76,9 @@ TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
     "update_document": ("Actualizar documento", lambda _: "Word"),
     "list_conversation_files": ("Listar documentos", None),
     "get_document": ("Leer documento", None),
-    "create_html_report": ("Crear reporte HTML", _html_report_subtitle),
-    "append_html_report_block": ("Añadir bloque al dashboard", None),
-    "publish_html_report": ("Publicar dashboard", lambda _: "Dashboard"),
-    "update_html_report": ("Actualizar reporte HTML", _html_report_subtitle),
-    "get_html_report": ("Leer reporte HTML", None),
+    "hydrate_html_artifact": ("Cargar artifact al workspace", None),
+    "validate_html_artifact": ("Validar HTML del workspace", _html_artifact_subtitle),
+    "publish_html_artifact": ("Publicar reporte HTML", _html_artifact_subtitle),
     "write_todos": ("Planificar", None),
 }
 

@@ -1,7 +1,11 @@
 from contextvars import ContextVar
+from typing import TYPE_CHECKING
 
 from apps.agent.deliverable_intent import DeliverableIntent
 from apps.chat.models import Conversation
+
+if TYPE_CHECKING:
+    from deepagents.backends.protocol import BackendProtocol
 
 _conversation_ctx: ContextVar[Conversation | None] = ContextVar("agent_conversation", default=None)
 _user_ctx: ContextVar = ContextVar("agent_user", default=None)
@@ -10,6 +14,7 @@ _deliverable_intent_ctx: ContextVar[DeliverableIntent | None] = ContextVar(
     default=None,
 )
 _deliverable_nudge_count_ctx: ContextVar[int] = ContextVar("agent_deliverable_nudge_count", default=0)
+_backend_ctx: ContextVar["BackendProtocol | None"] = ContextVar("agent_backend", default=None)
 
 
 def set_agent_context(
@@ -54,3 +59,14 @@ def increment_deliverable_nudge_count() -> int:
 def reset_deliverable_guard_state() -> None:
     _deliverable_intent_ctx.set(None)
     _deliverable_nudge_count_ctx.set(0)
+
+
+def set_agent_backend(backend: "BackendProtocol") -> None:
+    _backend_ctx.set(backend)
+
+
+def get_agent_backend() -> "BackendProtocol":
+    backend = _backend_ctx.get()
+    if backend is None:
+        raise RuntimeError("Agent backend is not set for the current context")
+    return backend

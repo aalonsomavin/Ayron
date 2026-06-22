@@ -3,39 +3,26 @@ import json
 import pytest
 from django.contrib.auth import get_user_model
 
-from apps.agent.context import set_agent_context
+from apps.agent.context import set_agent_backend, set_agent_context
+from apps.agent.tests.dict_workspace_backend import DictWorkspaceBackend
 from apps.agent.tools.chart import render_inline_chart_html, validate_chart_input
 from apps.agent.tools.html_report import (
-    append_html_report_block,
-    append_to_container,
     build_export_html,
     build_preview_fragment,
-    create_html_report,
-    get_html_report,
     infer_html_kind,
     pop_html_report_display,
-    publish_html_report,
-    update_html_report,
+    run_hydrate_html_artifact,
+    run_publish_html_artifact,
+    run_validate_html_artifact,
     validate_html_report_content,
 )
 from apps.agent.tools.html_sanitize import sanitize_html_report
+from apps.agent.workspace import draft_artifact_path, write_workspace_file
 from apps.chat.models import Conversation
 from apps.files.models import File
 from apps.files.services import serialize_file_for_ui
 
 User = get_user_model()
-
-
-def invoke_tool(tool, tool_call_id, **kwargs):
-    result = tool.invoke(
-        {
-            "type": "tool_call",
-            "name": tool.name,
-            "id": tool_call_id,
-            "args": kwargs,
-        }
-    )
-    return result.content if hasattr(result, "content") else result
 
 
 SAMPLE_HTML = """
@@ -280,6 +267,13 @@ def conversation(user):
     return Conversation.objects.create(user=user)
 
 
+@pytest.fixture
+def workspace_backend():
+    backend = DictWorkspaceBackend()
+    set_agent_backend(backend)
+    return backend
+
+
 @pytest.mark.django_db
 class TestHtmlReportTool:
     def test_sanitize_strips_script(self):
@@ -380,56 +374,6 @@ class TestHtmlReportTool:
         assert ".ay-chart__plot" in html
         assert "chart.js" not in html
 
-    def test_create_html_report(self, user, conversation):
-        set_agent_context(conversation, user)
-        result = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_html_1",
-                title="Informe de ventas",
-                subtitle="Mayo 2026",
-                html=SAMPLE_HTML,
-                filename="ventas-mayo.html",
-            )
-        )
-        assert result["ok"] is True
-        file_obj = File.objects.get(id=result["file_id"])
-        assert file_obj.mime_type == "text/html"
-        assert file_obj.content_json["html_kind"] == "report"
-        assert "Informe de ventas" in file_obj.content_json["body_html"]
-
-    def test_create_dashboard_html_report(self, user, conversation):
-        set_agent_context(conversation, user)
-        result = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_html_dash",
-                title="Ventas Mayo",
-                html=DASHBOARD_HTML,
-            )
-        )
-        assert result["ok"] is True
-        file_obj = File.objects.get(id=result["file_id"])
-        assert file_obj.content_json["html_kind"] == "dashboard"
-        ui = serialize_file_for_ui(file_obj)
-        assert ui["meta"] == "Dashboard"
-        assert ui["open_expanded"] is True
-
-    def test_create_report_open_expanded_false(self, user, conversation):
-        set_agent_context(conversation, user)
-        result = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_html_rep",
-                title="Informe",
-                html=SAMPLE_HTML,
-            )
-        )
-        file_obj = File.objects.get(id=result["file_id"])
-        ui = serialize_file_for_ui(file_obj)
-        assert ui["meta"] == "Report · HTML"
-        assert ui["open_expanded"] is False
-
     def test_build_export_html_with_interactive_dashboard(self):
         content = validate_html_report_content("Ventas", INTERACTIVE_DASHBOARD_HTML, "")
         html = build_export_html(content)
@@ -516,189 +460,111 @@ class TestHtmlReportTool:
         assert "AyronDashboard.mountAll" in html
         assert "ay-dash-calculator" in html
 
-    def test_incremental_append_calculator_block(self, user, conversation):
+    def test_publish_html_artifact_creates_report(self, user, conversation, workspace_backend):
         set_agent_context(conversation, user)
-        created = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_calc_1",
-                title="Simulador",
-                html=DASHBOARD_SHELL,
-                build_mode="incremental",
-                html_kind="dashboard",
-            )
-        )
-        appended = json.loads(
-            invoke_tool(
-                append_html_report_block,
-                "call_calc_2",
-                file_id=created["file_id"],
-                html=CALCULATOR_BLOCK,
-                target="grid",
-            )
-        )
-        assert appended["ok"] is True
-        file_obj = File.objects.get(id=created["file_id"])
-        assert "ay-dash-calculator" in file_obj.content_json["body_html"]
-
-        published = json.loads(
-            invoke_tool(
-                publish_html_report,
-                "call_calc_3",
-                file_id=created["file_id"],
-            )
-        )
-        assert published["ok"] is True
-        file_obj.refresh_from_db()
-        assert file_obj.content_json["status"] == "published"
-
-    def test_append_to_container(self):
-        updated = append_to_container(DASHBOARD_SHELL, "ay-dash-grid", KPI_BLOCK)
-        assert updated.count("ay-dash-kpi-value") == 1
-        assert "ay-dash-grid" in updated
-
-    def test_append_tabs_targets_page_level_not_section(self):
-        updated = append_to_container(NESTED_TABS_SHELL, "ay-dash-tab-panels", PAGE_TAB_PANEL)
-        assert updated.count('data-page="artistas"') == 1
-        assert updated.count('data-page="2009"') == 1
-        assert updated.index('data-page="artistas"') > updated.index('data-page="resumen"')
-        assert updated.index('data-page="2009"') < updated.index('data-page="resumen"')
-
-    def test_mount_tabs_uses_direct_child_panels_only(self):
-        from django.conf import settings
-
-        content = (settings.BASE_DIR / "static" / "js" / "ayron-dashboard.js").read_text(
-            encoding="utf-8"
-        )
-        assert ":scope > .ay-dash-tab-panel[data-page]" in content
-
-    def test_create_incremental_dashboard_draft(self, user, conversation):
-        set_agent_context(conversation, user)
+        path = draft_artifact_path()
+        write_workspace_file(workspace_backend, path, SAMPLE_HTML)
         result = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_inc_1",
-                title="Ventas Mayo",
-                html=DASHBOARD_SHELL,
-                build_mode="incremental",
-                html_kind="dashboard",
+            run_publish_html_artifact(
+                path,
+                "Informe de ventas",
+                subtitle="Mayo 2026",
+                filename="ventas-mayo.html",
+                tool_call_id="call_pub_1",
             )
         )
         assert result["ok"] is True
-        assert result["draft"] is True
         file_obj = File.objects.get(id=result["file_id"])
-        assert file_obj.content_json["status"] == "draft"
-        display = pop_html_report_display("call_inc_1")
-        assert display["skip_chat_event"] is True
-
-    def test_incremental_append_and_publish(self, user, conversation):
-        set_agent_context(conversation, user)
-        created = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_inc_2",
-                title="Ventas Mayo",
-                html=DASHBOARD_SHELL,
-                build_mode="incremental",
-                html_kind="dashboard",
-            )
-        )
-        appended = json.loads(
-            invoke_tool(
-                append_html_report_block,
-                "call_inc_3",
-                file_id=created["file_id"],
-                html=KPI_BLOCK,
-                target="grid",
-            )
-        )
-        assert appended["ok"] is True
-        assert appended["draft"] is True
-        file_obj = File.objects.get(id=created["file_id"])
-        assert "ay-dash-kpi-value" in file_obj.content_json["body_html"]
-        assert file_obj.version == 2
-
-        published = json.loads(
-            invoke_tool(
-                publish_html_report,
-                "call_inc_4",
-                file_id=created["file_id"],
-            )
-        )
-        assert published["ok"] is True
-        assert published.get("draft") is not True
-        file_obj.refresh_from_db()
-        assert file_obj.content_json["status"] == "published"
-        display = pop_html_report_display("call_inc_4")
-        assert display.get("skip_chat_event") is not True
+        assert file_obj.mime_type == "text/html"
+        assert file_obj.content_json["html_kind"] == "report"
+        assert "Informe de ventas" in file_obj.content_json["body_html"]
+        display = pop_html_report_display("call_pub_1")
         assert display["updated"] is False
 
-    def test_append_rejects_published_file(self, user, conversation):
+    def test_publish_html_artifact_creates_dashboard(self, user, conversation, workspace_backend):
         set_agent_context(conversation, user)
-        created = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_inc_5",
-                title="Ventas",
-                html=DASHBOARD_HTML,
-            )
-        )
+        path = draft_artifact_path()
+        write_workspace_file(workspace_backend, path, DASHBOARD_HTML)
         result = json.loads(
-            invoke_tool(
-                append_html_report_block,
-                "call_inc_6",
-                file_id=created["file_id"],
-                html=KPI_BLOCK,
+            run_publish_html_artifact(
+                path,
+                "Ventas Mayo",
+                filename="ventas-mayo.html",
+                tool_call_id="call_pub_dash",
             )
         )
-        assert result["ok"] is False
+        assert result["ok"] is True
+        file_obj = File.objects.get(id=result["file_id"])
+        assert file_obj.content_json["html_kind"] == "dashboard"
+        ui = serialize_file_for_ui(file_obj)
+        assert ui["meta"] == "Dashboard"
+        assert ui["open_expanded"] is True
 
-    def test_get_and_update_html_report(self, user, conversation):
+    def test_validate_html_artifact_tool(self, user, conversation, workspace_backend):
         set_agent_context(conversation, user)
+        path = draft_artifact_path()
+        write_workspace_file(
+            workspace_backend,
+            path,
+            '<div class="ay-dash-page"><script>alert(1)</script><p>ok</p></div>',
+        )
+        result = json.loads(run_validate_html_artifact(path))
+        assert result["ok"] is True
+        assert result["html_kind"] == "dashboard"
+        cleaned = workspace_backend.files[path]
+        assert "alert" not in cleaned
+
+    def test_hydrate_and_update_html_artifact(self, user, conversation, workspace_backend):
+        set_agent_context(conversation, user)
+        path = draft_artifact_path()
+        write_workspace_file(workspace_backend, path, SAMPLE_HTML)
         created = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_html_2",
-                title="Informe",
-                html=SAMPLE_HTML,
+            run_publish_html_artifact(
+                path,
+                "Informe",
+                filename="informe.html",
+                tool_call_id="call_pub_2",
             )
         )
-        fetched = json.loads(get_html_report.invoke({"file_id": created["file_id"]}))
-        assert fetched["ok"] is True
-        assert fetched["html_kind"] == "report"
-        assert "Informe de ventas" in fetched["html"]
+        hydrated = json.loads(run_hydrate_html_artifact(created["file_id"]))
+        assert hydrated["ok"] is True
+        assert hydrated["path"].endswith(f"{created['file_id']}.html")
 
         updated_html = SAMPLE_HTML.replace("12 %", "18 %")
+        write_workspace_file(workspace_backend, hydrated["path"], updated_html)
         updated = json.loads(
-            invoke_tool(
-                update_html_report,
-                "call_html_3",
+            run_publish_html_artifact(
+                hydrated["path"],
+                "Informe actualizado",
                 file_id=created["file_id"],
-                title="Informe actualizado",
-                html=updated_html,
+                tool_call_id="call_pub_3",
             )
         )
         assert updated["ok"] is True
         assert updated["version"] == 2
+        file_obj = File.objects.get(id=created["file_id"])
+        assert "18 %" in file_obj.content_json["body_html"]
 
-    def test_update_wrong_conversation(self, user, conversation):
+    def test_publish_wrong_conversation(self, user, conversation, workspace_backend):
         other = Conversation.objects.create(user=user)
         set_agent_context(conversation, user)
+        path = draft_artifact_path()
+        write_workspace_file(workspace_backend, path, SAMPLE_HTML)
         created = json.loads(
-            invoke_tool(
-                create_html_report,
-                "call_html_4",
-                title="Informe",
-                html=SAMPLE_HTML,
+            run_publish_html_artifact(
+                path,
+                "Informe",
+                filename="informe.html",
+                tool_call_id="call_pub_4",
             )
         )
         set_agent_context(other, user)
         result = json.loads(
-            invoke_tool(
-                update_html_report,
-                "call_html_5",
+            run_publish_html_artifact(
+                path,
+                "Hack",
                 file_id=created["file_id"],
-                title="Hack",
+                tool_call_id="call_pub_5",
             )
         )
         assert result["ok"] is False

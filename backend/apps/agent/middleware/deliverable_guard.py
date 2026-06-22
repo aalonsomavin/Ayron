@@ -60,10 +60,19 @@ def deliverable_satisfied(messages: Sequence, intent: DeliverableIntent) -> bool
             parsed = _extract_tool_message_content(message.content)
             if not parsed or parsed.get("ok") is not True:
                 continue
-            tool_name = message.name or ""
-            if tool_name == "publish_html_report":
+            if (message.name or "") == "publish_html_artifact":
                 return True
-            if tool_name == "create_html_report" and not parsed.get("draft"):
+        return False
+
+    if intent == DeliverableIntent.UPDATE_FILE:
+        for message in messages:
+            if not isinstance(message, ToolMessage):
+                continue
+            parsed = _extract_tool_message_content(message.content)
+            if not parsed or parsed.get("ok") is not True:
+                continue
+            tool_name = message.name or ""
+            if tool_name in {"publish_html_artifact", "update_document"}:
                 return True
         return False
 

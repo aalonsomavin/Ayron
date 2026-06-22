@@ -27,36 +27,49 @@ briefs técnicos, dashboards, síntesis de código o datos.
 
 No uses para: Word (`.docx`), respuestas solo en chat. Para datos sueltos en el chat sin informe, usa `show_data_table` o `show_chart`.
 
+## Workspace
+
+Los reportes HTML se editan en el **filesystem del agente** bajo `/workspace/artifacts/`:
+
+| Path | Uso |
+|------|-----|
+| `/workspace/artifacts/_draft.html` | Borrador nuevo antes del primer publish |
+| `/workspace/artifacts/{file_id}.html` | Artifact publicado o en edición |
+
+Lee starters y guías desde `/skills/html-reports/` (solo lectura). **No escribas en `/skills/**`** — copia al workspace.
+
 ## Tools
 
 | Tool | Uso |
 |------|-----|
-| `create_html_report` | Crear reporte o shell de dashboard (`build_mode="complete"` o `"incremental"`) |
-| `append_html_report_block` | Añadir bloque a un dashboard en borrador |
-| `publish_html_report` | Publicar dashboard borrador (visible al usuario) |
-| `update_html_report` | Actualizar reporte publicado por `file_id` |
-| `get_html_report` | Leer reporte — devuelve `html` para editar |
+| `write_file` / `edit_file` / `grep` | Editar HTML en el workspace |
+| `hydrate_html_artifact` | Cargar artifact publicado al workspace para editar |
+| `validate_html_artifact` | Sanitizar y escribir versión canónica al path |
+| `publish_html_artifact` | Publicar path validado al usuario |
 | `list_conversation_files` | Listar archivos con `file_id` |
 
 ## Flujos
 
-### Reporte pequeño o dashboard simple
+### Crear reporte o dashboard nuevo
 
-0. **Planifica** con `write_todos`. El último paso: **Generar archivo**.
-1. Lee **`/skills/html-reports/GUIDELINES.md`**
-2. Llama **`create_html_report(title, html, ...)`** con todo el contenido — una tool call
-3. No repitas contenido en el chat
+0. **Planifica** con `write_todos`. El último paso: **Publicar artifact**.
+1. Lee **`/skills/html-reports/GUIDELINES.md`** (y `starter-dashboard.html` si aplica)
+2. Escribe HTML en `/workspace/artifacts/_draft.html` con `write_file` o `edit_file`
+3. `validate_html_artifact("/workspace/artifacts/_draft.html")`
+4. `publish_html_artifact(path, title, subtitle=..., filename=...)`
+5. No repitas contenido en el chat
 
-### Dashboard grande (incremental)
+### Editar artifact existente
 
-Usa cuando hay **más de ~4 bloques**, varias páginas/tabs, o muchos datos.
+1. `hydrate_html_artifact(file_id)` → carga en `/workspace/artifacts/{file_id}.html`
+2. Edita con `read_file` / `grep` / `edit_file`
+3. `validate_html_artifact(path)`
+4. `publish_html_artifact(path, title=..., file_id=...)`
+5. **No** uses `_draft.html` ni publiques sin `file_id` para el mismo entregable
 
-1. `create_html_report(..., build_mode="incremental", html_kind="dashboard")` — shell con header y, arriba, contenedores vacíos para **filtros** y/o **tabs de página** (`ay-dash-tab-panels`) o un `ay-dash-grid` (**no visible aún**)
-2. `append_html_report_block(file_id, html, target="grid"|"tabs")` por cada sección
-3. **`publish_html_report(file_id)`** — el usuario ve el artifact **solo aquí**
-4. Mensaje breve al final
+### Dashboard grande
 
-Para editar un archivo ya publicado: `get_html_report` → `update_html_report`
+Escribe el HTML completo en el workspace por secciones con `edit_file`. No hay flujo incremental separado: el borrador vive en el workspace hasta `publish_html_artifact`.
 
 ## Dos tipos de entregable
 
@@ -71,17 +84,17 @@ Para editar un archivo ya publicado: `get_html_report` → `update_html_report`
 
 **Tabs de página y filtros van arriba del dashboard** — al inicio de `.ay-dash-inner`, antes del grid de contenido (insight, KPIs, tablas). No los insertes en medio del informe.
 
-**No incluyas** eyebrow, `.ay-dash-title`, `.ay-dash-subtitle` ni `.ay-dash-divider` en el HTML por ahora (el título va en metadata de la tool).
+**No incluyas** eyebrow, `.ay-dash-title`, `.ay-dash-subtitle` ni `.ay-dash-divider` en el HTML por ahora (el título va en metadata de `publish_html_artifact`).
 
 Usa:
 
-- **Tabs de página** — capítulos grandes; en el shell, arriba (`append_html_report_block(..., target="tabs")` para cada capítulo)
-- **Tabs por sección** — `.ay-dash-tabs--section` dentro de una columna del grid (arriba de ese bloque)
+- **Tabs de página** — capítulos grandes; arriba en `.ay-dash-inner`
+- **Tabs por sección** — `.ay-dash-tabs--section` dentro de una columna del grid
 - **Tabs en header** — `.ay-dash-tabs--header` + `data-panels-target` dentro de `.ay-dash-tab-scope`
-- **Filtros legacy** — `.ay-dash-filter-bar` arriba + JSON (single-select sobre una tabla)
-- **Dashboard analítico** — `.ay-dash-filter-scope` arriba + dataset JSON + slicers (`control: pills|dropdown`) + KPIs/charts live (ver GUIDELINES y `starter-analytics-dashboard.html`)
+- **Filtros legacy** — `.ay-dash-filter-bar` arriba + JSON
+- **Dashboard analítico** — `.ay-dash-filter-scope` + dataset JSON + slicers (ver GUIDELINES y `starter-analytics-dashboard.html`)
 - **Tablas ordenables** — `ay-dash-table--sortable`
-- **Calculadoras what-if** — `.ay-dash-calculator` con slots `[data-calc-input]` / `[data-calc-output]`
+- **Calculadoras what-if** — `.ay-dash-calculator`
 
 Ver GUIDELINES para markup exacto. No escribas `<input>`, `<button>` ni handlers en HTML.
 
@@ -93,59 +106,31 @@ Incrusta gráficos Chart.js con bloques `.ay-chart` y JSON en `<script type="app
 
 En dashboards, el bloque **insight** va **al inicio del grid** (o del panel de tab activo), antes de KPIs y tablas — **después** de filtros y tabs de página si los hay.
 
-## Ejemplo dashboard one-shot
+## Ejemplo crear dashboard
 
-```python
-create_html_report(
-    title="Ventas Mayo 2026",
-    subtitle="Chinook · facturación",
-    filename="ventas-mayo-2026.html",
-    html=\"\"\"
-<div class="ay-dash-page">
-  <div class="ay-dash-inner">
-    <div class="ay-dash-grid">
-      <div class="ay-dash-col ay-dash-col--12">
-        <div class="ay-dash-card ay-dash-card--insight">…</div>
-      </div>
-    </div>
-  </div>
-</div>
-\"\"\",
-)
 ```
-
-## Ejemplo dashboard incremental
-
-```python
-create_html_report(
-    title="Ventas Q2",
-    build_mode="incremental",
-    html_kind="dashboard",
-    html=\"\"\"
-<div class="ay-dash-page">
-  <div class="ay-dash-inner">
-    <div class="ay-dash-tabs">
-      <div class="ay-dash-tab-panels"></div>
-    </div>
-    <div class="ay-dash-grid"></div>
-  </div>
-</div>
-\"\"\",
-)
-# file_id del resultado → append_html_report_block(...) × N → publish_html_report(file_id)
+# 1. write_file("/workspace/artifacts/_draft.html", html_from_guidelines)
+# 2. validate_html_artifact("/workspace/artifacts/_draft.html")
+# 3. publish_html_artifact(
+#      path="/workspace/artifacts/_draft.html",
+#      title="Ventas Mayo 2026",
+#      subtitle="Chinook · facturación",
+#      filename="ventas-mayo-2026.html",
+#    )
 ```
 
 ## Anti-patrones
 
-- Terminar sin `publish_html_report` en flujo incremental
-- Mostrar contenido parcial al usuario (append sin publish al final)
-- Colocar **tabs de página** o **filtros** en medio del grid o al final del dashboard
-- `<script>` o handlers inline
+- Publicar sin `validate_html_artifact` antes
+- Escribir en `/skills/**` en lugar del workspace
+- Crear otro artifact (`_draft` + publish sin `file_id`) cuando el usuario pidió **modificar** uno existente
+- Colocar **tabs de página** o **filtros** en medio del grid
+- `<script>` o handlers inline (salvo JSON en `type="application/json"`)
 - Volcar el informe en markdown en el chat
 
 ## Reglas en el chat
 
-- El artifact aparece como tarjeta HTML **solo al publicar o crear completo**
+- El artifact aparece como tarjeta HTML **solo tras `publish_html_artifact`**
 - **Dashboard**: vista expandida al click
 - **Reporte**: panel lateral, export PDF
 - No repitas el contenido en tu respuesta

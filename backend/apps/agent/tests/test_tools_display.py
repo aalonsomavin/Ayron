@@ -49,20 +49,20 @@ class TestGetToolDisplay:
             "tool_subtitle": "3 filas",
         }
 
-    def test_create_html_report_dashboard_subtitle(self):
+    def test_publish_html_artifact_dashboard_subtitle(self):
         assert get_tool_display(
-            "create_html_report",
-            {"html": '<div class="ay-dash-page"></div>'},
+            "publish_html_artifact",
+            {"path": "/workspace/artifacts/_draft.html", "html_kind": "dashboard"},
         ) == {
-            "tool_label": "Crear reporte HTML",
+            "tool_label": "Publicar reporte HTML",
             "tool_subtitle": "Dashboard",
         }
 
-    def test_create_html_report_prose_subtitle(self):
+    def test_validate_html_artifact_subtitle(self):
         assert get_tool_display(
-            "create_html_report",
-            {"html": '<div class="ay-report-prose"></div>'},
+            "validate_html_artifact",
+            {"path": "/workspace/artifacts/_draft.html"},
         ) == {
-            "tool_label": "Crear reporte HTML",
-            "tool_subtitle": "PDF",
+            "tool_label": "Validar HTML del workspace",
+            "tool_subtitle": "HTML",
         }

@@ -127,7 +127,7 @@ no configura la marca manualmente.
 Flujo típico: primero consulta datos (SQL, tablas, gráficos), luego sintetiza en el documento.
 Los gráficos y tablas del chat no se incrustan automáticamente en el Word. Si el
 usuario necesita gráficos o exportación PDF, usa la skill `html-reports` con
-`create_html_report`. Para Word, resume los hallazgos en texto o tablas simples
+`publish_html_artifact`. Para Word, resume los hallazgos en texto o tablas simples
 dentro de `sections`.
 
 ## Calidad y formato

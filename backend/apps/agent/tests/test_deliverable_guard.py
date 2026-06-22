@@ -23,46 +23,41 @@ def _reset_guard_state():
 
 
 class TestDeliverableSatisfied:
-    def test_not_satisfied_with_draft_create_only(self):
+    def test_not_satisfied_without_publish(self):
         messages = [
             ToolMessage(
-                content=json.dumps({"ok": True, "file_id": "abc", "draft": True}),
+                content=json.dumps({"ok": True, "path": "/workspace/artifacts/_draft.html"}),
                 tool_call_id="call_1",
-                name="create_html_report",
+                name="validate_html_artifact",
             )
         ]
         assert deliverable_satisfied(messages, DeliverableIntent.CREATE_HTML) is False
 
-    def test_satisfied_after_publish_html_report(self):
-        messages = [
-            ToolMessage(
-                content=json.dumps({"ok": True, "file_id": "abc", "draft": True}),
-                tool_call_id="call_1",
-                name="create_html_report",
-            ),
-            ToolMessage(
-                content=json.dumps({"ok": True, "file_id": "abc"}),
-                tool_call_id="call_2",
-                name="publish_html_report",
-            ),
-        ]
-        assert deliverable_satisfied(messages, DeliverableIntent.CREATE_HTML) is True
-
-    def test_satisfied_after_successful_create_html_report(self):
+    def test_satisfied_after_publish_html_artifact(self):
         messages = [
             ToolMessage(
                 content=json.dumps({"ok": True, "file_id": "abc"}),
                 tool_call_id="call_1",
-                name="create_html_report",
+                name="publish_html_artifact",
             )
         ]
         assert deliverable_satisfied(messages, DeliverableIntent.CREATE_HTML) is True
+
+    def test_update_satisfied_with_publish_html_artifact(self):
+        messages = [
+            ToolMessage(
+                content=json.dumps({"ok": True, "file_id": "abc", "action": "updated"}),
+                tool_call_id="call_1",
+                name="publish_html_artifact",
+            )
+        ]
+        assert deliverable_satisfied(messages, DeliverableIntent.UPDATE_FILE) is True
 
     def test_not_satisfied_without_tool(self):
         messages = [AIMessage(content="Aquí está el informe en texto.")]
         assert deliverable_satisfied(messages, DeliverableIntent.CREATE_HTML) is False
 
-    def test_update_satisfied_with_either_update_tool(self):
+    def test_update_satisfied_with_update_document(self):
         messages = [
             ToolMessage(
                 content=json.dumps({"ok": True, "file_id": "abc"}),
@@ -88,9 +83,9 @@ class TestDeliverableGuardMiddleware:
 
         assert result is not None
         assert result["jump_to"] == "model"
-        assert "create_html_report" in result["messages"][0].content
+        assert "publish_html_artifact" in result["messages"][0].content
 
-    def test_no_nudge_when_deliverable_created(self):
+    def test_no_nudge_when_deliverable_published(self):
         set_deliverable_intent(DeliverableIntent.CREATE_HTML)
         middleware = DeliverableGuardMiddleware()
         state = {
@@ -99,13 +94,13 @@ class TestDeliverableGuardMiddleware:
                 AIMessage(
                     content="",
                     tool_calls=[
-                        {"id": "call_1", "name": "create_html_report", "args": {}},
+                        {"id": "call_1", "name": "publish_html_artifact", "args": {}},
                     ],
                 ),
                 ToolMessage(
                     content=json.dumps({"ok": True, "file_id": "abc"}),
                     tool_call_id="call_1",
-                    name="create_html_report",
+                    name="publish_html_artifact",
                 ),
                 AIMessage(content="Listo."),
             ]

@@ -10,6 +10,7 @@ from apps.agent.middleware.deliverable_guard import DeliverableGuardMiddleware
 from apps.agent.middleware.tool_errors import ToolFailureFeedbackMiddleware
 
 from apps.agent.checkpoint import get_checkpointer
+from apps.agent.context import set_agent_backend
 from apps.agent.skills import (
     build_agent_backend,
     get_platform_skill_permissions,
@@ -153,8 +154,8 @@ de la base; no inventes cifras.
 - Plantilla mínima de todos: recopilar datos → sintetizar → **generar archivo** \
   (último paso obligatorio).
 - `show_data_table` y `show_chart` son pasos intermedios; **no sustituyen** el archivo.
-- No des por terminada la tarea hasta que `create_html_report`, `create_document`, \
-  `update_html_report` o `update_document` devuelvan `"ok": true`.
+- No des por terminada la tarea hasta que `publish_html_artifact`, `create_document`, \
+  o `update_document` devuelvan `"ok": true`.
 - Tras crear o actualizar el archivo, no repitas su contenido en el chat.
 """
 
@@ -173,11 +174,13 @@ def build_system_prompt(conversation: Conversation, user_message: str = "") -> s
 
 
 def create_agent(conversation: Conversation, user_message: str = ""):
+    backend = build_agent_backend()
+    set_agent_backend(backend)
     return create_deep_agent(
         model=settings.DEFAULT_LLM_MODEL,
         tools=AGENT_TOOLS,
         system_prompt=build_system_prompt(conversation, user_message),
-        backend=build_agent_backend(),
+        backend=backend,
         skills=get_platform_skill_sources(),
         permissions=get_platform_skill_permissions(),
         middleware=[

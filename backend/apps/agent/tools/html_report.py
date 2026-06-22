@@ -5,20 +5,28 @@ from pathlib import Path
 from typing import Annotated
 
 from django.conf import settings
+from langchain.tools import ToolRuntime
 from langchain_core.tools import InjectedToolCallId, tool
 
 from apps.agent.cancellation import check_agent_not_cancelled
 from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.workspace import (
+    read_workspace_file,
+    relocate_workspace_artifact,
+    resolve_agent_backend,
+    sync_artifact_to_workspace,
+    validate_and_writeback,
+    write_workspace_file,
+)
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import footer_attribution_text
 from apps.agent.tools.html_insight import normalize_insight_markup
-from apps.agent.tools.html_sanitize import normalize_agent_html, sanitize_html_report
+from apps.agent.tools.html_sanitize import normalize_agent_html
 from apps.files.models import HTML_MIME
 from apps.files.services import (
     escape_preview_text as esc,
     get_file_for_conversation,
     save_generated_file,
-    serialize_file_for_agent,
     serialize_file_for_ui,
     update_generated_file,
 )
@@ -31,36 +39,11 @@ AGENT_INSTRUCTION_AFTER_HTML_REPORT = (
     "Solo añade una frase breve si aporta contexto, o termina sin texto."
 )
 
-AGENT_INSTRUCTION_AFTER_DRAFT_CREATE = (
-    "Dashboard en borrador (no visible aún). "
-    "Añade bloques con append_html_report_block y publica con publish_html_report. "
-    "Tabs de página y filtros van arriba (inicio de ay-dash-inner, antes del contenido). "
-    "No incluyas ay-dash-title, ay-dash-subtitle, ay-dash-eyebrow ni ay-dash-divider por ahora. "
-    "Prefiere tabs por sección, filtros, tablas ordenables o calculadoras cuando el "
-    "informe tenga varias vistas o datos comparables."
-)
-
 HTML_KIND_REPORT = "report"
 HTML_KIND_DASHBOARD = "dashboard"
 HTML_KINDS = {HTML_KIND_REPORT, HTML_KIND_DASHBOARD}
 
-STATUS_DRAFT = "draft"
 STATUS_PUBLISHED = "published"
-
-BUILD_MODE_COMPLETE = "complete"
-BUILD_MODE_INCREMENTAL = "incremental"
-BUILD_MODES = {BUILD_MODE_COMPLETE, BUILD_MODE_INCREMENTAL}
-
-APPEND_TARGETS = {
-    "grid": "ay-dash-grid",
-    "tabs": "ay-dash-tab-panels",
-    "prose": "ay-report-prose",
-}
-
-_ROOT_WRAPPER_RE = re.compile(
-    r'\bclass="[^"]*\b(?:ay-dash-page|ay-report-prose)\b',
-    re.IGNORECASE,
-)
 
 
 def pop_html_report_display(tool_call_id: str | None) -> dict | None:
@@ -298,126 +281,12 @@ def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
     return preview_html or ""
 
 
-def _find_div_inner_bounds(html: str, after_open: int) -> tuple[int, int]:
-    start = after_open
-    depth = 1
-    pos = start
-    while pos < len(html) and depth > 0:
-        next_open = html.find("<div", pos)
-        next_close = html.find("</div>", pos)
-        if next_close == -1:
-            raise ValueError("Unclosed container div")
-        if next_open != -1 and next_open < next_close:
-            depth += 1
-            pos = next_open + 4
-        else:
-            depth -= 1
-            if depth == 0:
-                return start, next_close
-            pos = next_close + 6
-    raise ValueError("Could not locate end of container div")
-
-
-def _find_div_container_bounds(html: str, container_class: str) -> tuple[int, int]:
-    pattern = re.compile(
-        rf'<div\b[^>]*\bclass="[^"]*\b{re.escape(container_class)}\b[^"]*"[^>]*>',
-        re.IGNORECASE,
-    )
-    match = pattern.search(html)
-    if not match:
-        raise ValueError(f"Container .{container_class} not found in HTML")
-    return _find_div_inner_bounds(html, match.end())
-
-
-def _tabs_opening_is_page_level(opening_tag: str) -> bool:
-    return (
-        "ay-dash-tabs--section" not in opening_tag
-        and "ay-dash-tabs--header" not in opening_tag
-    )
-
-
-def _find_page_tab_panels_bounds(html: str) -> tuple[int, int]:
-    tabs_re = re.compile(
-        r'<div\b[^>]*\bclass="[^"]*\bay-dash-tabs\b[^"]*"[^>]*>',
-        re.IGNORECASE,
-    )
-    panels_re = re.compile(
-        r'<div\b[^>]*\bclass="[^"]*\bay-dash-tab-panels\b[^"]*"[^>]*>',
-        re.IGNORECASE,
-    )
-    for tabs_match in tabs_re.finditer(html):
-        if not _tabs_opening_is_page_level(tabs_match.group(0)):
-            continue
-        panels_match = panels_re.search(html, tabs_match.end())
-        if not panels_match:
-            continue
-        between = html[tabs_match.end() : panels_match.start()]
-        if between.strip():
-            continue
-        return _find_div_inner_bounds(html, panels_match.end())
-    return _find_div_container_bounds(html, "ay-dash-tab-panels")
-
-
-def append_to_container(body_html: str, container_class: str, fragment: str) -> str:
-    if container_class == "ay-dash-tab-panels":
-        _inner_start, close_tag_start = _find_page_tab_panels_bounds(body_html)
-    else:
-        _inner_start, close_tag_start = _find_div_container_bounds(
-            body_html, container_class
-        )
-    return body_html[:close_tag_start] + fragment + body_html[close_tag_start:]
-
-
-def _validate_append_fragment(fragment: str) -> str:
-    if _ROOT_WRAPPER_RE.search(fragment):
-        raise ValueError(
-            "Append fragment must not include root wrapper (.ay-dash-page or .ay-report-prose)"
-        )
-    cleaned = sanitize_html_report(fragment)
-    if not cleaned.strip():
-        raise ValueError("Append fragment is empty after sanitization")
-    return cleaned
-
-
-def _resolve_append_target(target: str) -> str:
-    normalized = (target or "grid").strip().lower()
-    container_class = APPEND_TARGETS.get(normalized)
-    if not container_class:
-        allowed = ", ".join(sorted(APPEND_TARGETS))
-        raise ValueError(f"target must be one of: {allowed}")
-    return container_class
-
-
-def _merge_content_json(existing: dict, title, subtitle, html, html_kind=None) -> dict:
-    merged = dict(existing)
-    preserved_status = merged.get("status", STATUS_PUBLISHED)
-    if title is not None:
-        merged["title"] = str(title).strip()
-    if subtitle is not None:
-        merged["subtitle"] = str(subtitle).strip()
-    if html is not None:
-        normalized = normalize_agent_html(html)
-        merged["html"] = normalized["html"]
-        merged["body_html"] = normalized["body_html"]
-        merged["full_document"] = normalized["full_document"]
-        merged.pop("html_kind", None)
-    kind = html_kind if html_kind is not None else merged.get("html_kind")
-    result = validate_html_report_content(
-        merged.get("title", ""),
-        merged.get("html") or merged.get("body_html", ""),
-        merged.get("subtitle", ""),
-        html_kind=kind,
-        status=preserved_status,
-    )
-    return result
-
-
 def _build_agent_tool_response(
     file_obj,
     action: str,
     *,
-    draft: bool = False,
     agent_instruction: str | None = None,
+    workspace_path: str | None = None,
 ) -> str:
     payload = {
         "ok": True,
@@ -425,11 +294,11 @@ def _build_agent_tool_response(
         "file_id": str(file_obj.id),
         "name": file_obj.original_name,
         "version": file_obj.version,
-        "status": file_obj.content_json.get("status", STATUS_PUBLISHED),
+        "status": STATUS_PUBLISHED,
         "agent_instruction": agent_instruction or AGENT_INSTRUCTION_AFTER_HTML_REPORT,
     }
-    if draft:
-        payload["draft"] = True
+    if workspace_path:
+        payload["workspace_path"] = workspace_path
     return json.dumps(payload)
 
 
@@ -438,25 +307,11 @@ def _register_display(
     file_obj,
     *,
     updated: bool = False,
-    skip_chat_event: bool = False,
-    force_created: bool = False,
 ) -> None:
     payload = serialize_file_for_ui(file_obj)
-    payload["updated"] = updated and not force_created
-    payload["status"] = file_obj.content_json.get("status", STATUS_PUBLISHED)
-    if skip_chat_event or payload["status"] == STATUS_DRAFT:
-        payload["skip_chat_event"] = True
-    if force_created:
-        payload["updated"] = False
+    payload["updated"] = updated
+    payload["status"] = STATUS_PUBLISHED
     _HTML_REPORT_DISPLAY_REGISTRY[tool_call_id] = payload
-
-
-def _resolve_build_mode(build_mode: str | None) -> str:
-    normalized = (build_mode or BUILD_MODE_COMPLETE).strip().lower()
-    if normalized not in BUILD_MODES:
-        allowed = ", ".join(sorted(BUILD_MODES))
-        raise ValueError(f"build_mode must be one of: {allowed}")
-    return normalized
 
 
 def _persist_html_file(
@@ -487,211 +342,21 @@ def _persist_html_file(
     )
 
 
-@tool
-def create_html_report(
+def _content_json_from_workspace_html(
+    html: str,
     title: str,
-    html: str,
     subtitle: str = "",
-    filename: str = "",
-    html_kind: str = "",
-    build_mode: str = "complete",
-    tool_call_id: Annotated[str, InjectedToolCallId] = "",
-) -> str:
-    """Create an HTML report or dashboard for the user in the chat.
-
-    Read `/skills/html-reports/GUIDELINES.md` before writing HTML. Use shared
-    classes (`ay-dash-*` for dashboards, `ay-report-prose` for explainers) — do
-    not duplicate system CSS or Google Fonts in the fragment. Ayron injects fonts
-    and stylesheet automatically.
-
-    Two deliverable types (inferred from markup, or set `html_kind` explicitly):
-    - `report`: prose document (`.ay-report-prose`), opens in the artifact panel,
-      exportable as PDF.
-    - `dashboard`: analytics layout (`.ay-dash-page`), opens expanded on click.
-
-    For large dashboards, use `build_mode="incremental"`: creates a draft shell
-    (not visible to the user), then call `append_html_report_block` for each
-    section and `publish_html_report` when done. Put page-level tabs and filter
-    bars at the top of the dashboard (start of `.ay-dash-inner`), before
-    insight/KPI/table content — see GUIDELINES. Do not include page title,
-    subtitle, eyebrow or divider markup for now.
-
-    For charts, embed `.ay-chart` blocks with a JSON payload in
-    `<script type="application/json">` (see GUIDELINES). Do not use `<script>`
-    for JavaScript.
-
-    Insight blocks must use the exact structure from `starter-dashboard.html`
-    (`.ay-dash-insight-head` + empty `.ay-dash-insight-logo`). Ayron injects
-    the brand mark automatically; never use custom icons, emoji, or symbols.
-
-    Pass the report body as `html`: a body fragment with semantic markup. You may
-    pass a full document (<!DOCTYPE html>...) if needed. Tables, SVG diagrams, and
-    <pre><code> are allowed; no <script>.
-
-    Set `title` for file metadata. Use `subtitle` for one line of context.
-    Use `filename` like `<topic>-<kind>.html`. Do not repeat report content in chat.
-
-    To modify an existing report later, use update_html_report with the same file_id.
-    """
-    check_agent_not_cancelled()
-    conversation = get_agent_conversation()
-    user = get_agent_user()
-    if conversation is None or user is None:
-        return build_tool_error_response("No conversation context")
-
-    try:
-        kind = html_kind.strip() if html_kind else None
-        mode = _resolve_build_mode(build_mode)
-        content_json = validate_html_report_content(title, html, subtitle, html_kind=kind)
-        if mode == BUILD_MODE_INCREMENTAL:
-            if content_json["html_kind"] != HTML_KIND_DASHBOARD:
-                raise ValueError("build_mode=incremental is only valid for dashboards")
-            content_json["status"] = STATUS_DRAFT
-        else:
-            content_json["status"] = STATUS_PUBLISHED
-    except ValueError as exc:
-        return build_tool_error_response(str(exc))
-
-    try:
-        original_name = _sanitize_filename(filename, content_json["title"])
-        file_obj = _persist_html_file(
-            conversation=conversation,
-            user=user,
-            content_json=content_json,
-            original_name=original_name,
-        )
-    except Exception as exc:
-        return build_tool_error_response(str(exc))
-
-    is_draft = content_json["status"] == STATUS_DRAFT
-    _register_display(tool_call_id, file_obj, skip_chat_event=is_draft)
-    return _build_agent_tool_response(
-        file_obj,
-        "created",
-        draft=is_draft,
-        agent_instruction=AGENT_INSTRUCTION_AFTER_DRAFT_CREATE if is_draft else None,
-    )
+    html_kind: str | None = None,
+) -> dict:
+    return validate_html_report_content(title, html, subtitle, html_kind=html_kind)
 
 
-@tool
-def append_html_report_block(
-    file_id: str,
-    html: str,
-    target: str = "grid",
-    tool_call_id: Annotated[str, InjectedToolCallId] = "",
-) -> str:
-    """Append a sanitized HTML block to a draft dashboard or report.
+def run_hydrate_html_artifact(file_id: str, runtime: ToolRuntime | None = None) -> str:
+    """Load a published HTML artifact into the agent workspace for editing.
 
-    Use after `create_html_report(..., build_mode="incremental")`. The user does
-    not see updates until `publish_html_report`.
-
-    `target`:
-    - `grid`: append inside `.ay-dash-grid` (KPI cards, tables, charts, **tabs de sección**)
-    - `tabs`: append a `.ay-dash-tab-panel` inside the **page-level** `.ay-dash-tab-panels` only (capítulos grandes). El contenedor de tabs va **arriba** en el shell, al inicio de `.ay-dash-inner`. No uses esto para años, regiones ni sub-vistas — esas van en `.ay-dash-tabs--section` con `target="grid"`.
-    - `prose`: append inside `.ay-report-prose`
-
-    Do not include root wrappers (`.ay-dash-page`, `.ay-report-prose`) in `html`.
-    """
-    check_agent_not_cancelled()
-    conversation = get_agent_conversation()
-    if conversation is None:
-        return build_tool_error_response("No conversation context")
-
-    file_obj = get_file_for_conversation(file_id, conversation)
-    if file_obj is None or file_obj.format_key != "html":
-        return build_tool_error_response("HTML report not found in this conversation")
-
-    if file_obj.content_json.get("status") != STATUS_DRAFT:
-        return build_tool_error_response(
-            "Can only append to draft files; use update_html_report on published files"
-        )
-
-    try:
-        container_class = _resolve_append_target(target)
-        fragment = _validate_append_fragment(html)
-        body_html = file_obj.content_json.get("body_html") or file_obj.content_json.get("html", "")
-        updated_body = append_to_container(body_html, container_class, fragment)
-        content_json = validate_html_report_content(
-            file_obj.content_json.get("title", ""),
-            updated_body,
-            file_obj.content_json.get("subtitle", ""),
-            html_kind=file_obj.content_json.get("html_kind"),
-            status=STATUS_DRAFT,
-        )
-    except ValueError as exc:
-        return build_tool_error_response(str(exc))
-
-    try:
-        file_obj = _persist_html_file(
-            conversation=conversation,
-            user=get_agent_user(),
-            content_json=content_json,
-            original_name=file_obj.original_name,
-            file_obj=file_obj,
-        )
-    except Exception as exc:
-        return build_tool_error_response(str(exc))
-
-    return json.dumps(
-        {
-            "ok": True,
-            "action": "appended",
-            "file_id": str(file_obj.id),
-            "version": file_obj.version,
-            "draft": True,
-            "target": target.strip().lower() or "grid",
-        }
-    )
-
-
-@tool
-def publish_html_report(
-    file_id: str,
-    tool_call_id: Annotated[str, InjectedToolCallId] = "",
-) -> str:
-    """Publish a draft HTML dashboard so it becomes visible to the user.
-
-    Call after all `append_html_report_block` steps are complete.
-    """
-    check_agent_not_cancelled()
-    conversation = get_agent_conversation()
-    if conversation is None:
-        return build_tool_error_response("No conversation context")
-
-    file_obj = get_file_for_conversation(file_id, conversation)
-    if file_obj is None or file_obj.format_key != "html":
-        return build_tool_error_response("HTML report not found in this conversation")
-
-    if file_obj.content_json.get("status") != STATUS_DRAFT:
-        return build_tool_error_response("File is already published")
-
-    if file_obj.content_json.get("html_kind") != HTML_KIND_DASHBOARD:
-        return build_tool_error_response("Only draft dashboards can be published with this tool")
-
-    content_json = dict(file_obj.content_json)
-    content_json["status"] = STATUS_PUBLISHED
-
-    try:
-        file_obj = _persist_html_file(
-            conversation=conversation,
-            user=get_agent_user(),
-            content_json=content_json,
-            original_name=file_obj.original_name,
-            file_obj=file_obj,
-        )
-    except Exception as exc:
-        return build_tool_error_response(str(exc))
-
-    _register_display(tool_call_id, file_obj, force_created=True)
-    return _build_agent_tool_response(file_obj, "published")
-
-
-@tool
-def get_html_report(file_id: str) -> str:
-    """Read the HTML report content by file_id.
-
-    Returns title, subtitle, and the stored `html` for editing.
-    Call before update_html_report when you need the current markup.
+    Writes the current markup to `/workspace/artifacts/{file_id}.html`. Use
+    `read_file`, `grep`, or `edit_file` on that path, then `validate_html_artifact`
+    and `publish_html_artifact` with the same `file_id`.
     """
     conversation = get_agent_conversation()
     if conversation is None:
@@ -702,66 +367,197 @@ def get_html_report(file_id: str) -> str:
         return build_tool_error_response("HTML report not found in this conversation")
 
     body_html = file_obj.content_json.get("body_html") or file_obj.content_json.get("html", "")
-    payload = {
-        "ok": True,
-        **serialize_file_for_agent(file_obj),
-        "title": file_obj.content_json.get("title", ""),
-        "subtitle": file_obj.content_json.get("subtitle", ""),
-        "html_kind": file_obj.content_json.get("html_kind")
-        or infer_html_kind(body_html),
-        "status": file_obj.content_json.get("status", STATUS_PUBLISHED),
-        "html": file_obj.content_json.get("html") or body_html,
-    }
-    return json.dumps(payload)
+    html = file_obj.content_json.get("html") or body_html
+    try:
+        backend = resolve_agent_backend(runtime)
+        path = sync_artifact_to_workspace(backend, str(file_obj.id), html)
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
+
+    return json.dumps(
+        {
+            "ok": True,
+            "action": "hydrated",
+            "file_id": str(file_obj.id),
+            "path": path,
+            "title": file_obj.content_json.get("title", ""),
+            "subtitle": file_obj.content_json.get("subtitle", ""),
+            "html_kind": file_obj.content_json.get("html_kind") or infer_html_kind(body_html),
+            "agent_instruction": (
+                "El artifact está en el workspace. Edítalo con las tools de filesystem, "
+                "luego validate_html_artifact y publish_html_artifact."
+            ),
+        }
+    )
 
 
 @tool
-def update_html_report(
-    file_id: str,
-    title: str | None = None,
-    subtitle: str | None = None,
-    html: str | None = None,
-    html_kind: str | None = None,
-    tool_call_id: Annotated[str, InjectedToolCallId] = "",
-) -> str:
-    """Update an existing HTML report by file_id.
+def hydrate_html_artifact(file_id: str, runtime: ToolRuntime) -> str:
+    """Load a published HTML artifact into the agent workspace for editing.
 
-    Provide only the fields you want to change. `html` replaces all markup when provided.
-    `html_kind` is re-inferred when `html` changes. Only works on published files.
+    Writes the current markup to `/workspace/artifacts/{file_id}.html`. Use
+    `read_file`, `grep`, or `edit_file` on that path, then `validate_html_artifact`
+    and `publish_html_artifact` with the same `file_id`.
+    """
+    return run_hydrate_html_artifact(file_id, runtime)
+
+
+def run_validate_html_artifact(path: str, runtime: ToolRuntime | None = None) -> str:
+    """Sanitize a workspace HTML file and write the canonical version back.
+
+    Call after editing HTML in `/workspace/artifacts/`. Required before
+    `publish_html_artifact`. Read `/skills/html-reports/GUIDELINES.md` before writing HTML.
+    """
+    check_agent_not_cancelled()
+    try:
+        backend = resolve_agent_backend(runtime)
+        result = validate_and_writeback(backend, path)
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
+    return json.dumps(result)
+
+
+@tool
+def validate_html_artifact(path: str, runtime: ToolRuntime) -> str:
+    """Sanitize a workspace HTML file and write the canonical version back.
+
+    Call after editing HTML in `/workspace/artifacts/`. Required before
+    `publish_html_artifact`. Read `/skills/html-reports/GUIDELINES.md` before writing HTML.
+    """
+    return run_validate_html_artifact(path, runtime)
+
+
+def run_publish_html_artifact(
+    path: str,
+    title: str,
+    runtime: ToolRuntime | None = None,
+    subtitle: str = "",
+    filename: str = "",
+    file_id: str = "",
+    tool_call_id: str = "",
+) -> str:
+    """Publish a validated workspace HTML file to the user.
+
+    The file at `path` must exist under `/workspace/` (e.g. `/workspace/artifacts/_draft.html`
+    for new reports, or `/workspace/artifacts/{file_id}.html` after hydrate).
+
+  For new artifacts, omit `file_id`. For updates, pass the existing `file_id`.
+  Call `validate_html_artifact` on `path` before publishing.
     """
     check_agent_not_cancelled()
     conversation = get_agent_conversation()
-    if conversation is None:
+    user = get_agent_user()
+    if conversation is None or user is None:
         return build_tool_error_response("No conversation context")
 
-    file_obj = get_file_for_conversation(file_id, conversation)
-    if file_obj is None or file_obj.format_key != "html":
-        return build_tool_error_response("HTML report not found in this conversation")
-
-    if file_obj.content_json.get("status") == STATUS_DRAFT:
-        return build_tool_error_response(
-            "Cannot update a draft file; use append_html_report_block or publish_html_report"
+    try:
+        backend = resolve_agent_backend(runtime)
+        source_path = path.strip()
+        html = read_workspace_file(backend, source_path)
+        normalized = normalize_agent_html(html)
+        workspace_html = (
+            normalized["html"] if normalized["full_document"] else normalized["body_html"]
         )
+        write_workspace_file(backend, source_path, workspace_html)
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
+
+    existing_file = None
+    normalized_file_id = file_id.strip() if file_id else ""
+    if normalized_file_id:
+        existing_file = get_file_for_conversation(normalized_file_id, conversation)
+        if existing_file is None or existing_file.format_key != "html":
+            return build_tool_error_response("HTML report not found in this conversation")
+
+    resolved_title = title.strip() if title else ""
+    if not resolved_title:
+        if existing_file:
+            resolved_title = existing_file.content_json.get("title", "")
+        else:
+            return build_tool_error_response("title is required")
+
+    resolved_subtitle = subtitle
+    if not resolved_subtitle and existing_file:
+        resolved_subtitle = existing_file.content_json.get("subtitle", "")
 
     try:
-        kind = html_kind.strip() if isinstance(html_kind, str) and html_kind.strip() else None
-        content_json = _merge_content_json(
-            file_obj.content_json, title, subtitle, html, html_kind=kind
+        content_json = _content_json_from_workspace_html(
+            workspace_html,
+            resolved_title,
+            resolved_subtitle,
+            html_kind=existing_file.content_json.get("html_kind") if existing_file else None,
         )
         content_json["status"] = STATUS_PUBLISHED
     except ValueError as exc:
         return build_tool_error_response(str(exc))
 
     try:
-        file_obj = _persist_html_file(
-            conversation=conversation,
-            user=get_agent_user(),
-            content_json=content_json,
-            original_name=file_obj.original_name,
-            file_obj=file_obj,
-        )
+        if existing_file:
+            original_name = existing_file.original_name
+            file_obj = _persist_html_file(
+                conversation=conversation,
+                user=user,
+                content_json=content_json,
+                original_name=original_name,
+                file_obj=existing_file,
+            )
+            workspace_path = relocate_workspace_artifact(
+                backend,
+                source_path,
+                str(file_obj.id),
+            )
+            action = "updated"
+            updated = True
+        else:
+            original_name = _sanitize_filename(filename, content_json["title"])
+            file_obj = _persist_html_file(
+                conversation=conversation,
+                user=user,
+                content_json=content_json,
+                original_name=original_name,
+            )
+            workspace_path = relocate_workspace_artifact(
+                backend,
+                source_path,
+                str(file_obj.id),
+            )
+            action = "created"
+            updated = False
     except Exception as exc:
         return build_tool_error_response(str(exc))
 
-    _register_display(tool_call_id, file_obj, updated=True)
-    return _build_agent_tool_response(file_obj, "updated")
+    _register_display(tool_call_id, file_obj, updated=updated)
+    return _build_agent_tool_response(
+        file_obj,
+        action,
+        workspace_path=workspace_path,
+    )
+
+
+@tool
+def publish_html_artifact(
+    path: str,
+    title: str,
+    runtime: ToolRuntime,
+    subtitle: str = "",
+    filename: str = "",
+    file_id: str = "",
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> str:
+    """Publish a validated workspace HTML file to the user.
+
+    The file at `path` must exist under `/workspace/` (e.g. `/workspace/artifacts/_draft.html`
+    for new reports, or `/workspace/artifacts/{file_id}.html` after hydrate).
+
+    For new artifacts, omit `file_id`. For updates, pass the existing `file_id`.
+    Call `validate_html_artifact` on `path` before publishing.
+    """
+    return run_publish_html_artifact(
+        path,
+        title,
+        runtime,
+        subtitle=subtitle,
+        filename=filename,
+        file_id=file_id,
+        tool_call_id=tool_call_id,
+    )

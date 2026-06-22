@@ -1,6 +1,6 @@
 # Guidelines — reportes HTML Ayron
 
-Lee este archivo antes de escribir HTML para `create_html_report`. Ayron inyecta automáticamente las fuentes Geist y el CSS del design system — **no repitas `<link>` ni `<style>` del sistema** en tu fragmento.
+Lee este archivo antes de escribir HTML para el workspace (`/workspace/artifacts/`). Ayron inyecta automáticamente las fuentes Geist y el CSS del design system — **no repitas `<link>` ni `<style>` del sistema** en tu fragmento.
 
 ## Fundamentos visuales
 
@@ -50,7 +50,7 @@ Shell mínimo:
 </div>
 ```
 
-**Header de página (eyebrow, título, subtítulo, divider)** — omitir por ahora. El título del informe va en metadata de `create_html_report`, no en el HTML del dashboard.
+**Header de página (eyebrow, título, subtítulo, divider)** — omitir por ahora. El título del informe va en metadata de `publish_html_artifact`, no en el HTML del dashboard.
 
 Plantilla completa con ejemplos: lee `/skills/html-reports/starter-dashboard.html`.
 
@@ -376,7 +376,7 @@ Puedes:
 - Repetir patrones del starter adaptando datos
 
 Evita:
-- Terminar un dashboard incremental sin `publish_html_report`
+- Publicar sin `validate_html_artifact` antes de `publish_html_artifact`
 - Bloques JSON o tools distintas de las de html-reports para armar el informe
 - Colocar **tabs de página** o **filtros** en medio del grid o al final del dashboard
 - CSS inline en cada elemento (copiar estilos del catálogo)
