@@ -78,54 +78,33 @@ Escribe el HTML completo en el workspace por secciones con `edit_file`. No hay f
 | **Reporte** | Explainers, postmortems, briefs | `.ay-report-prose` | Panel lateral, export PDF |
 | **Dashboard** | KPIs, tablas, status analítico | `.ay-dash-page` | Vista expandida |
 
-## Interactividad declarativa
+## Interactividad y JavaScript
 
-**Prefiere dashboards interactivos** cuando haya varias vistas, periodos o escenarios.
+**Escribe toda la lógica del dashboard en el HTML del workspace** — filtros, tabs, KPIs dinámicos, gráficos, tablas ordenables, calculadoras. El frontend **solo renderiza** el artifact en un iframe sandbox; **no** monta runtime Ayron (`AyronDashboard`, `AyronChart`).
 
-**Tabs de página y filtros van arriba del dashboard** — al inicio de `.ay-dash-inner`, antes del grid de contenido (insight, KPIs, tablas). No los insertes en medio del informe.
+Incluye en tu HTML:
 
-**No incluyas** eyebrow, `.ay-dash-title`, `.ay-dash-subtitle` ni `.ay-dash-divider` en el HTML por ahora (el título va en metadata de `publish_html_artifact`).
+- Markup semántico con clases `ay-dash-*` / `ay-report-prose` (Ayron inyecta fuentes y CSS del design system en preview/export)
+- `<script>` inline con la lógica (event listeners, agregaciones, render)
+- `<script type="application/json">` para datasets grandes
+- `<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js">` si usas Chart.js (único CDN externo permitido)
+- `<button>`, `<select>`, `<input>` según necesites — **no** uses handlers inline (`onclick=`); enlaza en JS
 
-Usa:
+Al publicar, `validate_html_artifact` preserva scripts inline y JSON; elimina scripts externos no permitidos.
 
-- **Tabs de página** — capítulos grandes; arriba en `.ay-dash-inner`
-- **Tabs por sección** — `.ay-dash-tabs--section` dentro de una columna del grid
-- **Tabs en header** — `.ay-dash-tabs--header` + `data-panels-target` dentro de `.ay-dash-tab-scope`
-- **Filtros legacy** — `.ay-dash-filter-bar` arriba + JSON
-- **Dashboard analítico** — `.ay-dash-filter-scope` + dataset JSON + slicers (ver GUIDELINES y `starter-analytics-dashboard.html`)
-- **Tablas ordenables** — `ay-dash-table--sortable`
-- **Calculadoras what-if** — `.ay-dash-calculator`
-
-Ver GUIDELINES para markup exacto. No escribas `<input>`, `<button>` ni handlers en HTML.
+Ver **`starter-analytics-dashboard.html`** para un dashboard analítico autocontenido con filtros, KPIs, tabla y gráfico.
 
 ## Gráficos en el reporte
 
-Incrusta gráficos Chart.js con bloques `.ay-chart` y JSON en `<script type="application/json">`. No uses `show_chart` aparte si el gráfico va dentro del informe.
-
-## Insight primero
-
-En dashboards, el bloque **insight** va **al inicio del grid** (o del panel de tab activo), antes de KPIs y tablas — **después** de filtros y tabs de página si los hay.
-
-## Ejemplo crear dashboard
-
-```
-# 1. write_file("/workspace/artifacts/_draft.html", html_from_guidelines)
-# 2. validate_html_artifact("/workspace/artifacts/_draft.html")
-# 3. publish_html_artifact(
-#      path="/workspace/artifacts/_draft.html",
-#      title="Ventas Mayo 2026",
-#      subtitle="Chinook · facturación",
-#      filename="ventas-mayo-2026.html",
-#    )
-```
+Incrusta Chart.js con `<script src="…chart.js…">` y tu propio script de inicialización sobre `<canvas>`. No dependas de bloques `.ay-chart` montados por el chat — declara el canvas y construye el chart en JS.
 
 ## Anti-patrones
 
 - Publicar sin `validate_html_artifact` antes
 - Escribir en `/skills/**` en lugar del workspace
 - Crear otro artifact (`_draft` + publish sin `file_id`) cuando el usuario pidió **modificar** uno existente
-- Colocar **tabs de página** o **filtros** en medio del grid
-- `<script>` o handlers inline (salvo JSON en `type="application/json"`)
+- Depender de `AyronDashboard.mountAll` / `AyronChart.mountAll` en el chat
+- `<script src>` a dominios distintos de Chart.js en jsdelivr
 - Volcar el informe en markdown en el chat
 
 ## Reglas en el chat

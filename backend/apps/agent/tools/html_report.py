@@ -117,22 +117,9 @@ def _load_dashboard_css() -> str:
     return css_path.read_text(encoding="utf-8")
 
 
-CHART_JS_CDN = "https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"
-
-
 def _load_chart_css() -> str:
     css_path = Path(settings.BASE_DIR) / "static" / "css" / "html_report_chart.css"
     return css_path.read_text(encoding="utf-8")
-
-
-def _load_ayron_chart_js() -> str:
-    js_path = Path(settings.BASE_DIR) / "static" / "js" / "ayron-chart.js"
-    return js_path.read_text(encoding="utf-8")
-
-
-def _load_ayron_dashboard_js() -> str:
-    js_path = Path(settings.BASE_DIR) / "static" / "js" / "ayron-dashboard.js"
-    return js_path.read_text(encoding="utf-8")
 
 
 def _load_report_css(*, include_charts: bool = False) -> str:
@@ -143,46 +130,7 @@ def _load_report_css(*, include_charts: bool = False) -> str:
 
 
 def _body_has_charts(body_html: str) -> bool:
-    return "ay-chart" in body_html
-
-
-def _body_has_interactive_dashboard(body_html: str) -> bool:
-    markers = (
-        "ay-dash-tabs",
-        "ay-dash-filter-bar",
-        "ay-dash-filter-scope",
-        "ay-dash-table--sortable",
-        "ay-dash-calculator",
-    )
-    return any(marker in body_html for marker in markers)
-
-
-def _report_chart_scripts(*, inline_mount: bool = False) -> str:
-    ayron_js = _load_ayron_chart_js()
-    mount = (
-        "<script>document.addEventListener('DOMContentLoaded',function(){"
-        "if(window.AyronChart){AyronChart.mountAll(document);}"
-        "});</script>"
-        if inline_mount
-        else ""
-    )
-    return (
-        f'<script src="{CHART_JS_CDN}"></script>'
-        f"<script>{ayron_js}</script>"
-        f"{mount}"
-    )
-
-
-def _report_dashboard_scripts(*, inline_mount: bool = False) -> str:
-    ayron_js = _load_ayron_dashboard_js()
-    mount = (
-        "<script>document.addEventListener('DOMContentLoaded',function(){"
-        "if(window.AyronDashboard){AyronDashboard.mountAll(document);}"
-        "});</script>"
-        if inline_mount
-        else ""
-    )
-    return f"<script>{ayron_js}</script>{mount}"
+    return "ay-chart" in body_html or "chart.js" in body_html.lower()
 
 
 def _report_font_links() -> str:
@@ -192,10 +140,6 @@ def _report_font_links() -> str:
         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2'
         "?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap\">"
     )
-
-
-def _report_styles_html(*, include_charts: bool = False) -> str:
-    return f"<style>{_load_report_css(include_charts=include_charts)}</style>"
 
 
 def _footer_html() -> str:
@@ -212,24 +156,39 @@ def _wrap_export_body(body_html: str) -> str:
     return f'<div class="ay-html-report">{body_html}{_footer_html()}</div>'
 
 
-def _export_runtime_scripts(body_html: str) -> str:
-    scripts = ""
-    if _body_has_charts(body_html):
-        scripts += _report_chart_scripts(inline_mount=True)
-    if _body_has_interactive_dashboard(body_html):
-        scripts += _report_dashboard_scripts(inline_mount=True)
-    return scripts
+def _preview_document_shell(body_html: str, *, title: str = "Preview") -> str:
+    include_charts = _body_has_charts(body_html)
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="es">'
+        "<head>"
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{esc(title)}</title>"
+        f"{_report_font_links()}"
+        f"<style>{_load_report_css(include_charts=include_charts)}</style>"
+        "</head>"
+        "<body>"
+        f'<div class="ay-html-report-preview">{body_html}</div>'
+        "</body>"
+        "</html>"
+    )
+
+
+def build_preview_html(content_json: dict) -> str:
+    if content_json.get("full_document"):
+        html = content_json.get("html") or ""
+        if html.strip():
+            return html
+
+    body_html = content_json.get("body_html") or content_json.get("html") or ""
+    body_html = normalize_insight_markup(body_html)
+    title = content_json.get("title") or "Preview"
+    return _preview_document_shell(body_html, title=title)
 
 
 def build_preview_fragment(content_json: dict) -> str:
-    body_html = content_json.get("body_html") or content_json.get("html") or ""
-    body_html = normalize_insight_markup(body_html)
-    include_charts = _body_has_charts(body_html)
-    return (
-        f"{_report_font_links()}"
-        f"{_report_styles_html(include_charts=include_charts)}"
-        f'<div class="ay-html-report-preview">{body_html}</div>'
-    )
+    return build_preview_html(content_json)
 
 
 def build_export_html(content_json: dict) -> str:
@@ -255,7 +214,6 @@ def build_export_html(content_json: dict) -> str:
     body_html = normalize_insight_markup(body_html)
     wrapped_body = _wrap_export_body(body_html)
     include_charts = _body_has_charts(body_html)
-    runtime_scripts = _export_runtime_scripts(body_html)
     return (
         "<!DOCTYPE html>"
         '<html lang="es">'
@@ -268,7 +226,6 @@ def build_export_html(content_json: dict) -> str:
         "</head>"
         "<body>"
         f"{wrapped_body}"
-        f"{runtime_scripts}"
         "</body>"
         "</html>"
     )
@@ -277,7 +234,7 @@ def build_export_html(content_json: dict) -> str:
 def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
     if content_json and content_json.get("format") == "html":
         if content_json.get("body_html") or content_json.get("html"):
-            return build_preview_fragment(content_json)
+            return build_preview_html(content_json)
     return preview_html or ""
 
 
@@ -323,7 +280,7 @@ def _persist_html_file(
     file_obj=None,
 ):
     export_html = build_export_html(content_json)
-    preview_html = build_preview_fragment(content_json)
+    preview_html = build_preview_html(content_json)
     if file_obj is None:
         return save_generated_file(
             conversation=conversation,

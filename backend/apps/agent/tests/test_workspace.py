@@ -58,14 +58,14 @@ class TestWorkspaceFileIO:
         assert result["ok"] is True
         assert "ay-dash-page" in read_workspace_file(backend, path)
 
-    def test_validate_and_writeback_strips_script_tags(self, backend):
+    def test_validate_and_writeback_preserves_inline_script(self, backend):
         path = draft_artifact_path()
-        raw = '<div class="ay-dash-page"><script>alert(1)</script><p>ok</p></div>'
+        raw = '<div class="ay-dash-page"><script>window.__ok = true</script><p>ok</p></div>'
         write_workspace_file(backend, path, raw)
         result = validate_and_writeback(backend, path)
         assert result["ok"] is True
         cleaned = read_workspace_file(backend, path)
-        assert "alert" not in cleaned
+        assert "window.__ok" in cleaned
         assert "ay-dash-page" in cleaned
         assert result["html_kind"] == "dashboard"
 

@@ -107,239 +107,62 @@ Celdas: `.ay-dash-td-strong`, `.ay-dash-td-muted`, `.ay-dash-td-mono`, `.ay-dash
 
 **Callout** — `.ay-dash-callout` + `.ay-dash-callout-stats` / `.ay-dash-callout-stat`
 
-**Gráfico Chart.js** — `.ay-chart` con payload JSON (mismo formato que el chat). Colócalo en `.ay-dash-col--12` o `--6` dentro del grid, después del insight y antes o junto a tablas según la historia.
+**Gráfico Chart.js** — incluye Chart.js y tu script de init. Ayron **no** monta gráficos en el chat; el artifact debe ser autocontenido.
 
 ```html
 <div class="ay-dash-col ay-dash-col--12">
-  <div class="ay-chart" data-chart-id="chart-ventas">
-    <script id="chart-ventas" type="application/json">
-    {"chart_type":"bar","title":"Ingresos por región","caption":"Mayo 2026","labels":["EMEA","APAC"],"datasets":[{"label":"Ingresos","data":[486200,248910],"color_index":0}],"value_format":"currency"}
-    </script>
-    <div class="ay-chart__card">
-      <div class="ay-chart__title">Ingresos por región</div>
-      <div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>
-      <div class="ay-chart__caption">Mayo 2026</div>
+  <div class="ay-dash-card ay-dash-card--flush">
+    <div class="ay-dash-card-header">
+      <span class="ay-dash-card-header__title">Ingresos por región</span>
+    </div>
+    <div class="ay-chart__plot" style="padding:16px 20px 20px;height:280px;">
+      <canvas id="chart-ventas"></canvas>
     </div>
   </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  new Chart(document.getElementById("chart-ventas"), {
+    type: "bar",
+    data: {
+      labels: ["EMEA", "APAC"],
+      datasets: [{ label: "Ingresos", data: [486200, 248910], backgroundColor: "#3b6ef6" }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+});
+</script>
 ```
 
-**Gráfico de torta (pie)** — una sola serie; usa `color_indices` (uno por segmento), no `color_index`:
-
-```html
-<div class="ay-dash-col ay-dash-col--6">
-  <div class="ay-chart" data-chart-id="chart-categorias">
-    <script id="chart-categorias" type="application/json">
-    {"chart_type":"pie","title":"Ventas por categoría","caption":"Mayo 2026","labels":["Rock","Jazz","Clásica"],"datasets":[{"label":"Ventas","data":[42,28,18],"color_indices":[0,1,2]}],"value_format":"percent"}
-    </script>
-    <div class="ay-chart__card">
-      <div class="ay-chart__title">Ventas por categoría</div>
-      <div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>
-      <div class="ay-chart__caption">Mayo 2026</div>
-    </div>
-  </div>
-</div>
-```
-
-Reglas del gráfico:
-- `chart_type`: `bar`, `line` o `pie`
-- `labels`: máx. 25; `datasets`: máx. 8 series (pie: una sola)
-- `bar` / `line`: `color_index` por serie (0–7)
-- `pie`: `color_indices` con un índice por segmento (`[0,1,2,…]`); si omites `color_indices`, Ayron asigna colores automáticamente
+Reglas:
+- Único CDN externo permitido: Chart.js en jsdelivr
 - Valores numéricos en `data`, no strings formateados
-- `value_format`: `number`, `currency` o `percent`
-- El `id` del `<script>` debe coincidir con `data-chart-id` del wrapper
-- Ayron inyecta Chart.js y monta el canvas — no añadas `<script src>` ni JS
 - En PDF el gráfico puede no renderizar (WeasyPrint); el HTML descargable sí
 
 ## Interactividad (dashboards)
 
-**Usa interactividad cuando el informe lo mejore** — no dejes dashboards estáticos si hay varias dimensiones (periodo, región, escenario, producto) o datos que el usuario querrá explorar. Ayron monta tabs, filtros, tablas ordenables y calculadoras; declara markup + JSON, sin JS propio.
+**Implementa toda la interactividad en JavaScript** dentro del HTML del workspace. El chat renderiza el artifact en un iframe sandbox — no hay runtime `AyronDashboard` / `AyronChart`.
 
-| Patrón | Cuándo |
-|--------|--------|
-| **Tabs por sección** | 2–5 vistas del mismo bloque (trimestres, regiones, escenarios) |
-| **Tabs de página** | Capítulos grandes del informe (Resumen / Detalle / Anexos) |
-| **Filtros** | Una tabla o bloque que filtra por dimensión |
-| **Tabla ordenable** | Rankings, listas largas |
-| **Calculadora** | What-if, proyecciones, sensibilidad |
+| Patrón | Cómo implementarlo |
+|--------|-------------------|
+| **Tabs** | Markup con paneles + `<button>` + JS que alterna clases `hidden` / `aria-selected` |
+| **Filtros / slicers** | `<button>` o `<select>` + JS que filtra filas y recalcula KPIs |
+| **Tabla ordenable** | Clic en `<th>` + JS que reordena `<tbody>` |
+| **Calculadora what-if** | `<input type="number">` + JS con fórmulas |
+| **Gráficos reactivos** | Actualiza instancias Chart.js en tu función `render()` |
 
-### Tabs — tres niveles
+**Filtros van arriba** — al inicio de `.ay-dash-inner`, antes del grid.
 
-**Tabs de página van arriba** — en el shell, al inicio de `.ay-dash-inner` (después de filtros globales si los hay). Cada panel lleva su propio grid con insight → KPIs → detalle.
+**Dashboard analítico** — copia `starter-analytics-dashboard.html`: dataset en `<script type="application/json">`, slicers como botones, KPIs con ids, tabla y chart actualizados en JS.
 
-**1. Página completa** — shell en create, cada capítulo con append `target="tabs"`. **Solo** paneles de capítulo aquí (Resumen, Detalle…). Los años, regiones u otras sub-vistas van en tabs de sección (`--section`) dentro del contenido del panel, **nunca** con `target="tabs"`.
+Puedes usar clases `ay-dash-*` para estilo (slicers, chips, KPI cards) aunque la lógica sea tuya. Datos grandes en JSON; lógica en `<script>` inline al final del fragmento.
 
-```html
-<div class="ay-dash-tabs">
-  <div class="ay-dash-tab-panels">
-    <div class="ay-dash-tab-panel" data-page="ventas" data-label="Ventas">
-      <div class="ay-dash-grid">…</div>
-    </div>
-    <div class="ay-dash-tab-panel" data-page="clientes" data-label="Clientes">
-      <div class="ay-dash-grid">…</div>
-    </div>
-  </div>
-</div>
-```
+**No uses** handlers inline (`onclick=`, `onchange=`). Enlaza eventos en JS.
 
-**2. Sección dentro del grid** — tabs que cambian solo ese bloque (`.ay-dash-tabs--section`). Si van dentro de un panel de página, inclúyelos en el HTML del panel con `target="grid"`, no con `target="tabs"`:
+**Elementos permitidos:** `button`, `input`, `select`, `option`, `textarea`, `label`, `form`.
 
-```html
-<div class="ay-dash-col ay-dash-col--12">
-  <div class="ay-dash-tabs ay-dash-tabs--section">
-    <div class="ay-dash-tab-panels">
-      <div class="ay-dash-tab-panel" data-page="q1" data-label="Q1">
-        <div class="ay-dash-grid">
-          <div class="ay-dash-col ay-dash-col--3">
-            <div class="ay-dash-card">
-              <div class="ay-dash-kpi-label">Ingresos</div>
-              <div class="ay-dash-kpi-value">€420K</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="ay-dash-tab-panel" data-page="q2" data-label="Q2">
-        <div class="ay-dash-grid">…</div>
-      </div>
-    </div>
-  </div>
-</div>
-```
-
-**3. Tabs en header de card** — selector arriba, contenido debajo (`data-panels-target`):
-
-```html
-<div class="ay-dash-col ay-dash-col--12">
-  <div class="ay-dash-tab-scope">
-    <div class="ay-dash-card ay-dash-card--flush">
-      <div class="ay-dash-card-header ay-dash-card-header--with-tabs">
-        <span class="ay-dash-card-header__title">Ventas por región</span>
-        <div class="ay-dash-tabs ay-dash-tabs--header" data-panels-target="#ventas-region"></div>
-      </div>
-    </div>
-    <div id="ventas-region" class="ay-dash-tab-panels">
-      <div class="ay-dash-tab-panel" data-page="norte" data-label="Norte">
-        <div class="ay-dash-card ay-dash-card--flush">
-          <table class="ay-dash-table ay-dash-table--sortable">…</table>
-        </div>
-      </div>
-      <div class="ay-dash-tab-panel" data-page="sur" data-label="Sur">
-        <div class="ay-dash-card ay-dash-card--flush">
-          <table class="ay-dash-table">…</table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-```
-
-Puedes anidar varios `.ay-dash-tab-scope` en el mismo dashboard. Combina tabs de sección con filtros o calculadoras en otras columnas.
-
-**Filtros van arriba** — `.ay-dash-filter-bar` o `.ay-dash-filter-scope` al inicio de `.ay-dash-inner`, antes del grid. No los coloques debajo de KPIs ni al final del informe.
-
-**Filtros legacy** — barra con JSON; filas con atributo `data-region` (o el que definas):
-
-```html
-<div class="ay-dash-filter-bar">
-  <script type="application/json">
-  {"filters":[{"id":"region","label":"Región","options":["Todas","Norte","Sur"],"target":"#tabla-ventas","attr":"data-region"}]}
-  </script>
-</div>
-<table id="tabla-ventas" class="ay-dash-table">…<tr data-region="Norte">…</tr>…</table>
-```
-
-**Dashboard analítico coordinado** — usa `.ay-dash-filter-scope` cuando necesites filtros multi-select, KPIs reactivos, gráficos que se actualizan y cross-filter (clic en barra). **Colócalo arriba** (inicio de `.ay-dash-inner`). Copia la estructura de `starter-analytics-dashboard.html`.
-
-```html
-<div class="ay-dash-filter-scope">
-  <script type="application/json" id="analytics-data">{"rows":[…]}</script>
-  <script type="application/json">{"slicers":[{"id":"year","field":"year","label":"Año","control":"pills"},{"id":"country","field":"country","label":"País","control":"dropdown"},…]}</script>
-  <div class="ay-dash-slicer-bar"></div>
-  <div class="ay-dash-filter-chips"></div>
-  <div class="ay-dash-grid">…tiles…</div>
-</div>
-```
-
-Reglas del scope coordinado:
-- **Dataset obligatorio** — primer script JSON con `"rows": […]` (resultado SQL del agente)
-- **Config slicers** — segundo script con `"slicers": [{"id","field","label","control"}, …]`
-- **Control del slicer** — `"control": "pills"` para pocas opciones visibles (p. ej. años); `"control": "dropdown"` para listas largas (país, género) con checkboxes multi-select. Si omites `control`, Ayron usa pills en valores numéricos (años) y dropdown en texto
-- **KPIs live** — `.ay-dash-kpi-live` + `data-agg="sum:amount"` (o `count`, `count_distinct:field`) + `data-format="currency|number|percent"`
-- **Gráficos live** — `.ay-chart.ay-chart--live` + `data-dimension` + `data-measure`; JSON solo metadata (`title`, `caption`, `chart_type`, `value_format`) — **no** pongas `labels` ni `data` en charts live
-- **Cross-filter** — en barras categóricas añade `data-cross-filter` con el id del slicer (p. ej. `country`)
-- **Tablas** — filas con `data-{field}` por cada dimensión filtrable (`data-year`, `data-country`, …)
-- **Grid de charts** — `.ay-dash-grid.ay-dash-grid--charts` para layout asimétrico (line arriba, bars abajo)
-
-Cuándo usar scope vs filtros legacy: scope para análisis exploratorio con varias dimensiones coordinadas; `.ay-dash-filter-bar` para filtrar una sola tabla con un `<select>`.
-
-**Tabla ordenable** — añade `ay-dash-table--sortable`; columnas numéricas con `ay-dash-th-numeric` en `<th>`.
-
-**Calculadora / what-if** — bloque `.ay-dash-calculator` con inputs + fórmulas → KPIs en vivo. Ayron genera los inputs; no escribas `<input>` en HTML.
-
-Cuándo usarlo: proyecciones, ROI, sensibilidad, simuladores simples.
-
-```html
-<div class="ay-dash-calculator">
-  <script type="application/json">
-  {
-    "inputs": [
-      {"id": "units", "label": "Unidades", "type": "number", "default": 1000, "min": 0},
-      {"id": "price", "label": "Precio unitario", "type": "number", "default": 42.5, "min": 0, "step": 0.01}
-    ],
-    "constants": {"fixed_cost": 30000},
-    "outputs": [
-      {"id": "revenue", "label": "Ingresos", "expr": "units * price", "format": "currency"},
-      {"id": "margin", "label": "Margen", "expr": "(revenue - fixed_cost) / revenue", "format": "percent"}
-    ]
-  }
-  </script>
-  <div class="ay-dash-grid">
-    <div class="ay-dash-col ay-dash-col--3" data-calc-input="units">
-      <div class="ay-dash-card ay-dash-card--calc-input"></div>
-    </div>
-    <div class="ay-dash-col ay-dash-col--3" data-calc-input="price">
-      <div class="ay-dash-card ay-dash-card--calc-input"></div>
-    </div>
-    <div class="ay-dash-col ay-dash-col--3" data-calc-output="revenue">
-      <div class="ay-dash-card ay-dash-card--calc-output">
-        <div class="ay-dash-kpi-label">Ingresos</div>
-        <div class="ay-dash-kpi-value ay-dash-kpi-value--calc">—</div>
-      </div>
-    </div>
-    <div class="ay-dash-col ay-dash-col--3" data-calc-output="margin">
-      <div class="ay-dash-card ay-dash-card--calc-output">
-        <div class="ay-dash-kpi-label">Margen</div>
-        <div class="ay-dash-kpi-value ay-dash-kpi-value--calc">—</div>
-      </div>
-    </div>
-  </div>
-</div>
-```
-
-**Calc cards — layout y CSS (importante)**
-
-Usa **solo clases del design system**. No CSS inline ni estilos custom.
-
-| Tipo | Markup del agente | Label |
-|------|-------------------|-------|
-| **Input** | `<div class="ay-dash-col ay-dash-col--N" data-calc-input="{id}"><div class="ay-dash-card ay-dash-card--calc-input"></div></div>` | Solo en JSON `inputs[].label` — **no** pongas `ay-dash-kpi-label` en input slots |
-| **Output** | `<div class="ay-dash-col ay-dash-col--N" data-calc-output="{id}"><div class="ay-dash-card ay-dash-card--calc-output"><div class="ay-dash-kpi-label">…</div><div class="ay-dash-kpi-value ay-dash-kpi-value--calc">—</div></div></div>` | En HTML (sentence case) — debe coincidir con `outputs[].label` |
-
-**Anchos de columna:** `ay-dash-col--2` parámetros compactos · `--3` default · `--4` inputs largos · `--6` resultados destacados.
-
-**Evita:** labels duplicados en input cards, ALL CAPS en labels (usa sentence case), `<input>` manual, cards sin `ay-dash-card--calc-input` / `--calc-output`.
-
-Reglas calculadora v1:
-- `inputs[].type`: `number`, `range`, `select` (escenarios con `options[].values` inyectan variables al scope)
-- **Slots de input:** `[data-calc-input="{id}"]` + card vacía `ay-dash-card ay-dash-card--calc-input`. Label solo en JSON.
-- **Sin slot:** el input cae en `.ay-dash-calculator__controls` (barra agrupada).
-- **Slots output:** `[data-calc-output="{id}"]` + `ay-dash-card--calc-output` + kpi-label + kpi-value--calc.
-- `outputs[].expr`: aritmética `+ - * / ( )`, identificadores de inputs/constants/outputs previos, funciones `min`, `max`, `round`, `abs`
-- `outputs[].format`: `number`, `currency`, `percent` (percent espera ratio 0–1, p. ej. `0.15` → `15.0%`)
-- En PDF/export: KPIs con valores default
-
-En PDF/export descargable los filtros, tabs y calculadoras quedan en estado por defecto (primera tab, sin filtro, inputs default).
+En PDF/export descargable, el HTML incluye tu JS; WeasyPrint no ejecuta scripts (KPIs estáticos o valores default).
 
 ## Prosa — layout
 
@@ -369,21 +192,20 @@ Puedes:
 - Inventar layouts dentro del grid (mezclar columnas, añadir secciones)
 - Combinar KPI + tablas + insight + callout — **siempre con el insight principal al inicio**
 - Usar **tabs por sección** (`ay-dash-tabs--section`) además de tabs de página
-- Usar filtros, tablas ordenables y calculadoras cuando haya datos comparables
+- Usar filtros, tablas ordenables y calculadoras con JS propio cuando haya datos comparables
 - Usar tablas HTML semánticas con clases dashboard
 - Añadir diagramas SVG en reportes prosa
-- Incrustar gráficos `.ay-chart` con Chart.js en dashboards o prosa
+- Incrustar gráficos Chart.js con `<canvas>` + script de init
 - Repetir patrones del starter adaptando datos
 
 Evita:
 - Publicar sin `validate_html_artifact` antes de `publish_html_artifact`
-- Bloques JSON o tools distintas de las de html-reports para armar el informe
+- Depender de `AyronDashboard` / `AyronChart` en el chat (el artifact debe ser autocontenido)
 - Colocar **tabs de página** o **filtros** en medio del grid o al final del dashboard
-- CSS inline en cada elemento (copiar estilos del catálogo)
-- `<script>` o handlers `onclick`
+- Handlers inline (`onclick=`, `onchange=`) — enlaza eventos en `<script>`
+- `<script src>` fuera de Chart.js en jsdelivr
 - Fuentes genéricas (Inter, system-ui solo como fallback ya incluido)
 - Gradientes purple/AI-slop, emoji, exclamaciones
-- Sparklines o SVG de datos hechos a mano — usa `.ay-chart` con Chart.js
 - Volcar el informe en el chat
 
 ## Voz (contenido)

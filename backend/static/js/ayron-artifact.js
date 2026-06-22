@@ -180,6 +180,65 @@
     return container;
   }
 
+  function teardownHtmlPreview(body) {
+    if (!body) return;
+    const observer = body._artifactIframeResizeObserver;
+    if (observer) {
+      observer.disconnect();
+      delete body._artifactIframeResizeObserver;
+    }
+    body.classList.remove("ay-artifact-panel__body--html-preview");
+    body.style.position = "";
+    body.style.padding = "";
+    body.style.overflow = "";
+  }
+
+  function mountHtmlPreview(body, html, title, panelEl) {
+    teardownHtmlPreview(body);
+    body.classList.add("ay-artifact-panel__body--html-preview");
+    body.style.position = "relative";
+    body.style.padding = "0";
+    body.style.overflow = "hidden";
+    body.innerHTML = "";
+    const iframe = document.createElement("iframe");
+    iframe.className = "ay-artifact-panel__iframe";
+    iframe.title = title;
+    iframe.setAttribute("sandbox", "allow-scripts");
+    iframe.style.position = "absolute";
+    iframe.style.inset = "0";
+    iframe.style.display = "block";
+    iframe.style.border = "0";
+    iframe.style.background = "#fff";
+    iframe.srcdoc = html;
+    body.appendChild(iframe);
+
+    function syncIframeSize() {
+      const header = panelEl.querySelector(".ay-artifact-panel__header");
+      const headerHeight = header ? header.offsetHeight : 56;
+      const width = Math.max(body.clientWidth || panelEl.clientWidth || 0, 320);
+      const height = Math.max(
+        body.clientHeight || panelEl.clientHeight - headerHeight || 0,
+        480
+      );
+      iframe.style.width = width + "px";
+      iframe.style.height = height + "px";
+    }
+
+    syncIframeSize();
+    requestAnimationFrame(function () {
+      syncIframeSize();
+      requestAnimationFrame(syncIframeSize);
+    });
+    iframe.addEventListener("load", syncIframeSize);
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(syncIframeSize);
+      observer.observe(panelEl);
+      observer.observe(body);
+      body._artifactIframeResizeObserver = observer;
+    }
+  }
+
   window.AyronArtifact = {
     panelEl: null,
     mainEl: null,
@@ -305,6 +364,24 @@
         '<span class="ay-spinner" aria-hidden="true"></span>' +
         "</div>";
 
+      if (isHtml) {
+        fetch(file.preview_url, { credentials: "same-origin" })
+          .then(function (r) {
+            if (!r.ok) throw new Error("preview failed");
+            return r.text();
+          })
+          .then(function (html) {
+            if (!self.openFile || self.openFile.file_id !== file.file_id) return;
+            mountHtmlPreview(body, html, displayFileName(file), self.panelEl);
+          })
+          .catch(function () {
+            if (self.openFile && self.openFile.file_id === file.file_id) {
+              body.innerHTML = '<div class="ay-artifact-panel__error">Preview unavailable.</div>';
+            }
+          });
+        return;
+      }
+
       fetch(file.preview_url, { credentials: "same-origin" })
         .then(function (r) {
           if (!r.ok) throw new Error("preview failed");
@@ -313,14 +390,7 @@
         .then(function (html) {
           if (!self.openFile || self.openFile.file_id !== file.file_id) return;
           body.innerHTML = html;
-          if (isHtml) {
-            if (window.AyronDashboard) {
-              window.AyronDashboard.mountAll(body);
-            }
-            if (window.AyronChart) {
-              window.AyronChart.mountAll(body);
-            }
-          } else if (!isHtml && window.AyronDocPreview) {
+          if (window.AyronDocPreview) {
             window.AyronDocPreview.mount(body);
           }
         })
@@ -354,6 +424,8 @@
       resetPanelExpandVisibility(this.panelEl);
       const metaLine = this.panelEl.querySelector(".ay-artifact-panel__meta-line");
       if (metaLine) metaLine.hidden = false;
+      const body = this.panelEl.querySelector(".ay-artifact-panel__body");
+      teardownHtmlPreview(body);
     },
 
     toggleExpand: function () {
@@ -362,6 +434,24 @@
       const expandBtn = this.panelEl.querySelector("[data-artifact-expand]");
       if (expandBtn) {
         expandBtn.innerHTML = this.expanded ? iconSvg("collapse") : iconSvg("expand");
+      }
+      const body = this.panelEl.querySelector(".ay-artifact-panel__body");
+      if (body && body.classList.contains("ay-artifact-panel__body--html-preview")) {
+        const iframe = body.querySelector(".ay-artifact-panel__iframe");
+        const panelEl = this.panelEl;
+        if (iframe) {
+          const header = panelEl.querySelector(".ay-artifact-panel__header");
+          const headerHeight = header ? header.offsetHeight : 56;
+          requestAnimationFrame(function () {
+            const width = Math.max(body.clientWidth || panelEl.clientWidth || 0, 320);
+            const height = Math.max(
+              body.clientHeight || panelEl.clientHeight - headerHeight || 0,
+              480
+            );
+            iframe.style.width = width + "px";
+            iframe.style.height = height + "px";
+          });
+        }
       }
     },
 

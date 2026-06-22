@@ -127,6 +127,7 @@ class TestFileViews:
         url = reverse("files:preview", kwargs={"file_id": file_obj.id})
         response = client.get(url)
         assert response.status_code == 200
+        assert b"<!DOCTYPE html>" in response.content
         assert b"ay-html-report-preview" in response.content
         assert b"<table>" in response.content
 

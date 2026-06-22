@@ -8,11 +8,6 @@ from apps.agent.tools.html_insight import normalize_insight_markup
 
 MAX_HTML_BYTES = 512_000
 
-_JSON_SCRIPT_RE = re.compile(
-    r"<script\b([^>]*\btype\s*=\s*[\"']application/json[\"'][^>]*)>(.*?)</script>",
-    re.IGNORECASE | re.DOTALL,
-)
-
 ALLOWED_TAGS = frozenset(
     {
         "html",
@@ -88,6 +83,14 @@ ALLOWED_TAGS = frozenset(
         "mask",
         "use",
         "marker",
+        "script",
+        "button",
+        "input",
+        "select",
+        "option",
+        "textarea",
+        "label",
+        "form",
     }
 )
 
@@ -112,6 +115,7 @@ ALLOWED_ATTRIBUTES = {
         "data-chart-id",
         "data-ay-chart-script",
         "data-ay-json-script",
+        "data-ay-preserved-script",
         "data-panels-target",
         "data-dimension",
         "data-measure",
@@ -143,6 +147,14 @@ ALLOWED_ATTRIBUTES = {
     "radialgradient": ["id", "cx", "cy", "r"],
     "stop": ["offset", "stop-color", "stop-opacity"],
     "use": ["href", "x", "y", "width", "height"],
+    "script": ["type", "src", "id", "defer", "async"],
+    "button": ["type", "disabled"],
+    "input": ["type", "name", "value", "min", "max", "step", "placeholder", "checked", "disabled"],
+    "select": ["name", "disabled"],
+    "option": ["value", "selected", "disabled"],
+    "textarea": ["name", "rows", "cols", "placeholder", "disabled"],
+    "label": ["for"],
+    "form": ["action", "method"],
 }
 
 CSS_SANITIZER = CSSSanitizer(
@@ -209,31 +221,64 @@ CSS_SANITIZER = CSSSanitizer(
 )
 
 
-def _preserve_json_scripts(html: str) -> tuple[str, list[str]]:
+_SCRIPT_RE = re.compile(
+    r"<script\b([^>]*)>(.*?)</script>|<script\b([^>]*)/>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+ALLOWED_SCRIPT_SRC_PREFIXES = (
+    "https://cdn.jsdelivr.net/npm/chart.js",
+)
+
+_ALLOWED_INLINE_SCRIPT_TYPES = frozenset(
+    {
+        "text/javascript",
+        "application/javascript",
+        "module",
+    }
+)
+
+
+def _script_is_allowed(attrs: str, body: str) -> bool:
+    if re.search(r"\btype\s*=\s*[\"']application/json[\"']", attrs, re.IGNORECASE):
+        try:
+            json.loads(body.strip())
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON script: {exc}") from exc
+        return True
+
+    src_match = re.search(r"\bsrc\s*=\s*[\"']([^\"']+)[\"']", attrs, re.IGNORECASE)
+    if src_match:
+        src = src_match.group(1).strip()
+        return any(src.startswith(prefix) for prefix in ALLOWED_SCRIPT_SRC_PREFIXES)
+
+    type_match = re.search(r"\btype\s*=\s*[\"']([^\"']+)[\"']", attrs, re.IGNORECASE)
+    if type_match:
+        script_type = type_match.group(1).strip().lower()
+        return script_type in _ALLOWED_INLINE_SCRIPT_TYPES
+
+    return True
+
+
+def _preserve_scripts(html: str) -> tuple[str, list[str]]:
     stored: list[str] = []
 
     def replace(match: re.Match) -> str:
-        body = match.group(2).strip()
-        try:
-            json.loads(body)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON script: {exc}") from exc
-        token = f'<div data-ay-json-script="{len(stored)}"></div>'
+        attrs = match.group(1) or match.group(3) or ""
+        body = match.group(2) or ""
+        if not _script_is_allowed(attrs, body):
+            return ""
+        token = f'<div data-ay-preserved-script="{len(stored)}"></div>'
         stored.append(match.group(0))
         return token
 
-    preserved = _JSON_SCRIPT_RE.sub(replace, html)
-    preserved = re.sub(
-        r"<script\b[^>]*>.*?</script>",
-        "",
-        preserved,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
+    preserved = _SCRIPT_RE.sub(replace, html)
     return preserved, stored
 
 
-def _restore_json_scripts(html: str, stored: list[str]) -> str:
+def _restore_scripts(html: str, stored: list[str]) -> str:
     for idx, script in enumerate(stored):
+        html = html.replace(f'<div data-ay-preserved-script="{idx}"></div>', script, 1)
         html = html.replace(f'<div data-ay-json-script="{idx}"></div>', script, 1)
         html = html.replace(f'<div data-ay-chart-script="{idx}"></div>', script, 1)
     return html
@@ -262,7 +307,7 @@ def sanitize_html_report(html: str) -> str:
     if len(raw.encode("utf-8")) > MAX_HTML_BYTES:
         raise ValueError(f"html exceeds maximum of {MAX_HTML_BYTES} bytes")
 
-    raw, json_scripts = _preserve_json_scripts(raw)
+    raw, preserved_scripts = _preserve_scripts(raw)
     cleaned = bleach.clean(
         raw,
         tags=ALLOWED_TAGS,
@@ -270,7 +315,7 @@ def sanitize_html_report(html: str) -> str:
         css_sanitizer=CSS_SANITIZER,
         strip=True,
     )
-    cleaned = _restore_json_scripts(cleaned, json_scripts)
+    cleaned = _restore_scripts(cleaned, preserved_scripts)
     if not cleaned.strip():
         raise ValueError("html is empty after sanitization")
     return cleaned

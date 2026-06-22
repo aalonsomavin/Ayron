@@ -276,11 +276,17 @@ def workspace_backend():
 
 @pytest.mark.django_db
 class TestHtmlReportTool:
-    def test_sanitize_strips_script(self):
-        dirty = "<p>Hola</p><script>alert(1)</script>"
+    def test_sanitize_preserves_inline_script(self):
+        dirty = "<p>Hola</p><script>window.__ok = true</script>"
         clean = sanitize_html_report(dirty)
         assert "Hola" in clean
-        assert "alert" not in clean
+        assert "window.__ok" in clean
+
+    def test_sanitize_strips_disallowed_external_script(self):
+        dirty = '<p>Hola</p><script src="https://evil.example/hack.js"></script>'
+        clean = sanitize_html_report(dirty)
+        assert "Hola" in clean
+        assert "evil.example" not in clean
 
     def test_sanitize_preserves_chart_json_script(self):
         dirty = """
@@ -326,6 +332,7 @@ class TestHtmlReportTool:
     def test_build_preview_fragment(self):
         content = validate_html_report_content("Informe", SAMPLE_HTML, "")
         html = build_preview_fragment(content)
+        assert "<!DOCTYPE html>" in html
         assert "ay-html-report-preview" in html
         assert "fonts.googleapis.com" in html
         assert ".ay-dash-page" in html or "ay-dash-page" in html
@@ -349,7 +356,8 @@ class TestHtmlReportTool:
         assert ".ay-report-prose" in html
         assert "<table>" in html
         assert "<svg" in html
-        assert "<script" not in html
+        assert "AyronChart.mountAll" not in html
+        assert "AyronDashboard.mountAll" not in html
         assert "Generado con Ayron" in html
 
     def test_build_export_html_dashboard(self):
@@ -361,24 +369,37 @@ class TestHtmlReportTool:
         assert 'class="ay-dash-page"' in html
 
     def test_build_export_html_with_chart(self):
-        content = validate_html_report_content("Ventas", _chart_report_html(), "")
+        html_with_chart = """
+<div class="ay-dash-page"><div class="ay-dash-inner">
+<canvas id="c1"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>new Chart(document.getElementById("c1"), { type: "bar", data: { labels: ["A"], datasets: [{ data: [1] }] } });</script>
+</div></div>
+"""
+        content = validate_html_report_content("Ventas", html_with_chart, "")
         html = build_export_html(content)
-        assert ".ay-chart__plot" in html
         assert "chart.js" in html
-        assert "AyronChart.mountAll" in html
-        assert 'type="application/json"' in html
+        assert "new Chart" in html
+        assert "AyronChart.mountAll" not in html
 
     def test_build_preview_fragment_with_chart(self):
-        content = validate_html_report_content("Ventas", _chart_report_html(), "")
+        html_with_chart = """
+<div class="ay-dash-page"><canvas id="c1"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>new Chart(document.getElementById("c1"), { type: "bar", data: { labels: ["A"], datasets: [{ data: [1] }] } });</script>
+</div>
+"""
+        content = validate_html_report_content("Ventas", html_with_chart, "")
         html = build_preview_fragment(content)
-        assert ".ay-chart__plot" in html
-        assert "chart.js" not in html
+        assert "<!DOCTYPE html>" in html
+        assert "chart.js" in html
+        assert "new Chart" in html
 
     def test_build_export_html_with_interactive_dashboard(self):
         content = validate_html_report_content("Ventas", INTERACTIVE_DASHBOARD_HTML, "")
         html = build_export_html(content)
-        assert "AyronDashboard.mountAll" in html
         assert "ay-dash-filter-bar" in html
+        assert "AyronDashboard.mountAll" not in html
 
     def test_sanitize_analytics_filter_scope(self):
         clean = sanitize_html_report(ANALYTICS_DASHBOARD_HTML)
@@ -393,42 +414,10 @@ class TestHtmlReportTool:
     def test_build_export_html_with_analytics_scope(self):
         content = validate_html_report_content("Facturación", ANALYTICS_DASHBOARD_HTML, "")
         html = build_export_html(content)
-        assert "AyronDashboard.mountAll" in html
-        assert "AyronChart.mountAll" in html
-        assert "chart.js" in html.lower()
+        assert "AyronDashboard.mountAll" not in html
+        assert "AyronChart.mountAll" not in html
         assert "ay-dash-filter-scope" in html
-        assert "mountFilterScopes" in html or "createFilterScope" in html
-        assert "ay-dash-slicer-dropdown" in html or "slicerUsesDropdown" in html
-
-    def test_dashboard_js_has_slicer_dropdown_ui(self):
-        from django.conf import settings
-
-        content = (settings.BASE_DIR / "static" / "js" / "ayron-dashboard.js").read_text(
-            encoding="utf-8"
-        )
-        assert "function mountDropdownSlicer" in content
-        assert "function slicerUsesDropdown" in content
-        assert "ay-dash-slicer-dropdown__menu" in content
-
-    def test_dashboard_js_has_filter_scope_runtime(self):
-        from django.conf import settings
-
-        content = (settings.BASE_DIR / "static" / "js" / "ayron-dashboard.js").read_text(
-            encoding="utf-8"
-        )
-        assert "function createFilterScope" in content
-        assert "function mountFilterScopes" in content
-        assert "ay-dash-kpi-live" in content
-
-    def test_chart_js_has_live_mount_and_update(self):
-        from django.conf import settings
-
-        content = (settings.BASE_DIR / "static" / "js" / "ayron-chart.js").read_text(
-            encoding="utf-8"
-        )
-        assert "function mountLive" in content
-        assert "function update" in content
-        assert "buildLivePayload" in content
+        assert 'type="application/json"' in html
 
     def test_sanitize_section_tabs_with_external_panels(self):
         clean = sanitize_html_report(SECTION_TABS_HTML)
@@ -439,7 +428,7 @@ class TestHtmlReportTool:
     def test_build_export_html_with_section_tabs(self):
         content = validate_html_report_content("Ventas", SECTION_TABS_HTML, "")
         html = build_export_html(content)
-        assert "AyronDashboard.mountAll" in html
+        assert "AyronDashboard.mountAll" not in html
         assert "data-panels-target" in html
 
     def test_sanitize_calculator_block(self):
@@ -449,15 +438,15 @@ class TestHtmlReportTool:
         assert "data-calc-input" in clean
         assert 'type="application/json"' in clean
 
-    def test_sanitize_strips_agent_input(self):
+    def test_sanitize_preserves_agent_input(self):
         dirty = '<div class="ay-dash-calculator"><input type="number" value="1"></div>'
         clean = sanitize_html_report(dirty)
-        assert "<input" not in clean
+        assert "<input" in clean
 
     def test_build_export_html_with_calculator(self):
         content = validate_html_report_content("Simulador", CALCULATOR_HTML, "")
         html = build_export_html(content)
-        assert "AyronDashboard.mountAll" in html
+        assert "AyronDashboard.mountAll" not in html
         assert "ay-dash-calculator" in html
 
     def test_publish_html_artifact_creates_report(self, user, conversation, workspace_backend):
@@ -506,13 +495,14 @@ class TestHtmlReportTool:
         write_workspace_file(
             workspace_backend,
             path,
-            '<div class="ay-dash-page"><script>alert(1)</script><p>ok</p></div>',
+            '<div class="ay-dash-page"><script>window.__dash = 1</script><p>ok</p></div>',
         )
         result = json.loads(run_validate_html_artifact(path))
         assert result["ok"] is True
         assert result["html_kind"] == "dashboard"
         cleaned = workspace_backend.files[path]
-        assert "alert" not in cleaned
+        assert "window.__dash" in cleaned
+        assert "ay-dash-page" in cleaned
 
     def test_hydrate_and_update_html_artifact(self, user, conversation, workspace_backend):
         set_agent_context(conversation, user)
