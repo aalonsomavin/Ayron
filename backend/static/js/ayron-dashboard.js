@@ -479,6 +479,506 @@
     });
   }
 
+  function readScopeScripts(scopeEl) {
+    var dataset = null;
+    var config = null;
+    scopeEl.querySelectorAll('script[type="application/json"]').forEach(function (script) {
+      try {
+        var parsed = JSON.parse(script.textContent || "");
+        if (parsed && Array.isArray(parsed.rows)) {
+          dataset = parsed;
+        } else if (parsed && Array.isArray(parsed.slicers)) {
+          config = parsed;
+        }
+      } catch (_err) {
+        return;
+      }
+    });
+    return { dataset: dataset, config: config };
+  }
+
+  function parseMeasure(spec) {
+    if (!spec) return { fn: "count", field: null };
+    var parts = String(spec).split(":");
+    return { fn: parts[0], field: parts[1] || null };
+  }
+
+  function computeMeasure(rows, measure) {
+    if (measure.fn === "sum") {
+      return rows.reduce(function (acc, row) {
+        return acc + (Number(row[measure.field]) || 0);
+      }, 0);
+    }
+    if (measure.fn === "count_distinct") {
+      var seen = {};
+      rows.forEach(function (row) {
+        seen[String(row[measure.field])] = true;
+      });
+      return Object.keys(seen).length;
+    }
+    return rows.length;
+  }
+
+  function sortGroupKeys(keys) {
+    return keys.slice().sort(function (a, b) {
+      var na = Number(a);
+      var nb = Number(b);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
+  function createFilterScope(rows, slicers) {
+    var state = {};
+    var listeners = [];
+    slicers.forEach(function (s) {
+      state[s.id] = [];
+    });
+
+    function notify() {
+      listeners.forEach(function (fn) {
+        fn();
+      });
+    }
+
+    function rowsFor(excludeDim) {
+      return rows.filter(function (row) {
+        return slicers.every(function (s) {
+          if (s.id === excludeDim) return true;
+          var active = state[s.id];
+          if (!active.length) return true;
+          var val = row[s.field];
+          return active.some(function (item) {
+            return String(item) === String(val);
+          });
+        });
+      });
+    }
+
+    function aggregate(measureSpec, groupByField, excludeDim) {
+      var filtered = rowsFor(excludeDim != null ? excludeDim : null);
+      if (!groupByField) {
+        return computeMeasure(filtered, parseMeasure(measureSpec));
+      }
+      var groups = {};
+      filtered.forEach(function (row) {
+        var key = String(row[groupByField]);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(row);
+      });
+      var keys = sortGroupKeys(Object.keys(groups));
+      return {
+        labels: keys,
+        values: keys.map(function (key) {
+          return computeMeasure(groups[key], parseMeasure(measureSpec));
+        }),
+      };
+    }
+
+    return {
+      slicers: slicers,
+      getState: function () {
+        return state;
+      },
+      rowsFor: rowsFor,
+      aggregate: aggregate,
+      toggle: function (dim, val) {
+        if (!Object.prototype.hasOwnProperty.call(state, dim)) return;
+        var arr = state[dim].slice();
+        var strVal = String(val);
+        var idx = arr.findIndex(function (item) {
+          return String(item) === strVal;
+        });
+        if (idx < 0) arr.push(val);
+        else arr.splice(idx, 1);
+        state[dim] = arr;
+        notify();
+      },
+      clearAll: function () {
+        slicers.forEach(function (s) {
+          state[s.id] = [];
+        });
+        notify();
+      },
+      has: function (dim, val) {
+        return (state[dim] || []).some(function (item) {
+          return String(item) === String(val);
+        });
+      },
+      onChange: function (fn) {
+        listeners.push(fn);
+      },
+    };
+  }
+
+  function uniqueFieldValues(rows, field) {
+    var seen = {};
+    var values = [];
+    rows.forEach(function (row) {
+      var val = row[field];
+      var key = String(val);
+      if (seen[key]) return;
+      seen[key] = true;
+      values.push(val);
+    });
+    return sortGroupKeys(values.map(String)).map(function (key) {
+      var sample = rows.find(function (row) {
+        return String(row[field]) === key;
+      });
+      return sample ? sample[field] : key;
+    });
+  }
+
+  function isNumericLikeValues(values) {
+    return (
+      values.length > 0 &&
+      values.every(function (val) {
+        return String(val).trim() !== "" && !Number.isNaN(Number(val));
+      })
+    );
+  }
+
+  function slicerUsesDropdown(slicer, values) {
+    if (slicer.control === "dropdown") return true;
+    if (slicer.control === "pills") return false;
+    return !isNumericLikeValues(values);
+  }
+
+  function createChevronSvg() {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "12");
+    svg.setAttribute("height", "12");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2.4");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("class", "ay-dash-slicer-dropdown__chevron");
+    var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M6 9l6 6 6-6");
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function createDropdownCheck(checked) {
+    var box = document.createElement("span");
+    box.className =
+      "ay-dash-slicer-dropdown__check" +
+      (checked ? " ay-dash-slicer-dropdown__check--on" : "");
+    if (checked) {
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "10");
+      svg.setAttribute("height", "10");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "#fff");
+      svg.setAttribute("stroke-width", "3.4");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("stroke-linejoin", "round");
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", "M20 6L9 17l-5-5");
+      svg.appendChild(path);
+      box.appendChild(svg);
+    }
+    return box;
+  }
+
+  function refreshPillSlicer(slicerEl, slicer, scope) {
+    slicerEl.querySelectorAll(".ay-dash-slicer__pill").forEach(function (pill) {
+      var active = scope.has(slicer.id, pill.dataset.slicerValue || pill.textContent);
+      pill.classList.toggle("ay-dash-slicer__pill--active", active);
+    });
+  }
+
+  function refreshDropdownSlicer(slicerEl, slicer, scope) {
+    var state = scope.getState()[slicer.id] || [];
+    var trigger = slicerEl.querySelector(".ay-dash-slicer-dropdown__trigger");
+    var countEl = slicerEl.querySelector(".ay-dash-slicer-dropdown__count");
+    if (trigger) {
+      trigger.classList.toggle("ay-dash-slicer-dropdown__trigger--active", state.length > 0);
+    }
+    if (countEl) {
+      countEl.hidden = state.length === 0;
+      countEl.textContent = String(state.length);
+    }
+    slicerEl.querySelectorAll(".ay-dash-slicer-dropdown__item").forEach(function (item) {
+      var val = item.dataset.slicerValue;
+      var active = scope.has(slicer.id, val);
+      item.classList.toggle("ay-dash-slicer-dropdown__item--active", active);
+      var check = item.querySelector(".ay-dash-slicer-dropdown__check");
+      if (check) {
+        var next = createDropdownCheck(active);
+        check.replaceWith(next);
+      }
+    });
+  }
+
+  function mountPillSlicer(barEl, scope, slicer, values) {
+    var wrap = document.createElement("div");
+    wrap.className = "ay-dash-slicer ay-dash-slicer--pills";
+    wrap.dataset.slicerId = slicer.id;
+
+    var label = document.createElement("span");
+    label.className = "ay-dash-slicer__label";
+    label.textContent = slicer.label || slicer.id;
+    wrap.appendChild(label);
+
+    var pills = document.createElement("div");
+    pills.className = "ay-dash-slicer__pills";
+
+    values.forEach(function (val) {
+      var pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "ay-dash-slicer__pill";
+      pill.dataset.slicerValue = String(val);
+      pill.textContent = String(val);
+      pill.addEventListener("click", function () {
+        scope.toggle(slicer.id, val);
+      });
+      pills.appendChild(pill);
+    });
+
+    wrap.appendChild(pills);
+    barEl.appendChild(wrap);
+
+    scope.onChange(function () {
+      refreshPillSlicer(wrap, slicer, scope);
+    });
+    refreshPillSlicer(wrap, slicer, scope);
+    return wrap;
+  }
+
+  function mountDropdownSlicer(barEl, scope, slicer, values, closeMenus) {
+    var wrap = document.createElement("div");
+    wrap.className = "ay-dash-slicer ay-dash-slicer--dropdown";
+    wrap.dataset.slicerId = slicer.id;
+
+    var trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "ay-dash-slicer-dropdown__trigger";
+
+    var triggerLabel = document.createElement("span");
+    triggerLabel.className = "ay-dash-slicer-dropdown__trigger-label";
+    triggerLabel.textContent = slicer.label || slicer.id;
+
+    var countEl = document.createElement("span");
+    countEl.className = "ay-dash-slicer-dropdown__count";
+    countEl.hidden = true;
+
+    trigger.appendChild(triggerLabel);
+    trigger.appendChild(countEl);
+    trigger.appendChild(createChevronSvg());
+
+    var menu = document.createElement("div");
+    menu.className = "ay-dash-slicer-dropdown__menu";
+    menu.hidden = true;
+
+    values.forEach(function (val) {
+      var item = document.createElement("button");
+      item.type = "button";
+      item.className = "ay-dash-slicer-dropdown__item";
+      item.dataset.slicerValue = String(val);
+      item.appendChild(createDropdownCheck(scope.has(slicer.id, val)));
+      var text = document.createElement("span");
+      text.className = "ay-dash-slicer-dropdown__item-label";
+      text.textContent = String(val);
+      item.appendChild(text);
+      item.addEventListener("click", function (event) {
+        event.stopPropagation();
+        scope.toggle(slicer.id, val);
+      });
+      menu.appendChild(item);
+    });
+
+    trigger.addEventListener("click", function (event) {
+      event.stopPropagation();
+      var wasOpen = !menu.hidden;
+      closeMenus();
+      if (!wasOpen) {
+        menu.hidden = false;
+        trigger.classList.add("ay-dash-slicer-dropdown__trigger--open");
+      }
+    });
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+    barEl.appendChild(wrap);
+
+    scope.onChange(function () {
+      refreshDropdownSlicer(wrap, slicer, scope);
+    });
+    refreshDropdownSlicer(wrap, slicer, scope);
+    return wrap;
+  }
+
+  function mountSlicerBar(scopeEl, scope) {
+    var barEl = scopeEl.querySelector(".ay-dash-slicer-bar");
+    if (!barEl || barEl.dataset.ayDashMounted) return;
+    barEl.dataset.ayDashMounted = "1";
+    barEl.innerHTML = "";
+
+    function closeMenus() {
+      barEl.querySelectorAll(".ay-dash-slicer-dropdown__menu").forEach(function (menu) {
+        menu.hidden = true;
+      });
+      barEl.querySelectorAll(".ay-dash-slicer-dropdown__trigger").forEach(function (trigger) {
+        trigger.classList.remove("ay-dash-slicer-dropdown__trigger--open");
+      });
+    }
+
+    if (!barEl.dataset.ayDashDropdownListener) {
+      barEl.dataset.ayDashDropdownListener = "1";
+      document.addEventListener("click", function () {
+        closeMenus();
+      });
+    }
+
+    var sawPills = false;
+    var sawDropdown = false;
+
+    scope.slicers.forEach(function (slicer) {
+      var values = uniqueFieldValues(scope.rowsFor(slicer.id), slicer.field);
+      var useDropdown = slicerUsesDropdown(slicer, values);
+
+      if (useDropdown && sawPills && !sawDropdown) {
+        var divider = document.createElement("span");
+        divider.className = "ay-dash-slicer-bar__divider";
+        divider.setAttribute("aria-hidden", "true");
+        barEl.appendChild(divider);
+      }
+
+      if (useDropdown) {
+        mountDropdownSlicer(barEl, scope, slicer, values, closeMenus);
+        sawDropdown = true;
+      } else {
+        mountPillSlicer(barEl, scope, slicer, values);
+        sawPills = true;
+      }
+    });
+  }
+
+  function mountFilterChips(scopeEl, scope) {
+    var chipsEl = scopeEl.querySelector(".ay-dash-filter-chips");
+    if (!chipsEl || chipsEl.dataset.ayDashMounted) return;
+    chipsEl.dataset.ayDashMounted = "1";
+
+    function render() {
+      chipsEl.innerHTML = "";
+      var state = scope.getState();
+      var chips = [];
+      scope.slicers.forEach(function (slicer) {
+        (state[slicer.id] || []).forEach(function (val) {
+          chips.push({ dim: slicer.id, label: slicer.label || slicer.id, val: val });
+        });
+      });
+
+      if (!chips.length) {
+        var empty = document.createElement("span");
+        empty.className = "ay-dash-filter-chips__empty";
+        empty.textContent = "Sin filtros · mostrando todo";
+        chipsEl.appendChild(empty);
+        return;
+      }
+
+      chips.forEach(function (chip) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ay-dash-filter-chip";
+        btn.textContent = chip.label + ": " + String(chip.val);
+        btn.addEventListener("click", function () {
+          scope.toggle(chip.dim, chip.val);
+        });
+        chipsEl.appendChild(btn);
+      });
+
+      var clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.className = "ay-dash-filter-chip ay-dash-filter-chip__clear";
+      clearBtn.textContent = "Limpiar";
+      clearBtn.addEventListener("click", function () {
+        scope.clearAll();
+      });
+      chipsEl.appendChild(clearBtn);
+    }
+
+    scope.onChange(render);
+    render();
+  }
+
+  function mountScopeTables(scopeEl, scope) {
+    scopeEl.querySelectorAll("table.ay-dash-table tbody").forEach(function (tbody) {
+      if (tbody.dataset.ayDashScopeTable) return;
+      tbody.dataset.ayDashScopeTable = "1";
+      scope.onChange(function () {
+        tbody.querySelectorAll("tr").forEach(function (row) {
+          var visible = scope.slicers.every(function (slicer) {
+            var active = scope.getState()[slicer.id];
+            if (!active.length) return true;
+            var attr = "data-" + slicer.field;
+            var rowVal = row.getAttribute(attr);
+            return active.some(function (item) {
+              return String(item) === String(rowVal);
+            });
+          });
+          row.hidden = !visible;
+        });
+      });
+      tbody.querySelectorAll("tr").forEach(function (row) {
+        row.hidden = false;
+      });
+    });
+  }
+
+  function mountLiveKpis(scopeEl, scope) {
+    scopeEl.querySelectorAll(".ay-dash-kpi-live").forEach(function (kpiEl) {
+      if (kpiEl.dataset.ayDashMounted) return;
+      kpiEl.dataset.ayDashMounted = "1";
+      var agg = kpiEl.getAttribute("data-agg");
+      var valueFormat = kpiEl.getAttribute("data-format") || "number";
+      var valueEl = kpiEl.querySelector(".ay-dash-kpi-value");
+      if (!valueEl || !agg) return;
+
+      scope.onChange(function () {
+        var value = scope.aggregate(agg, null, null);
+        valueEl.textContent = formatCalcValue(value, valueFormat);
+      });
+      var initial = scope.aggregate(agg, null, null);
+      valueEl.textContent = formatCalcValue(initial, valueFormat);
+    });
+  }
+
+  function mountFilterScopes(container) {
+    container.querySelectorAll(".ay-dash-filter-scope").forEach(function (scopeEl) {
+      if (scopeEl.dataset.ayDashMounted) return;
+      var scripts = readScopeScripts(scopeEl);
+      if (!scripts.dataset || !scripts.config) return;
+      scopeEl.dataset.ayDashMounted = "1";
+
+      var rows = scripts.dataset.rows || [];
+      var slicers = scripts.config.slicers || [];
+      if (!slicers.length) return;
+
+      var scope = createFilterScope(rows, slicers);
+      mountSlicerBar(scopeEl, scope);
+      mountFilterChips(scopeEl, scope);
+      mountScopeTables(scopeEl, scope);
+      mountLiveKpis(scopeEl, scope);
+
+      if (window.AyronChart && window.AyronChart.mountLive) {
+        scopeEl.querySelectorAll(".ay-chart--live").forEach(function (chartEl) {
+          window.AyronChart.mountLive(scope, chartEl);
+        });
+      }
+
+      scope.onChange(function () {
+        if (window.AyronChart && window.AyronChart.resizeAll) {
+          window.AyronChart.resizeAll(scopeEl);
+        }
+      });
+    });
+  }
+
   function mountCalculators(container) {
     container.querySelectorAll(".ay-dash-calculator").forEach(function (calcEl) {
       if (calcEl.dataset.ayDashMounted) return;
@@ -554,10 +1054,12 @@
       container = container || document;
       mountTabs(container);
       mountFilters(container);
+      mountFilterScopes(container);
       mountSortableTables(container);
       mountCalculators(container);
     },
     evaluateExpression: evaluateExpression,
     formatCalcValue: formatCalcValue,
+    createFilterScope: createFilterScope,
   };
 })();

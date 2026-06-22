@@ -34,6 +34,8 @@ AGENT_INSTRUCTION_AFTER_HTML_REPORT = (
 AGENT_INSTRUCTION_AFTER_DRAFT_CREATE = (
     "Dashboard en borrador (no visible aún). "
     "Añade bloques con append_html_report_block y publica con publish_html_report. "
+    "Tabs de página y filtros van arriba (inicio de ay-dash-inner, antes del contenido). "
+    "No incluyas ay-dash-title, ay-dash-subtitle, ay-dash-eyebrow ni ay-dash-divider por ahora. "
     "Prefiere tabs por sección, filtros, tablas ordenables o calculadoras cuando el "
     "informe tenga varias vistas o datos comparables."
 )
@@ -165,6 +167,7 @@ def _body_has_interactive_dashboard(body_html: str) -> bool:
     markers = (
         "ay-dash-tabs",
         "ay-dash-filter-bar",
+        "ay-dash-filter-scope",
         "ay-dash-table--sortable",
         "ay-dash-calculator",
     )
@@ -508,7 +511,10 @@ def create_html_report(
 
     For large dashboards, use `build_mode="incremental"`: creates a draft shell
     (not visible to the user), then call `append_html_report_block` for each
-    section and `publish_html_report` when done.
+    section and `publish_html_report` when done. Put page-level tabs and filter
+    bars at the top of the dashboard (start of `.ay-dash-inner`), before
+    insight/KPI/table content — see GUIDELINES. Do not include page title,
+    subtitle, eyebrow or divider markup for now.
 
     For charts, embed `.ay-chart` blocks with a JSON payload in
     `<script type="application/json">` (see GUIDELINES). Do not use `<script>`
@@ -581,7 +587,7 @@ def append_html_report_block(
 
     `target`:
     - `grid`: append inside `.ay-dash-grid` (KPI cards, tables, charts, **tabs de sección**)
-    - `tabs`: append a `.ay-dash-tab-panel` inside the **page-level** `.ay-dash-tab-panels` only (capítulos grandes). No uses esto para años, regiones ni sub-vistas — esas van en `.ay-dash-tabs--section` con `target="grid"`.
+    - `tabs`: append a `.ay-dash-tab-panel` inside the **page-level** `.ay-dash-tab-panels` only (capítulos grandes). El contenedor de tabs va **arriba** en el shell, al inicio de `.ay-dash-inner`. No uses esto para años, regiones ni sub-vistas — esas van en `.ay-dash-tabs--section` con `target="grid"`.
     - `prose`: append inside `.ay-report-prose`
 
     Do not include root wrappers (`.ay-dash-page`, `.ay-report-prose`) in `html`.

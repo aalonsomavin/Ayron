@@ -111,6 +111,43 @@ INTERACTIVE_DASHBOARD_HTML = """
 </div>
 """
 
+ANALYTICS_DASHBOARD_HTML = """
+<div class="ay-dash-page">
+  <div class="ay-dash-inner">
+    <h1 class="ay-dash-title">Facturación</h1>
+    <div class="ay-dash-filter-scope">
+      <script type="application/json" id="analytics-data">
+      {"rows":[{"year":2009,"country":"USA","genre":"Rock","amount":12.5,"invoice_id":"INV-1"},{"year":2010,"country":"Canada","genre":"Rock","amount":6.1,"invoice_id":"INV-2"}]}
+      </script>
+      <script type="application/json">
+      {"slicers":[{"id":"year","field":"year","label":"Año","control":"pills"},{"id":"country","field":"country","label":"País","control":"dropdown"}]}
+      </script>
+      <div class="ay-dash-slicer-bar"></div>
+      <div class="ay-dash-filter-chips"></div>
+      <div class="ay-dash-grid">
+        <div class="ay-dash-col ay-dash-col--3">
+          <div class="ay-dash-card ay-dash-kpi-live" data-agg="sum:amount" data-format="currency">
+            <div class="ay-dash-kpi-label">Total</div>
+            <div class="ay-dash-kpi-value">—</div>
+          </div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--6">
+          <div class="ay-chart ay-chart--live" data-chart-id="chart-country" data-dimension="country" data-measure="sum:amount" data-cross-filter="country">
+            <script id="chart-country" type="application/json">
+            {"chart_type":"bar","title":"Por país","datasets":[{"label":"Importe","color_index":0}],"value_format":"currency"}
+            </script>
+            <div class="ay-chart__card">
+              <div class="ay-chart__title">Por país</div>
+              <div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+"""
+
 SECTION_TABS_HTML = """
 <div class="ay-dash-page">
   <div class="ay-dash-inner">
@@ -398,6 +435,56 @@ class TestHtmlReportTool:
         html = build_export_html(content)
         assert "AyronDashboard.mountAll" in html
         assert "ay-dash-filter-bar" in html
+
+    def test_sanitize_analytics_filter_scope(self):
+        clean = sanitize_html_report(ANALYTICS_DASHBOARD_HTML)
+        assert "ay-dash-filter-scope" in clean
+        assert "data-agg" in clean
+        assert "data-dimension" in clean
+        assert "data-measure" in clean
+        assert "data-cross-filter" in clean
+        assert "ay-chart--live" in clean
+        assert 'type="application/json"' in clean
+
+    def test_build_export_html_with_analytics_scope(self):
+        content = validate_html_report_content("Facturación", ANALYTICS_DASHBOARD_HTML, "")
+        html = build_export_html(content)
+        assert "AyronDashboard.mountAll" in html
+        assert "AyronChart.mountAll" in html
+        assert "chart.js" in html.lower()
+        assert "ay-dash-filter-scope" in html
+        assert "mountFilterScopes" in html or "createFilterScope" in html
+        assert "ay-dash-slicer-dropdown" in html or "slicerUsesDropdown" in html
+
+    def test_dashboard_js_has_slicer_dropdown_ui(self):
+        from django.conf import settings
+
+        content = (settings.BASE_DIR / "static" / "js" / "ayron-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        assert "function mountDropdownSlicer" in content
+        assert "function slicerUsesDropdown" in content
+        assert "ay-dash-slicer-dropdown__menu" in content
+
+    def test_dashboard_js_has_filter_scope_runtime(self):
+        from django.conf import settings
+
+        content = (settings.BASE_DIR / "static" / "js" / "ayron-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        assert "function createFilterScope" in content
+        assert "function mountFilterScopes" in content
+        assert "ay-dash-kpi-live" in content
+
+    def test_chart_js_has_live_mount_and_update(self):
+        from django.conf import settings
+
+        content = (settings.BASE_DIR / "static" / "js" / "ayron-chart.js").read_text(
+            encoding="utf-8"
+        )
+        assert "function mountLive" in content
+        assert "function update" in content
+        assert "buildLivePayload" in content
 
     def test_sanitize_section_tabs_with_external_panels(self):
         clean = sanitize_html_report(SECTION_TABS_HTML)

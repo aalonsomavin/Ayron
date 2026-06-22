@@ -44,7 +44,24 @@
     return palette[idx % palette.length];
   }
 
-  function buildChartConfig(chart) {
+  function hexWithAlpha(hex, alpha) {
+    if (!hex || hex.charAt(0) !== "#") return hex;
+    var h = hex.slice(1);
+    if (h.length === 3) {
+      h = h
+        .split("")
+        .map(function (c) {
+          return c + c;
+        })
+        .join("");
+    }
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+  }
+
+  function buildChartConfig(chart, liveOpts) {
     const palette = chartColors();
     const valueFormat = chart.value_format || "number";
     const textMuted = cssVar("--ay-text-muted") || "#8a8a92";
@@ -72,9 +89,17 @@
         entry.tension = 0.3;
         entry.fill = false;
       } else {
-        entry.backgroundColor = color;
+        if (Array.isArray(dataset.backgroundColors)) {
+          entry.backgroundColor = dataset.backgroundColors;
+        } else {
+          entry.backgroundColor = color;
+        }
         entry.borderRadius = 3;
         entry.maxBarThickness = 18;
+        if (Array.isArray(dataset.borderColors)) {
+          entry.borderColor = dataset.borderColors;
+          entry.borderWidth = dataset.borderWidth != null ? dataset.borderWidth : 2;
+        }
       }
       return entry;
     });
@@ -106,13 +131,7 @@
             },
           };
 
-    return {
-      type: chartType,
-      data: {
-        labels: chart.labels || [],
-        datasets: datasets,
-      },
-      options: {
+    const options = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -143,13 +162,31 @@
           },
         },
         scales: scales,
+      };
+
+    if (liveOpts && liveOpts.crossFilter && chartType !== "pie") {
+      options.onClick = function (_evt, elements) {
+        if (!elements.length || !liveOpts.scope) return;
+        const idx = elements[0].index;
+        const label = (chart.labels || [])[idx];
+        if (label == null) return;
+        liveOpts.scope.toggle(liveOpts.crossFilter, label);
+      };
+    }
+
+    return {
+      type: chartType,
+      data: {
+        labels: chart.labels || [],
+        datasets: datasets,
       },
+      options: options,
     };
   }
 
-  function createChart(canvas, chart) {
+  function createChart(canvas, chart, liveOpts) {
     if (typeof Chart === "undefined") return null;
-    const config = buildChartConfig(chart);
+    const config = buildChartConfig(chart, liveOpts);
     return new Chart(canvas, config);
   }
 
@@ -221,6 +258,90 @@
     });
   }
 
+  function update(node, chart, liveOpts) {
+    const instance = instances.get(node);
+    if (!instance) return;
+    const config = buildChartConfig(chart, liveOpts);
+    instance.config.type = config.type;
+    instance.data.labels = config.data.labels;
+    instance.data.datasets = config.data.datasets;
+    instance.options = config.options;
+    instance.update("none");
+  }
+
+  function buildLivePayload(scope, node) {
+    const dimension = node.dataset.dimension;
+    const measure = node.dataset.measure;
+    const crossFilter = node.dataset.crossFilter || dimension;
+    const meta = readPayload(node) || {};
+    const aggregated = scope.aggregate(measure, dimension, dimension);
+    const labels = aggregated.labels || [];
+    const values = aggregated.values || [];
+    const palette = chartColors();
+    const colorIdx =
+      meta.datasets && meta.datasets[0] && meta.datasets[0].color_index != null
+        ? meta.datasets[0].color_index
+        : 0;
+    const baseColor = palette[colorIdx % palette.length];
+    const dimState = scope.getState()[crossFilter] || [];
+    const hasActive = dimState.length > 0;
+    const backgroundColors = labels.map(function (label) {
+      if (!hasActive || scope.has(crossFilter, label)) return baseColor;
+      return hexWithAlpha(baseColor, 0.28);
+    });
+    const borderColors = labels.map(function (label) {
+      if (!hasActive || scope.has(crossFilter, label)) return baseColor;
+      return hexWithAlpha(baseColor, 0.28);
+    });
+
+    return {
+      chart_type: meta.chart_type || "bar",
+      title: meta.title,
+      caption: meta.caption,
+      value_format: meta.value_format || "number",
+      labels: labels,
+      datasets: [
+        {
+          label:
+            meta.datasets && meta.datasets[0] && meta.datasets[0].label
+              ? meta.datasets[0].label
+              : measure,
+          data: values,
+          color_index: colorIdx,
+          backgroundColors: backgroundColors,
+          borderColors: borderColors,
+          borderWidth: hasActive ? 2 : 0,
+        },
+      ],
+    };
+  }
+
+  function mountLive(scope, node) {
+    if (!node || node.dataset.ayChartLiveMounted) return;
+    node.dataset.ayChartLiveMounted = "1";
+    const crossFilter = node.dataset.crossFilter || node.dataset.dimension;
+    const liveOpts = { scope: scope, crossFilter: crossFilter };
+
+    function refresh() {
+      const payload = buildLivePayload(scope, node);
+      const canvas = node.querySelector(".ay-chart__canvas");
+      if (!canvas) return;
+      const instance = instances.get(node);
+      if (instance) {
+        update(node, payload, liveOpts);
+      } else {
+        const created = createChart(canvas, payload, liveOpts);
+        if (created) {
+          instances.set(node, created);
+          scheduleResize(created);
+        }
+      }
+    }
+
+    scope.onChange(refresh);
+    refresh();
+  }
+
   function mount(node) {
     if (!node) return;
     const existing = instances.get(node);
@@ -239,14 +360,14 @@
   }
 
   function mountAll(root) {
-    (root || document).querySelectorAll(".ay-chart").forEach(mount);
+    (root || document).querySelectorAll(".ay-chart:not(.ay-chart--live)").forEach(mount);
   }
 
   function resizeAll(root) {
     (root || document).querySelectorAll(".ay-chart").forEach(function (node) {
       const instance = instances.get(node);
       if (instance) scheduleResize(instance);
-      else mount(node);
+      else if (!node.classList.contains("ay-chart--live")) mount(node);
     });
   }
 
@@ -264,8 +385,11 @@
     create: buildElement,
     render: render,
     mount: mount,
+    mountLive: mountLive,
     mountAll: mountAll,
+    update: update,
     resizeAll: resizeAll,
     destroyAll: destroyAll,
+    buildLivePayload: buildLivePayload,
   };
 })();

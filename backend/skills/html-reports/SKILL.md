@@ -51,7 +51,7 @@ No uses para: Word (`.docx`), respuestas solo en chat. Para datos sueltos en el 
 
 Usa cuando hay **más de ~4 bloques**, varias páginas/tabs, o muchos datos.
 
-1. `create_html_report(..., build_mode="incremental", html_kind="dashboard")` — shell con header y grid/tabs vacíos (**no visible aún**)
+1. `create_html_report(..., build_mode="incremental", html_kind="dashboard")` — shell con header y, arriba, contenedores vacíos para **filtros** y/o **tabs de página** (`ay-dash-tab-panels`) o un `ay-dash-grid` (**no visible aún**)
 2. `append_html_report_block(file_id, html, target="grid"|"tabs")` por cada sección
 3. **`publish_html_report(file_id)`** — el usuario ve el artifact **solo aquí**
 4. Mensaje breve al final
@@ -67,12 +67,19 @@ Para editar un archivo ya publicado: `get_html_report` → `update_html_report`
 
 ## Interactividad declarativa
 
-**Prefiere dashboards interactivos** cuando haya varias vistas, periodos o escenarios. Usa:
+**Prefiere dashboards interactivos** cuando haya varias vistas, periodos o escenarios.
 
-- **Tabs de página** — capítulos grandes (`append_html_report_block(..., target="tabs")`)
-- **Tabs por sección** — `.ay-dash-tabs--section` dentro de una columna del grid
+**Tabs de página y filtros van arriba del dashboard** — al inicio de `.ay-dash-inner`, antes del grid de contenido (insight, KPIs, tablas). No los insertes en medio del informe.
+
+**No incluyas** eyebrow, `.ay-dash-title`, `.ay-dash-subtitle` ni `.ay-dash-divider` en el HTML por ahora (el título va en metadata de la tool).
+
+Usa:
+
+- **Tabs de página** — capítulos grandes; en el shell, arriba (`append_html_report_block(..., target="tabs")` para cada capítulo)
+- **Tabs por sección** — `.ay-dash-tabs--section` dentro de una columna del grid (arriba de ese bloque)
 - **Tabs en header** — `.ay-dash-tabs--header` + `data-panels-target` dentro de `.ay-dash-tab-scope`
-- **Filtros** — `.ay-dash-filter-bar` + JSON
+- **Filtros legacy** — `.ay-dash-filter-bar` arriba + JSON (single-select sobre una tabla)
+- **Dashboard analítico** — `.ay-dash-filter-scope` arriba + dataset JSON + slicers (`control: pills|dropdown`) + KPIs/charts live (ver GUIDELINES y `starter-analytics-dashboard.html`)
 - **Tablas ordenables** — `ay-dash-table--sortable`
 - **Calculadoras what-if** — `.ay-dash-calculator` con slots `[data-calc-input]` / `[data-calc-output]`
 
@@ -84,7 +91,7 @@ Incrusta gráficos Chart.js con bloques `.ay-chart` y JSON en `<script type="app
 
 ## Insight primero
 
-En dashboards, el bloque **insight** va **al inicio del grid**, antes de KPIs y tablas.
+En dashboards, el bloque **insight** va **al inicio del grid** (o del panel de tab activo), antes de KPIs y tablas — **después** de filtros y tabs de página si los hay.
 
 ## Ejemplo dashboard one-shot
 
@@ -96,7 +103,6 @@ create_html_report(
     html=\"\"\"
 <div class="ay-dash-page">
   <div class="ay-dash-inner">
-    <h1 class="ay-dash-title">Ventas Mayo 2026</h1>
     <div class="ay-dash-grid">
       <div class="ay-dash-col ay-dash-col--12">
         <div class="ay-dash-card ay-dash-card--insight">…</div>
@@ -118,7 +124,9 @@ create_html_report(
     html=\"\"\"
 <div class="ay-dash-page">
   <div class="ay-dash-inner">
-    <h1 class="ay-dash-title">Ventas Q2</h1>
+    <div class="ay-dash-tabs">
+      <div class="ay-dash-tab-panels"></div>
+    </div>
     <div class="ay-dash-grid"></div>
   </div>
 </div>
@@ -131,6 +139,7 @@ create_html_report(
 
 - Terminar sin `publish_html_report` en flujo incremental
 - Mostrar contenido parcial al usuario (append sin publish al final)
+- Colocar **tabs de página** o **filtros** en medio del grid o al final del dashboard
 - `<script>` o handlers inline
 - Volcar el informe en markdown en el chat
 

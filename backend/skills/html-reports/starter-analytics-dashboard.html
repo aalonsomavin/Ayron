@@ -1,0 +1,137 @@
+<div class="ay-dash-page">
+  <div class="ay-dash-inner">
+    <div class="ay-dash-filter-scope">
+      <script type="application/json" id="analytics-data">
+      {"rows":[
+        {"year":2009,"country":"USA","genre":"Rock","amount":12.5,"invoice_id":"INV-1"},
+        {"year":2009,"country":"USA","genre":"Jazz","amount":8.2,"invoice_id":"INV-2"},
+        {"year":2009,"country":"Canada","genre":"Rock","amount":6.1,"invoice_id":"INV-3"},
+        {"year":2010,"country":"USA","genre":"Rock","amount":15.0,"invoice_id":"INV-4"},
+        {"year":2010,"country":"USA","genre":"Metal","amount":9.4,"invoice_id":"INV-5"},
+        {"year":2010,"country":"Brazil","genre":"Rock","amount":4.8,"invoice_id":"INV-6"},
+        {"year":2010,"country":"Brazil","genre":"Jazz","amount":3.2,"invoice_id":"INV-7"},
+        {"year":2011,"country":"Canada","genre":"Rock","amount":11.3,"invoice_id":"INV-8"},
+        {"year":2011,"country":"Canada","genre":"Jazz","amount":7.6,"invoice_id":"INV-9"},
+        {"year":2011,"country":"Germany","genre":"Metal","amount":10.1,"invoice_id":"INV-10"},
+        {"year":2011,"country":"Germany","genre":"Rock","amount":8.9,"invoice_id":"INV-11"},
+        {"year":2012,"country":"USA","genre":"Rock","amount":18.2,"invoice_id":"INV-12"},
+        {"year":2012,"country":"USA","genre":"Jazz","amount":6.5,"invoice_id":"INV-13"},
+        {"year":2012,"country":"Germany","genre":"Rock","amount":9.7,"invoice_id":"INV-14"}
+      ]}
+      </script>
+      <script type="application/json">
+      {"slicers":[
+        {"id":"year","field":"year","label":"Año","control":"pills"},
+        {"id":"country","field":"country","label":"País","control":"dropdown"},
+        {"id":"genre","field":"genre","label":"Género","control":"dropdown"}
+      ]}
+      </script>
+
+      <div class="ay-dash-slicer-bar"></div>
+      <div class="ay-dash-filter-chips"></div>
+
+      <div class="ay-dash-grid">
+        <div class="ay-dash-col ay-dash-col--3">
+          <div class="ay-dash-card ay-dash-kpi-live" data-agg="sum:amount" data-format="currency">
+            <div class="ay-dash-kpi-label">Facturación total</div>
+            <div class="ay-dash-kpi-value">—</div>
+          </div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--3">
+          <div class="ay-dash-card ay-dash-kpi-live" data-agg="count" data-format="number">
+            <div class="ay-dash-kpi-label">Facturas</div>
+            <div class="ay-dash-kpi-value">—</div>
+          </div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--3">
+          <div class="ay-dash-card ay-dash-kpi-live" data-agg="count_distinct:invoice_id" data-format="number">
+            <div class="ay-dash-kpi-label">Facturas únicas</div>
+            <div class="ay-dash-kpi-value">—</div>
+          </div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--3">
+          <div class="ay-dash-card ay-dash-kpi-live" data-agg="count_distinct:country" data-format="number">
+            <div class="ay-dash-kpi-label">Países</div>
+            <div class="ay-dash-kpi-value">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ay-dash-grid ay-dash-grid--charts">
+        <div class="ay-dash-col ay-dash-col--12">
+          <div class="ay-chart ay-chart--live" data-chart-id="chart-time" data-dimension="year" data-measure="sum:amount">
+            <script id="chart-time" type="application/json">
+            {"chart_type":"line","title":"Facturación por año","caption":"Evolución anual","datasets":[{"label":"Importe","color_index":0}],"value_format":"currency"}
+            </script>
+            <div class="ay-chart__card">
+              <div class="ay-chart__title">Facturación por año</div>
+              <div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>
+              <div class="ay-chart__caption">Evolución anual</div>
+            </div>
+          </div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--6">
+          <div class="ay-chart ay-chart--live" data-chart-id="chart-country" data-dimension="country" data-measure="sum:amount" data-cross-filter="country">
+            <script id="chart-country" type="application/json">
+            {"chart_type":"bar","title":"Por país","caption":"Clic en barra para filtrar","datasets":[{"label":"Importe","color_index":0}],"value_format":"currency"}
+            </script>
+            <div class="ay-chart__card">
+              <div class="ay-chart__title">Por país</div>
+              <div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>
+              <div class="ay-chart__caption">Clic en barra para filtrar</div>
+            </div>
+          </div>
+        </div>
+        <div class="ay-dash-col ay-dash-col--6">
+          <div class="ay-chart ay-chart--live" data-chart-id="chart-genre" data-dimension="genre" data-measure="sum:amount" data-cross-filter="genre">
+            <script id="chart-genre" type="application/json">
+            {"chart_type":"bar","title":"Por género","caption":"Clic en barra para filtrar","datasets":[{"label":"Importe","color_index":2}],"value_format":"currency"}
+            </script>
+            <div class="ay-chart__card">
+              <div class="ay-chart__title">Por género</div>
+              <div class="ay-chart__plot"><canvas class="ay-chart__canvas"></canvas></div>
+              <div class="ay-chart__caption">Clic en barra para filtrar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ay-dash-grid">
+        <div class="ay-dash-col ay-dash-col--12">
+          <div class="ay-dash-card ay-dash-card--flush">
+            <div class="ay-dash-card-header">
+              <span class="ay-dash-card-header__title">Detalle de facturas</span>
+            </div>
+            <table class="ay-dash-table">
+              <thead>
+                <tr>
+                  <th>Factura</th>
+                  <th>Año</th>
+                  <th>País</th>
+                  <th>Género</th>
+                  <th class="ay-dash-td-right ay-dash-th-numeric">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-year="2009" data-country="USA" data-genre="Rock"><td class="ay-dash-td-mono">INV-1</td><td>2009</td><td>USA</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€13</td></tr>
+                <tr data-year="2009" data-country="USA" data-genre="Jazz"><td class="ay-dash-td-mono">INV-2</td><td>2009</td><td>USA</td><td>Jazz</td><td class="ay-dash-td-right ay-dash-td-mono">€8</td></tr>
+                <tr data-year="2009" data-country="Canada" data-genre="Rock"><td class="ay-dash-td-mono">INV-3</td><td>2009</td><td>Canada</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€6</td></tr>
+                <tr data-year="2010" data-country="USA" data-genre="Rock"><td class="ay-dash-td-mono">INV-4</td><td>2010</td><td>USA</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€15</td></tr>
+                <tr data-year="2010" data-country="USA" data-genre="Metal"><td class="ay-dash-td-mono">INV-5</td><td>2010</td><td>USA</td><td>Metal</td><td class="ay-dash-td-right ay-dash-td-mono">€9</td></tr>
+                <tr data-year="2010" data-country="Brazil" data-genre="Rock"><td class="ay-dash-td-mono">INV-6</td><td>2010</td><td>Brazil</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€5</td></tr>
+                <tr data-year="2010" data-country="Brazil" data-genre="Jazz"><td class="ay-dash-td-mono">INV-7</td><td>2010</td><td>Brazil</td><td>Jazz</td><td class="ay-dash-td-right ay-dash-td-mono">€3</td></tr>
+                <tr data-year="2011" data-country="Canada" data-genre="Rock"><td class="ay-dash-td-mono">INV-8</td><td>2011</td><td>Canada</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€11</td></tr>
+                <tr data-year="2011" data-country="Canada" data-genre="Jazz"><td class="ay-dash-td-mono">INV-9</td><td>2011</td><td>Canada</td><td>Jazz</td><td class="ay-dash-td-right ay-dash-td-mono">€8</td></tr>
+                <tr data-year="2011" data-country="Germany" data-genre="Metal"><td class="ay-dash-td-mono">INV-10</td><td>2011</td><td>Germany</td><td>Metal</td><td class="ay-dash-td-right ay-dash-td-mono">€10</td></tr>
+                <tr data-year="2011" data-country="Germany" data-genre="Rock"><td class="ay-dash-td-mono">INV-11</td><td>2011</td><td>Germany</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€9</td></tr>
+                <tr data-year="2012" data-country="USA" data-genre="Rock"><td class="ay-dash-td-mono">INV-12</td><td>2012</td><td>USA</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€18</td></tr>
+                <tr data-year="2012" data-country="USA" data-genre="Jazz"><td class="ay-dash-td-mono">INV-13</td><td>2012</td><td>USA</td><td>Jazz</td><td class="ay-dash-td-right ay-dash-td-mono">€7</td></tr>
+                <tr data-year="2012" data-country="Germany" data-genre="Rock"><td class="ay-dash-td-mono">INV-14</td><td>2012</td><td>Germany</td><td>Rock</td><td class="ay-dash-td-right ay-dash-td-mono">€10</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

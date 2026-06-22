@@ -39,29 +39,41 @@ Shell mínimo:
 ```html
 <div class="ay-dash-page">
   <div class="ay-dash-inner">
-    <div class="ay-dash-eyebrow"><span class="ay-dash-eyebrow__dot"></span>Ayron · informe</div>
-    <h1 class="ay-dash-title">Título</h1>
-    <p class="ay-dash-subtitle">Contexto de una línea.</p>
-    <hr class="ay-dash-divider">
+    <div class="ay-dash-filter-scope">…</div>
+    <div class="ay-dash-tabs">
+      <div class="ay-dash-tab-panels">…</div>
+    </div>
     <div class="ay-dash-grid">
-      <!-- bloques aquí -->
+      …
     </div>
   </div>
 </div>
 ```
 
+**Header de página (eyebrow, título, subtítulo, divider)** — omitir por ahora. El título del informe va en metadata de `create_html_report`, no en el HTML del dashboard.
+
 Plantilla completa con ejemplos: lee `/skills/html-reports/starter-dashboard.html`.
 
 ### Orden del contenido
 
-**El insight va primero** — justo después del header (título, subtítulo, divider), como primer bloque del grid. Resume el hallazgo principal antes de KPIs, tablas o detalle. Si hay varios insights, el más importante primero; el resto puede ir después de los KPIs.
+**Tabs de página y filtros van arriba** — al inicio de `.ay-dash-inner`, **antes** del grid de contenido. No los entierres entre KPIs, tablas o gráficos.
 
-Orden recomendado en dashboard:
+Orden vertical recomendado:
+
+1. **Filtros** (si aplica) — `.ay-dash-filter-bar` o `.ay-dash-filter-scope`
+2. **Tabs de página** (si aplica) — `.ay-dash-tabs` de capítulo completo; si hay filtros globales y tabs, **filtros primero**, luego tabs
+3. Contenido — insight, KPIs, gráficos, tablas (ver abajo)
+
+Dentro del contenido, **el insight va primero** — como primer bloque del grid (o del panel de tab activo). Resume el hallazgo principal antes de KPIs, tablas o detalle. Si hay varios insights, el más importante primero; el resto puede ir después de los KPIs.
+
+Orden recomendado **dentro del grid** (o dentro de cada panel de tab):
 
 1. Insight (`.ay-dash-card--insight`) — ancho completo (`ay-dash-col--12`) o 7–12 cols
 2. KPIs / metric strip
-3. Tablas, rankings, barras
+3. Tablas, rankings, barras, gráficos
 4. Callouts o insights secundarios
+
+**Tabs por sección** (`--section`) y **tabs en header** (`--header`) no van a nivel de página: van **arriba de su bloque** (columna o card), no sustituyen la regla de tabs/filtros globales.
 
 En prosa, el equivalente es el **TL;DR** al inicio (ya va antes del cuerpo).
 
@@ -154,6 +166,8 @@ Reglas del gráfico:
 
 ### Tabs — tres niveles
 
+**Tabs de página van arriba** — en el shell, al inicio de `.ay-dash-inner` (después de filtros globales si los hay). Cada panel lleva su propio grid con insight → KPIs → detalle.
+
 **1. Página completa** — shell en create, cada capítulo con append `target="tabs"`. **Solo** paneles de capítulo aquí (Resumen, Detalle…). Los años, regiones u otras sub-vistas van en tabs de sección (`--section`) dentro del contenido del panel, **nunca** con `target="tabs"`.
 
 ```html
@@ -222,7 +236,9 @@ Reglas del gráfico:
 
 Puedes anidar varios `.ay-dash-tab-scope` en el mismo dashboard. Combina tabs de sección con filtros o calculadoras en otras columnas.
 
-**Filtros** — barra con JSON; filas con atributo `data-region` (o el que definas):
+**Filtros van arriba** — `.ay-dash-filter-bar` o `.ay-dash-filter-scope` al inicio de `.ay-dash-inner`, antes del grid. No los coloques debajo de KPIs ni al final del informe.
+
+**Filtros legacy** — barra con JSON; filas con atributo `data-region` (o el que definas):
 
 ```html
 <div class="ay-dash-filter-bar">
@@ -232,6 +248,30 @@ Puedes anidar varios `.ay-dash-tab-scope` en el mismo dashboard. Combina tabs de
 </div>
 <table id="tabla-ventas" class="ay-dash-table">…<tr data-region="Norte">…</tr>…</table>
 ```
+
+**Dashboard analítico coordinado** — usa `.ay-dash-filter-scope` cuando necesites filtros multi-select, KPIs reactivos, gráficos que se actualizan y cross-filter (clic en barra). **Colócalo arriba** (inicio de `.ay-dash-inner`). Copia la estructura de `starter-analytics-dashboard.html`.
+
+```html
+<div class="ay-dash-filter-scope">
+  <script type="application/json" id="analytics-data">{"rows":[…]}</script>
+  <script type="application/json">{"slicers":[{"id":"year","field":"year","label":"Año","control":"pills"},{"id":"country","field":"country","label":"País","control":"dropdown"},…]}</script>
+  <div class="ay-dash-slicer-bar"></div>
+  <div class="ay-dash-filter-chips"></div>
+  <div class="ay-dash-grid">…tiles…</div>
+</div>
+```
+
+Reglas del scope coordinado:
+- **Dataset obligatorio** — primer script JSON con `"rows": […]` (resultado SQL del agente)
+- **Config slicers** — segundo script con `"slicers": [{"id","field","label","control"}, …]`
+- **Control del slicer** — `"control": "pills"` para pocas opciones visibles (p. ej. años); `"control": "dropdown"` para listas largas (país, género) con checkboxes multi-select. Si omites `control`, Ayron usa pills en valores numéricos (años) y dropdown en texto
+- **KPIs live** — `.ay-dash-kpi-live` + `data-agg="sum:amount"` (o `count`, `count_distinct:field`) + `data-format="currency|number|percent"`
+- **Gráficos live** — `.ay-chart.ay-chart--live` + `data-dimension` + `data-measure`; JSON solo metadata (`title`, `caption`, `chart_type`, `value_format`) — **no** pongas `labels` ni `data` en charts live
+- **Cross-filter** — en barras categóricas añade `data-cross-filter` con el id del slicer (p. ej. `country`)
+- **Tablas** — filas con `data-{field}` por cada dimensión filtrable (`data-year`, `data-country`, …)
+- **Grid de charts** — `.ay-dash-grid.ay-dash-grid--charts` para layout asimétrico (line arriba, bars abajo)
+
+Cuándo usar scope vs filtros legacy: scope para análisis exploratorio con varias dimensiones coordinadas; `.ay-dash-filter-bar` para filtrar una sola tabla con un `<select>`.
 
 **Tabla ordenable** — añade `ay-dash-table--sortable`; columnas numéricas con `ay-dash-th-numeric` en `<th>`.
 
@@ -338,6 +378,7 @@ Puedes:
 Evita:
 - Terminar un dashboard incremental sin `publish_html_report`
 - Bloques JSON o tools distintas de las de html-reports para armar el informe
+- Colocar **tabs de página** o **filtros** en medio del grid o al final del dashboard
 - CSS inline en cada elemento (copiar estilos del catálogo)
 - `<script>` o handlers `onclick`
 - Fuentes genéricas (Inter, system-ui solo como fallback ya incluido)
