@@ -107,34 +107,7 @@
     </footer>
   </section>
 
-  <aside class="ay-artifact-panel" id="artifact-panel" aria-hidden="true">
-    <div class="ay-artifact-panel__resize" data-artifact-resize aria-hidden="true"></div>
-    <div class="ay-artifact-panel__header">
-      <span class="ay-artifact-panel__file-icon ay-artifact-panel__file-icon--doc">
-        {% include "components/icon.html" with name="filetext" size=17 %}
-      </span>
-      <div class="ay-artifact-panel__title-wrap">
-        <div class="ay-artifact-panel__name"></div>
-        <div class="ay-artifact-panel__meta-line">
-          <span class="ay-artifact-panel__ext"></span>
-          <span>· <span class="ay-artifact-panel__meta-suffix"></span></span>
-        </div>
-      </div>
-      <div class="ay-artifact-panel__actions">
-        <button type="button" class="ay-artifact-panel__btn" data-artifact-download title="Download">
-          {% include "components/icon.html" with name="download" size=16 %}
-        </button>
-        <span class="ay-artifact-panel__divider"></span>
-        <button type="button" class="ay-artifact-panel__btn" data-artifact-expand title="Expand">
-          {% include "components/icon.html" with name="expand" size=16 %}
-        </button>
-        <button type="button" class="ay-artifact-panel__btn" data-artifact-close title="Close">
-          {% include "components/icon.html" with name="close" size=16 %}
-        </button>
-      </div>
-    </div>
-    <div class="ay-artifact-panel__body"></div>
-  </aside>
+  {% include "components/artifact_panel.html" %}
   </div>
 </div>
 
@@ -1171,7 +1144,7 @@
   window.AyronAgentAvatar.mountAll(chatThreadEl);
   if (window.AyronChart) window.AyronChart.mountAll(chatThreadEl);
   if (window.AyronArtifact) {
-    window.AyronArtifact.init({ panelEl: artifactPanelEl, mainEl: mainEl });
+    window.AyronArtifact.init({ panelEl: artifactPanelEl, mainEl: mainEl, csrfToken: csrfToken });
   }
   if (window.AyronSidebar) {
     window.AyronSidebar.init({

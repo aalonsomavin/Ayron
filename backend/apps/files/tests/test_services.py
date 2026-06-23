@@ -6,9 +6,17 @@ from apps.files.models import File
 from apps.files.services import (
     format_agent_file_index_block,
     get_agent_file_index,
+    hydrate_file_payload_for_ui,
+    is_dashboard_saved,
+    list_saved_dashboards,
     normalize_file_payload_for_ui,
+    rename_dashboard_file,
+    save_dashboard,
     save_generated_file,
     serialize_file_for_ui,
+    serialize_saved_dashboard,
+    set_dashboard_pinned,
+    unsave_dashboard,
     update_generated_file,
 )
 
@@ -197,3 +205,219 @@ class TestFileServices:
         assert normalized["name"] == "Ventas"
         assert normalized["meta"] == "Dashboard"
         assert normalized["kind"] == "dashboard"
+
+    def test_rename_dashboard_file_updates_name_and_title(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "Ventas",
+            "subtitle": "",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Ventas.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        updated = rename_dashboard_file(file_obj, "ventas-hyalu")
+        assert updated.original_name == "ventas-hyalu.html"
+        assert updated.content_json["title"] == "ventas-hyalu"
+        assert updated.version == 1
+
+    def test_rename_dashboard_file_sanitizes_invalid_chars(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "Ventas",
+            "subtitle": "",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Ventas.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        updated = rename_dashboard_file(file_obj, 'bad<>:"/name')
+        assert updated.original_name == "badname.html"
+        assert updated.content_json["title"] == "badname"
+
+    def test_rename_dashboard_file_rejects_non_dashboard(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        content = {
+            "format": "html",
+            "title": "Reporte",
+            "subtitle": "",
+            "html": "<main><p>Hola</p></main>",
+            "body_html": "<main><p>Hola</p></main>",
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Reporte.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        with pytest.raises(ValueError, match="Only dashboards"):
+            rename_dashboard_file(file_obj, "nuevo-nombre")
+
+    def test_hydrate_file_payload_for_ui_uses_current_db_name(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "Ventas",
+            "subtitle": "",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Ventas.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        rename_dashboard_file(file_obj, "ventas-renombradas")
+        stale_payload = {
+            "file_id": str(file_obj.id),
+            "name": "Ventas",
+            "ext": "HTML",
+            "meta": "Dashboard",
+            "kind": "dashboard",
+            "version": 1,
+        }
+        hydrated = hydrate_file_payload_for_ui(
+            stale_payload,
+            conversation_id=conversation.id,
+        )
+        assert hydrated["name"] == "ventas-renombradas"
+
+
+def _dashboard_file(user, conversation):
+    from apps.files.models import HTML_MIME
+
+    dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+    content = {
+        "format": "html",
+        "html_kind": "dashboard",
+        "title": "Ventas",
+        "subtitle": "412 facturas",
+        "html": dashboard_html,
+        "body_html": dashboard_html,
+        "full_document": False,
+    }
+    return save_generated_file(
+        conversation=conversation,
+        user=user,
+        original_name="Ventas.html",
+        content_json=content,
+        file_bytes=b"<html></html>",
+        preview_html="<div></div>",
+        mime_type=HTML_MIME,
+    )
+
+
+@pytest.mark.django_db
+class TestSavedDashboardServices:
+    def test_save_dashboard_creates_bookmark(self, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        saved = save_dashboard(user, file_obj)
+        assert saved.user == user
+        assert saved.file == file_obj
+        assert is_dashboard_saved(user, file_obj.id)
+
+    def test_save_dashboard_idempotent(self, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        first = save_dashboard(user, file_obj)
+        second = save_dashboard(user, file_obj)
+        assert first.id == second.id
+
+    def test_save_dashboard_rejects_report(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        content = {
+            "format": "html",
+            "title": "Reporte",
+            "subtitle": "",
+            "html": "<main><p>Hola</p></main>",
+            "body_html": "<main><p>Hola</p></main>",
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Reporte.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        with pytest.raises(ValueError, match="Only dashboards"):
+            save_dashboard(user, file_obj)
+
+    def test_unsave_dashboard_removes_bookmark_not_file(self, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        save_dashboard(user, file_obj)
+        assert unsave_dashboard(user, file_obj.id) is True
+        assert not is_dashboard_saved(user, file_obj.id)
+        assert File.objects.filter(id=file_obj.id).exists()
+
+    def test_set_dashboard_pinned(self, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        save_dashboard(user, file_obj)
+        saved = set_dashboard_pinned(user, file_obj.id, True)
+        assert saved.pinned is True
+
+    def test_list_saved_dashboards_filters_query(self, user, conversation):
+        file_a = _dashboard_file(user, conversation)
+        file_b = _dashboard_file(user, conversation)
+        file_b.original_name = "Clientes.html"
+        file_b.content_json["title"] = "Clientes"
+        file_b.save(update_fields=["original_name", "content_json"])
+        save_dashboard(user, file_a)
+        save_dashboard(user, file_b)
+        results = list(list_saved_dashboards(user, query="clientes"))
+        assert len(results) == 1
+        assert results[0].file_id == file_b.id
+
+    def test_serialize_file_for_ui_includes_saved_flag(self, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        assert serialize_file_for_ui(file_obj, user=user)["saved"] is False
+        save_dashboard(user, file_obj)
+        assert serialize_file_for_ui(file_obj, user=user)["saved"] is True
+
+    def test_serialize_saved_dashboard(self, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        saved = save_dashboard(user, file_obj)
+        data = serialize_saved_dashboard(saved)
+        assert data["name"] == "Ventas"
+        assert data["saved"] is True
+        assert data["author"]
+        assert len(data["series"]) == 10

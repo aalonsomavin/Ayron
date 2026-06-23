@@ -53,3 +53,30 @@ class File(models.Model):
         return self.content_json.get("format") or (
             "html" if self.mime_type == HTML_MIME else "docx"
         )
+
+
+class SavedDashboard(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="saved_dashboards",
+    )
+    file = models.ForeignKey(
+        File,
+        on_delete=models.CASCADE,
+        related_name="saved_by",
+    )
+    pinned = models.BooleanField(default=False)
+    saved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "file"],
+                name="unique_saved_dashboard_per_user",
+            )
+        ]
+        ordering = ["-pinned", "-saved_at"]
+
+    def __str__(self):
+        return f"{self.user_id} · {self.file_id}"

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import html
+import re
 from io import BytesIO
 
 from django.core.files.base import ContentFile
+from django.db.models import Q
+from django.utils import timezone
+from django.utils.timesince import timesince
 
 from apps.chat.models import Conversation
-from apps.files.models import DOCX_MIME, HTML_MIME, File
+from apps.files.models import DOCX_MIME, HTML_MIME, File, SavedDashboard
 
 
 def _section_count(content_json: dict) -> int:
@@ -73,7 +78,26 @@ def normalize_file_payload_for_ui(payload: dict) -> dict:
     return normalized
 
 
-def serialize_file_for_ui(file_obj: File) -> dict:
+def hydrate_file_payload_for_ui(payload: dict, *, conversation_id=None, user=None) -> dict:
+    normalized = normalize_file_payload_for_ui(dict(payload))
+    file_id = normalized.get("file_id")
+    if not file_id:
+        return normalized
+
+    qs = File.objects.filter(id=file_id)
+    if conversation_id is not None:
+        qs = qs.filter(conversation_id=conversation_id)
+    file_obj = qs.first()
+    if file_obj is None:
+        return normalized
+
+    fresh = serialize_file_for_ui(file_obj, user=user)
+    if normalized.get("updated"):
+        fresh["updated"] = True
+    return fresh
+
+
+def serialize_file_for_ui(file_obj: File, *, user=None) -> dict:
     format_key = file_obj.format_key
     payload = {
         "file_id": str(file_obj.id),
@@ -90,6 +114,8 @@ def serialize_file_for_ui(file_obj: File) -> dict:
     if format_key == "html":
         payload["download_pdf_url"] = f"/files/{file_obj.id}/download/pdf/"
         payload["open_expanded"] = _html_kind(file_obj.content_json) == "dashboard"
+    if user is not None and payload["kind"] == "dashboard":
+        payload["saved"] = is_dashboard_saved(user, file_obj.id)
     return payload
 
 
@@ -206,3 +232,162 @@ def get_file_for_conversation(file_id: str, conversation: Conversation) -> File 
 
 def escape_preview_text(value: str) -> str:
     return html.escape(value or "")
+
+
+def _sanitize_dashboard_filename(name: str, fallback: str) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*]', "", name).strip()
+    if not cleaned:
+        cleaned = fallback
+    if cleaned.lower().endswith(".html"):
+        cleaned = cleaned[:-5]
+    if not cleaned:
+        cleaned = fallback
+    return f"{cleaned}.html"[:200]
+
+
+def rename_dashboard_file(file_obj: File, name: str) -> File:
+    from apps.agent.tools.html_report import build_export_html
+    from apps.files.models import MIME_EXTENSIONS
+
+    if _file_kind(file_obj.content_json) != "dashboard":
+        raise ValueError("Only dashboards can be renamed")
+
+    raw = (name or "").strip()
+    if not raw:
+        raise ValueError("name is required")
+
+    fallback = file_obj.content_json.get("title") or "dashboard"
+    original_name = _sanitize_dashboard_filename(raw, fallback)
+    title = original_name[:-5] if original_name.lower().endswith(".html") else original_name
+
+    content_json = dict(file_obj.content_json)
+    content_json["title"] = title
+    export_html = build_export_html(content_json)
+    file_bytes = export_html.encode("utf-8")
+
+    ext = MIME_EXTENSIONS.get(file_obj.mime_type, ".bin")
+    file_obj.original_name = original_name
+    file_obj.content_json = content_json
+    file_obj.size_bytes = len(file_bytes)
+    file_obj.file.save(
+        f"{file_obj.id}{ext}",
+        ContentFile(file_bytes),
+        save=False,
+    )
+    file_obj.save()
+    return file_obj
+
+
+def _user_display_name(user) -> str:
+    full_name = user.get_full_name().strip()
+    if full_name:
+        return full_name
+    return user.get_username()
+
+
+def _user_initials(user) -> str:
+    name = _user_display_name(user)
+    parts = [part for part in name.split() if part]
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[1][0]).upper()
+    if parts:
+        return parts[0][:2].upper()
+    return "?"
+
+
+def _relative_date_label(dt) -> str:
+    now = timezone.now()
+    if dt.date() == now.date():
+        return "Actualizado hoy"
+    delta = timesince(dt, now)
+    first = delta.split(",")[0].strip()
+    if first.startswith("0 "):
+        return "Actualizado hace un momento"
+    return f"Actualizado hace {first}"
+
+
+def _spark_series_for_file(file_id) -> list[int]:
+    digest = hashlib.md5(str(file_id).encode()).hexdigest()
+    values = []
+    seed = int(digest[:8], 16)
+    value = 40 + (seed % 20)
+    for i in range(10):
+        seed = (seed * 1103515245 + 12345 + i) & 0x7FFFFFFF
+        delta = (seed % 17) - 8
+        value = max(18, min(98, value + delta))
+        values.append(value)
+    return values
+
+
+def _spark_tint_for_file(file_id) -> str:
+    palette = ["#3b6ef6", "#16a34a", "#8b5cf6", "#d97706", "#0d9aa8", "#e1568f"]
+    digest = hashlib.md5(str(file_id).encode()).hexdigest()
+    return palette[int(digest[:2], 16) % len(palette)]
+
+
+def is_dashboard_saved(user, file_id) -> bool:
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    return SavedDashboard.objects.filter(user=user, file_id=file_id).exists()
+
+
+def save_dashboard(user, file_obj: File) -> SavedDashboard:
+    if _file_kind(file_obj.content_json) != "dashboard":
+        raise ValueError("Only dashboards can be saved")
+    saved, _ = SavedDashboard.objects.get_or_create(user=user, file=file_obj)
+    return saved
+
+
+def unsave_dashboard(user, file_id) -> bool:
+    deleted, _ = SavedDashboard.objects.filter(user=user, file_id=file_id).delete()
+    return deleted > 0
+
+
+def set_dashboard_pinned(user, file_id, pinned: bool) -> SavedDashboard:
+    try:
+        saved = SavedDashboard.objects.select_related("file").get(user=user, file_id=file_id)
+    except SavedDashboard.DoesNotExist:
+        raise ValueError("Dashboard is not saved")
+    saved.pinned = bool(pinned)
+    saved.save(update_fields=["pinned"])
+    return saved
+
+
+def list_saved_dashboards(user, *, query: str = ""):
+    qs = (
+        SavedDashboard.objects.filter(user=user)
+        .select_related("file", "file__uploaded_by")
+        .order_by("-pinned", "-saved_at")
+    )
+    q = (query or "").strip()
+    if q:
+        qs = qs.filter(
+            Q(file__original_name__icontains=q)
+            | Q(file__content_json__title__icontains=q)
+            | Q(file__uploaded_by__username__icontains=q)
+            | Q(file__uploaded_by__first_name__icontains=q)
+            | Q(file__uploaded_by__last_name__icontains=q)
+        )
+    return qs
+
+
+def serialize_saved_dashboard(saved: SavedDashboard) -> dict:
+    file_obj = saved.file
+    file_payload = serialize_file_for_ui(file_obj, user=saved.user)
+    author = file_obj.uploaded_by
+    title = file_payload["name"]
+    subtitle = file_obj.content_json.get("subtitle") or "Dashboard interactivo"
+    updated_at = file_obj.updated_at or saved.saved_at
+    return {
+        **file_payload,
+        "saved": True,
+        "pinned": saved.pinned,
+        "saved_at": saved.saved_at.isoformat(),
+        "author": _user_display_name(author),
+        "initials": _user_initials(author),
+        "date_label": _relative_date_label(updated_at),
+        "metric": title,
+        "sub": subtitle,
+        "tint": _spark_tint_for_file(file_obj.id),
+        "series": _spark_series_for_file(file_obj.id),
+    }

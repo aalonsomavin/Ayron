@@ -35,6 +35,18 @@
     <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 13v4"/><path d="M7 9v8"/><path d="M15 17V7"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg>
   {% elif name == "stop" %}
     <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect width="11" height="11" x="2.5" y="2.5" rx="2.5" fill="currentColor"/></svg>
+  {% elif name == "pencil" %}
+    <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+  {% elif name == "bookmark" %}
+    <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+  {% elif name == "star" %}
+    <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17.6 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z"/></svg>
+  {% elif name == "search" %}
+    <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+  {% elif name == "dots" %}
+    <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+  {% elif name == "trash" %}
+    <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>
   {% elif name == "square" %}
     <svg width="{{ size|default:16 }}" height="{{ size|default:16 }}" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="5" y="5" rx="1"/></svg>
   {% else %}

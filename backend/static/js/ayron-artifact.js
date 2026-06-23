@@ -14,6 +14,8 @@
         '<path d="m14 10 7-7"/><path d="M20 10h-6V4"/><path d="m3 21 7-7"/><path d="M4 14h6v6"/>',
       close:
         '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+      bookmark:
+        '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
     };
     const inner = paths[name];
     if (!inner) return "";
@@ -106,6 +108,7 @@
       download_pdf_url: event.download_pdf_url || "",
       preview_url: event.preview_url,
       open_expanded: Boolean(event.open_expanded),
+      saved: Boolean(event.saved),
     };
   }
 
@@ -239,16 +242,71 @@
     }
   }
 
+  function syncNameInputSize(panelEl) {
+    const wrap = panelEl.querySelector(".ay-artifact-panel__name-input-wrap");
+    const nameInput = panelEl.querySelector(".ay-artifact-panel__name-input");
+    if (!wrap || !nameInput) return;
+    wrap.dataset.value = nameInput.value || "\u00a0";
+  }
+
+  function applyPanelTitle(panelEl, file) {
+    const panelKind = fileKind(file);
+    const nameEl = panelEl.querySelector(".ay-artifact-panel__name");
+    const nameField = panelEl.querySelector(".ay-artifact-panel__name-field");
+    const nameInput = panelEl.querySelector(".ay-artifact-panel__name-input");
+    const displayName = displayFileName(file);
+    if (panelKind === "dashboard") {
+      if (nameEl) nameEl.hidden = true;
+      if (nameField) nameField.hidden = false;
+      if (nameInput) {
+        nameInput.value = displayName;
+        syncNameInputSize(panelEl);
+      }
+    } else {
+      if (nameEl) {
+        nameEl.hidden = false;
+        nameEl.textContent = displayName;
+      }
+      if (nameField) nameField.hidden = true;
+    }
+  }
+
+  function updateFileCardsName(fileId, name) {
+    document.querySelectorAll('.ay-file-card[data-file-id="' + fileId + '"]').forEach(function (card) {
+      card.dataset.fileName = name;
+      const nameEl = card.querySelector(".ay-file-card__name");
+      if (nameEl) {
+        nameEl.textContent = /\.html$/i.test(name) ? name.slice(0, -5) : name;
+      }
+    });
+  }
+
+  function applyPanelSaveState(panelEl, file) {
+    const saveBtn = panelEl.querySelector("[data-artifact-save]");
+    if (!saveBtn) return;
+    const isDashboard = fileKind(file) === "dashboard";
+    saveBtn.hidden = !isDashboard;
+    if (!isDashboard) return;
+    const saved = Boolean(file.saved);
+    saveBtn.classList.toggle("is-saved", saved);
+    saveBtn.title = saved ? "Quitar de guardados" : "Guardar";
+    saveBtn.innerHTML = iconSvg("bookmark", 16);
+  }
+
   window.AyronArtifact = {
     panelEl: null,
     mainEl: null,
     openFile: null,
     expanded: false,
     panelWidth: 680,
+    csrfToken: null,
+    _skipNameBlurSave: false,
+    _nameSaveInFlight: false,
 
     init: function (options) {
       this.panelEl = options.panelEl;
       this.mainEl = options.mainEl;
+      this.csrfToken = options.csrfToken || null;
       if (!this.panelEl) return;
 
       this.panelEl.removeAttribute("hidden");
@@ -257,6 +315,7 @@
 
       const self = this;
       this.initResize();
+      this.initNameInput();
       this.panelEl.querySelector("[data-artifact-close]").addEventListener("click", function () {
         self.close();
       });
@@ -268,6 +327,12 @@
         const url = downloadUrlForFile(self.openFile);
         if (url) window.location.href = url;
       });
+      const saveBtn = this.panelEl.querySelector("[data-artifact-save]");
+      if (saveBtn) {
+        saveBtn.addEventListener("click", function () {
+          self.toggleSaveDashboard();
+        });
+      }
 
       document.addEventListener("click", function (e) {
         const card = e.target.closest(".ay-file-card");
@@ -276,6 +341,131 @@
         self.open(filePayloadFromEl(card));
         self.setActiveCard(card);
       });
+    },
+
+    initNameInput: function () {
+      const nameInput = this.panelEl.querySelector(".ay-artifact-panel__name-input");
+      if (!nameInput) return;
+
+      const self = this;
+      const editIcon = this.panelEl.querySelector(".ay-artifact-panel__name-edit-icon");
+      if (editIcon) {
+        editIcon.addEventListener("click", function () {
+          nameInput.focus();
+          nameInput.select();
+        });
+      }
+
+      nameInput.addEventListener("input", function () {
+        syncNameInputSize(self.panelEl);
+      });
+
+      nameInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          self._skipNameBlurSave = true;
+          self.saveDashboardName().finally(function () {
+            self._skipNameBlurSave = false;
+          });
+          nameInput.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          self._skipNameBlurSave = true;
+          if (self.openFile) {
+            nameInput.value = displayFileName(self.openFile);
+            syncNameInputSize(self.panelEl);
+          }
+          nameInput.blur();
+          self._skipNameBlurSave = false;
+        }
+      });
+
+      nameInput.addEventListener("blur", function () {
+        if (self._skipNameBlurSave) return;
+        self.saveDashboardName();
+      });
+    },
+
+    saveDashboardName: function () {
+      const self = this;
+      const file = this.openFile;
+      const nameInput = this.panelEl.querySelector(".ay-artifact-panel__name-input");
+      if (!file || fileKind(file) !== "dashboard" || !nameInput) {
+        return Promise.resolve();
+      }
+
+      const rawName = (nameInput.value || "").trim();
+      const currentName = displayFileName(file);
+      if (!rawName || rawName === currentName) {
+        nameInput.value = currentName;
+        syncNameInputSize(this.panelEl);
+        return Promise.resolve();
+      }
+      if (this._nameSaveInFlight) {
+        return Promise.resolve();
+      }
+
+      this._nameSaveInFlight = true;
+      const headers = { "Content-Type": "application/json" };
+      if (this.csrfToken) {
+        headers["X-CSRFToken"] = this.csrfToken();
+      }
+
+      return fetch("/files/" + file.file_id + "/rename/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: headers,
+        body: JSON.stringify({ name: rawName }),
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error("rename failed");
+          return r.json();
+        })
+        .then(function (data) {
+          if (!self.openFile || self.openFile.file_id !== file.file_id) return;
+          self.openFile.name = data.name;
+          nameInput.value = data.name;
+          syncNameInputSize(self.panelEl);
+          updateFileCardsName(file.file_id, data.name);
+        })
+        .catch(function () {
+          if (self.openFile && self.openFile.file_id === file.file_id) {
+            nameInput.value = currentName;
+            syncNameInputSize(self.panelEl);
+          }
+        })
+        .finally(function () {
+          self._nameSaveInFlight = false;
+        });
+    },
+
+    toggleSaveDashboard: function () {
+      const self = this;
+      const file = this.openFile;
+      if (!file || fileKind(file) !== "dashboard") return;
+
+      const saved = Boolean(file.saved);
+      const url = "/files/" + file.file_id + (saved ? "/unsave/" : "/save/");
+      const headers = { "Content-Type": "application/json" };
+      if (this.csrfToken) {
+        headers["X-CSRFToken"] = this.csrfToken();
+      }
+
+      return fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: headers,
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error("save failed");
+          return r.json();
+        })
+        .then(function (data) {
+          if (!self.openFile || self.openFile.file_id !== file.file_id) return;
+          self.openFile.saved = Boolean(data.saved);
+          applyPanelSaveState(self.panelEl, self.openFile);
+        })
+        .catch(function () {});
     },
 
     setPanelWidth: function (width) {
@@ -344,7 +534,8 @@
       applyPanelExpandVisibility(this.panelEl, file, this.expanded);
       applyPanelFileIcon(this.panelEl, fileKind(file));
       const panelKind = fileKind(file);
-      this.panelEl.querySelector(".ay-artifact-panel__name").textContent = displayFileName(file);
+      applyPanelTitle(this.panelEl, file);
+      applyPanelSaveState(this.panelEl, file);
       const metaLine = this.panelEl.querySelector(".ay-artifact-panel__meta-line");
       if (metaLine) {
         metaLine.hidden = panelKind === "dashboard";
@@ -422,8 +613,17 @@
       this.panelEl.setAttribute("aria-hidden", "true");
       this.setActiveCard(null);
       resetPanelExpandVisibility(this.panelEl);
+      const nameEl = this.panelEl.querySelector(".ay-artifact-panel__name");
+      const nameField = this.panelEl.querySelector(".ay-artifact-panel__name-field");
+      if (nameEl) nameEl.hidden = false;
+      if (nameField) nameField.hidden = true;
       const metaLine = this.panelEl.querySelector(".ay-artifact-panel__meta-line");
       if (metaLine) metaLine.hidden = false;
+      const saveBtn = this.panelEl.querySelector("[data-artifact-save]");
+      if (saveBtn) {
+        saveBtn.hidden = true;
+        saveBtn.classList.remove("is-saved");
+      }
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
       teardownHtmlPreview(body);
     },
@@ -483,6 +683,10 @@
 
       const container = ensureFilesContainer(contentEl);
       this.renderFileCard(file, container);
+    },
+
+    applyPanelTitle: function (panelEl, file) {
+      applyPanelTitle(panelEl, file);
     },
   };
 })();

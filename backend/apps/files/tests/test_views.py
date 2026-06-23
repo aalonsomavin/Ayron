@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -193,4 +195,108 @@ class TestFileViews:
         client.force_login(user)
         url = reverse("files:download_pdf", kwargs={"file_id": file_obj.id})
         response = client.get(url)
+        assert response.status_code == 404
+
+
+def _dashboard_file(user, conversation):
+    from apps.files.models import HTML_MIME
+    from apps.files.services import save_generated_file
+
+    dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+    content = {
+        "format": "html",
+        "html_kind": "dashboard",
+        "title": "dashboard-ventas",
+        "subtitle": "",
+        "html": dashboard_html,
+        "body_html": dashboard_html,
+        "full_document": False,
+    }
+    return save_generated_file(
+        conversation=conversation,
+        user=user,
+        original_name="dashboard-ventas.html",
+        content_json=content,
+        file_bytes=b"<html></html>",
+        preview_html="<div></div>",
+        mime_type=HTML_MIME,
+    )
+
+
+@pytest.mark.django_db
+class TestFileRename:
+    def test_rename_dashboard_owner(self, client, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        client.force_login(user)
+        url = reverse("files:rename", kwargs={"file_id": file_obj.id})
+        response = client.post(
+            url,
+            data=json.dumps({"name": "dashboard-hyalufresh"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "dashboard-hyalufresh"
+        file_obj.refresh_from_db()
+        assert file_obj.original_name == "dashboard-hyalufresh.html"
+        assert file_obj.content_json["title"] == "dashboard-hyalufresh"
+
+    def test_rename_dashboard_empty_name(self, client, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        client.force_login(user)
+        url = reverse("files:rename", kwargs={"file_id": file_obj.id})
+        response = client.post(
+            url,
+            data=json.dumps({"name": "   "}),
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+
+    def test_rename_dashboard_other_user(self, client, other_user, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        client.force_login(other_user)
+        url = reverse("files:rename", kwargs={"file_id": file_obj.id})
+        response = client.post(
+            url,
+            data=json.dumps({"name": "otro-nombre"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 404
+
+    def test_rename_html_report_not_found(self, client, user, conversation):
+        from apps.agent.tools.html_report import (
+            build_export_html,
+            build_preview_fragment,
+            validate_html_report_content,
+        )
+        from apps.files.models import HTML_MIME
+        from apps.files.services import save_generated_file
+
+        content = validate_html_report_content("Reporte", "<p>Hola</p>", "")
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Reporte.html",
+            content_json=content,
+            file_bytes=build_export_html(content).encode("utf-8"),
+            preview_html=build_preview_fragment(content),
+            mime_type=HTML_MIME,
+        )
+        client.force_login(user)
+        url = reverse("files:rename", kwargs={"file_id": file_obj.id})
+        response = client.post(
+            url,
+            data=json.dumps({"name": "nuevo"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 404
+
+    def test_rename_docx_not_found(self, client, user, file_obj):
+        client.force_login(user)
+        url = reverse("files:rename", kwargs={"file_id": file_obj.id})
+        response = client.post(
+            url,
+            data=json.dumps({"name": "nuevo"}),
+            content_type="application/json",
+        )
         assert response.status_code == 404

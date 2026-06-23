@@ -887,6 +887,59 @@ class TestConversationDetail:
         assert blocks[0]["type"] == "files"
         assert blocks[0]["files"][0]["name"] == "Informe.docx"
 
+    def test_content_blocks_hydrate_renamed_dashboard_name(self, user, conversation):
+        from apps.files.models import HTML_MIME
+        from apps.files.services import rename_dashboard_file, save_generated_file
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "dashboard-ventas",
+            "subtitle": "",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="dashboard-ventas.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        rename_dashboard_file(file_obj, "dashboard-hyalufresh")
+
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+            payload={
+                "file_id": str(file_obj.id),
+                "name": "dashboard-ventas.html",
+                "ext": "HTML",
+                "format": "html",
+                "kind": "dashboard",
+                "meta": "Dashboard",
+                "version": 1,
+                "download_url": f"/files/{file_obj.id}/download/",
+                "preview_url": f"/files/{file_obj.id}/preview/",
+                "open_expanded": True,
+            },
+            sequence_number=0,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert blocks[0]["files"][0]["name"] == "dashboard-hyalufresh"
+
 
 @pytest.mark.django_db
 class TestConversationNew:

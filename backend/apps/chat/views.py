@@ -15,7 +15,7 @@ from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.chat.tool_trace import tool_trace_for_message
-from apps.files.services import normalize_file_payload_for_ui
+from apps.files.services import hydrate_file_payload_for_ui
 from config.celery import app as celery_app
 
 
@@ -64,7 +64,7 @@ def _get_conversation(request, conversation_id):
     return get_object_or_404(Conversation, id=conversation_id, user=request.user)
 
 
-def serialize_agent_event(event: AgentEvent) -> dict:
+def serialize_agent_event(event: AgentEvent, *, user=None) -> dict:
     data = {
         "seq": event.sequence_number,
         "type": event.event_type,
@@ -81,6 +81,18 @@ def serialize_agent_event(event: AgentEvent) -> dict:
         if tool_name:
             tool_input = data.get("input") if event.event_type == AgentEvent.EventType.TOOL_START else None
             data.update(get_tool_display(tool_name, tool_input))
+
+    if event.event_type in (
+        AgentEvent.EventType.FILE_CREATED,
+        AgentEvent.EventType.FILE_UPDATED,
+    ):
+        data.update(
+            hydrate_file_payload_for_ui(
+                data,
+                conversation_id=event.conversation_id,
+                user=user,
+            )
+        )
 
     if event.event_type == AgentEvent.EventType.PLAN:
         data.setdefault("tool_label", PLAN_TOOL_LABEL)
@@ -122,7 +134,7 @@ def _user_initials(user) -> str:
     return "?"
 
 
-def _content_blocks_for_message(message: Message) -> list[dict]:
+def _content_blocks_for_message(message: Message, *, user=None) -> list[dict]:
     events = AgentEvent.objects.filter(message=message).order_by("sequence_number")
 
     blocks: list[dict] = []
@@ -159,7 +171,11 @@ def _content_blocks_for_message(message: Message) -> list[dict]:
             AgentEvent.EventType.FILE_CREATED,
             AgentEvent.EventType.FILE_UPDATED,
         ):
-            file_payload = normalize_file_payload_for_ui(dict(event.payload))
+            file_payload = hydrate_file_payload_for_ui(
+                dict(event.payload),
+                conversation_id=message.conversation_id,
+                user=user,
+            )
             if blocks and blocks[-1]["type"] == "files":
                 blocks[-1]["files"].append(file_payload)
             else:
@@ -200,7 +216,7 @@ def _messages_with_content_blocks(conversation: Conversation) -> list[Message]:
     messages = list(conversation.messages.select_related().order_by("created_at"))
     for message in messages:
         if message.role == Message.Role.ASSISTANT:
-            message.content_blocks = _content_blocks_for_message(message)
+            message.content_blocks = _content_blocks_for_message(message, user=conversation.user)
             message.tool_trace = tool_trace_for_message(message)
             message.cancelled = _message_was_cancelled(message)
     return messages
@@ -471,7 +487,7 @@ def events_replay(request, conversation_id):
             return HttpResponseBadRequest("Invalid after parameter.")
         events_qs = events_qs.filter(sequence_number__gt=after)
 
-    events = [serialize_agent_event(event) for event in events_qs]
+    events = [serialize_agent_event(event, user=request.user) for event in events_qs]
     last_sequence = _conversation_last_sequence(conversation)
 
     return JsonResponse(
