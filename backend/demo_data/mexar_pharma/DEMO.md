@@ -30,6 +30,18 @@ Re-seed: `python manage.py seed_mexar_demo --force`
    *Genera un dashboard ejecutivo del catálogo Mexar por área terapéutica con KPIs, filtros y export PDF*  
    → `publish_html_artifact` (skill html-reports).
 
+7. **Argliptin-D vs genéricos en Farmacias del Ahorro**  
+   *¿Cómo se compara el precio de lista de Argliptin-D vs el genérico más barato en Farmacias del Ahorro?*  
+   → Tabla con `precio_lista` vs `competencia_precios`.
+
+8. **Oncología por debajo del mercado**  
+   *¿En qué productos de oncología Mexar está por debajo del precio mínimo de mercado?*  
+   → Tabla con join `comercial_productos` + `competencia_resumen`.
+
+9. **Bitam vs Januvia (Merck)**  
+   *¿Cuál es la brecha de precio de Bitam vs Januvia (Merck)?*  
+   → Comparación de precio de lista Mexar vs competidor de referencia.
+
 ## Catálogo
 
 18 SKUs del [catálogo Mexar](https://www.mexarpharma.com/catalogo): Hyperlub 5, HyaluFresh, Argliptin-D, Bitam, Selencor, Fibcorif, Kamedix, Brylupa, Degehn, Asgen, Iriaspe, Kebiras, Mocedam, Dacrolem, Vadismed, Drastep, Varpharm.
@@ -40,3 +52,4 @@ Re-seed: `python manage.py seed_mexar_demo --force`
 |---------|----------------|-----------|
 | ERP Comercial | `comercial_*` | Productos, pedidos, instituciones, inventario |
 | CRM Licenciamiento | `crm_*` | Cuentas, contactos, oportunidades, actividades |
+| Precios de Competencia | `competencia_*` | Precios observados de competidores por canal y fuente |

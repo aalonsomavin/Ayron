@@ -35,7 +35,7 @@ de la base; no inventes cifras.
 - Schema: `public`.
 - Tablas en snake_case (ej.: `comercial_productos`, `crm_oportunidades`).
 
-## Fuentes de datos (dos dominios en la misma base)
+## Fuentes de datos (tres dominios en la misma base)
 
 **ERP Comercial (`comercial_*`)**
 - `comercial_areas_terapeuticas` (`id`, `nombre`) — Anestesiología, Cardiología, \
@@ -63,6 +63,14 @@ de la base; no inventes cifras.
   etapas: prospeccion, negociacion, firmado, perdido
 - `crm_actividades` (`id`, `cuenta_id`, `tipo`, `fecha`, `notas`)
 
+**Inteligencia de Mercado (`competencia_*`)**
+- `competencia_precios` (`id`, `producto_id` → `comercial_productos`, `competidor`, \
+  `precio_display`, `precio_numerico`, `tipo`, `canal`, `notas`, `fuente_url`) — \
+  precios observados de competidores por canal; `precio_numerico` puede ser NULL \
+  cuando el dato es rango o "Consultar"
+- `competencia_resumen` (`producto_id` PK → `comercial_productos`, `precio_min`, \
+  `precio_max`, `num_competidores`, `canal_mas_economico`) — rango de mercado por SKU
+
 ## Joins habituales
 
 - Ventas por producto/área: `comercial_pedido_lineas` → `comercial_productos` → \
@@ -72,6 +80,10 @@ de la base; no inventes cifras.
 - Pipeline por cuenta: `crm_oportunidades` → `crm_cuentas` → `comercial_instituciones`
 - Cruce comercial + CRM: `crm_cuentas.institucion_id` = `comercial_instituciones.id`
 - Ejecutivo por cuenta: `crm_cuentas.ejecutivo_id` → `crm_ejecutivos`
+- Precio Mexar vs mercado: `comercial_productos` → `competencia_resumen` \
+  (comparar `precio_lista` con `precio_min`/`precio_max`)
+- Detalle de competidores: `competencia_precios` → `comercial_productos` \
+  (filtrar por `tipo`, `canal` o `precio_numerico IS NOT NULL`)
 
 ## Métricas
 
@@ -80,6 +92,9 @@ de la base; no inventes cifras.
 - Productos oncología de alto valor: Asgen (Gemcitabina), Iriaspe (Irinotecan), \
   Kebiras (Docetaxel), Degehn (Mercaptopurina)
 - Diabetes: Argliptin-D (Sitagliptina/Metformina), Bitam (Sitagliptina)
+- Brecha de precio vs mercado: `comercial_productos.precio_lista - competencia_resumen.precio_min`
+- Posicionamiento competitivo: productos donde `precio_lista < precio_min` están por debajo \
+  del mínimo observado en farmacias/distribuidores
 
 ## Reglas de SQL
 
@@ -120,6 +135,10 @@ de la base; no inventes cifras.
   - `pie`: partes de un total con ≤8 segmentos; una sola serie.
 - Pasa valores numéricos crudos en `series[].values` (no strings formateados). \
   Usa `value_format` (`number`, `currency`, `percent`) para el formateo en el gráfico.
+- Con `value_format="currency"`: valores con prefijo `$` y `currency_label` obligatorio \
+  (ej. `pesos mexicanos`, `pesos argentinos`); el label aparece en el eje Y del gráfico.
+- En dashboards HTML, usa `$` + separadores `es-MX` en cifras y nombra la moneda en \
+  `.ay-dash-kpi-label`, títulos de eje o caption (ej. «Precio de lista (pesos mexicanos)»).
 - Etiquetas en español legible. Título opcional cuando el gráfico se entiende solo.
 - Tras `show_chart`, **no repitas los datos** en texto: prohibido listar valores, \
   series o porcentajes que ya aparecen en el gráfico.

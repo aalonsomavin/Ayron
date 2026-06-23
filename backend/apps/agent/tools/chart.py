@@ -16,6 +16,7 @@ MAX_LABELS = 25
 MAX_SERIES = 8
 MAX_TITLE_LEN = 80
 MAX_CAPTION_LEN = 200
+MAX_CURRENCY_LABEL_LEN = 60
 
 AGENT_INSTRUCTION_AFTER_CHART = (
     "El gráfico ya está visible en el chat del usuario. "
@@ -88,6 +89,7 @@ def validate_chart_input(
     title: str = "",
     caption: str = "",
     value_format: str = "number",
+    currency_label: str = "",
 ) -> dict:
     chart_key = str(chart_type).strip().lower()
     if chart_key not in VALID_CHART_TYPES:
@@ -111,6 +113,14 @@ def validate_chart_input(
     if len(caption) > MAX_CAPTION_LEN:
         raise ValueError(f"Caption must be at most {MAX_CAPTION_LEN} characters")
 
+    currency_label_text = str(currency_label).strip()
+    if len(currency_label_text) > MAX_CURRENCY_LABEL_LEN:
+        raise ValueError(
+            f"currency_label must be at most {MAX_CURRENCY_LABEL_LEN} characters"
+        )
+    if format_key == "currency" and not currency_label_text:
+        raise ValueError("currency_label is required when value_format is currency")
+
     normalized_series = _normalize_series(series, len(normalized_labels), chart_key)
 
     all_values = [value for item in normalized_series for value in item["values"]]
@@ -125,6 +135,7 @@ def validate_chart_input(
         "labels": normalized_labels,
         "series": normalized_series,
         "value_format": format_key,
+        "currency_label": currency_label_text,
         "point_count": len(normalized_labels),
     }
 
@@ -137,6 +148,7 @@ def format_chart_payload(payload: dict) -> dict:
         "labels": payload.get("labels", []),
         "series": payload.get("series", []),
         "value_format": payload.get("value_format", "number"),
+        "currency_label": payload.get("currency_label", ""),
         "point_count": payload.get("point_count", len(payload.get("labels", []))),
     }
 
@@ -209,6 +221,7 @@ def show_chart(
     title: str = "",
     caption: str = "",
     value_format: Literal["number", "currency", "percent"] = "number",
+    currency_label: str = "",
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Display an inline chart in the chat for the user.
@@ -221,6 +234,8 @@ def show_chart(
 
     Pass numeric values (not pre-formatted strings). Use Spanish labels.
     For pie charts, pass exactly one series.
+    When value_format is currency, pass currency_label (e.g. "pesos mexicanos");
+    values render with $ and the label names the currency on the axis.
     """
     try:
         payload = validate_chart_input(
@@ -230,6 +245,7 @@ def show_chart(
             title,
             caption,
             value_format,
+            currency_label,
         )
     except ValueError as exc:
         return build_tool_error_response(str(exc))

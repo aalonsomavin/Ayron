@@ -9,7 +9,33 @@ from pathlib import Path
 import psycopg
 
 CATALOG_PATH = Path(__file__).resolve().parent / "catalog.json"
+COMPETENCIA_PATH = Path(__file__).resolve().parent / "competencia.json"
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+
+COMPETENCIA_DDL = """
+CREATE TABLE IF NOT EXISTS competencia_resumen (
+    producto_id INTEGER PRIMARY KEY REFERENCES comercial_productos(id),
+    precio_min NUMERIC(12, 2),
+    precio_max NUMERIC(12, 2),
+    num_competidores INTEGER NOT NULL,
+    canal_mas_economico VARCHAR(300)
+);
+
+CREATE TABLE IF NOT EXISTS competencia_precios (
+    id SERIAL PRIMARY KEY,
+    producto_id INTEGER NOT NULL REFERENCES comercial_productos(id),
+    competidor VARCHAR(200) NOT NULL,
+    precio_display VARCHAR(50),
+    precio_numerico NUMERIC(12, 2),
+    tipo VARCHAR(50) NOT NULL,
+    canal VARCHAR(150) NOT NULL,
+    notas TEXT,
+    fuente_url VARCHAR(200)
+);
+
+CREATE INDEX IF NOT EXISTS idx_competencia_precios_producto
+    ON competencia_precios(producto_id);
+"""
 
 INSTITUCIONES_PUBLICAS = [
     ("Hospital Civil de Guadalajara", "Jalisco", "Guadalajara", "Jalisco"),
@@ -89,6 +115,11 @@ def load_catalog() -> dict:
         return json.load(handle)
 
 
+def load_competencia() -> dict:
+    with COMPETENCIA_PATH.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 def schema_is_ready(conn: psycopg.Connection) -> bool:
     with conn.cursor() as cur:
         cur.execute(
@@ -116,6 +147,29 @@ def ensure_schema(conn: psycopg.Connection) -> bool:
     return True
 
 
+def competencia_schema_is_ready(conn: psycopg.Connection) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'competencia_precios'
+            """
+        )
+        return cur.fetchone() is not None
+
+
+def ensure_competencia_schema(conn: psycopg.Connection) -> bool:
+    if competencia_schema_is_ready(conn):
+        return False
+    if not schema_is_ready(conn):
+        return False
+    conn.execute(COMPETENCIA_DDL)
+    conn.commit()
+    return True
+
+
 def is_seeded(conn: psycopg.Connection) -> bool:
     if not schema_is_ready(conn):
         return False
@@ -124,8 +178,70 @@ def is_seeded(conn: psycopg.Connection) -> bool:
         return cur.fetchone()[0] > 0
 
 
+def is_competencia_seeded(conn: psycopg.Connection) -> bool:
+    if not competencia_schema_is_ready(conn):
+        return False
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM competencia_precios")
+        return cur.fetchone()[0] > 0
+
+
+def seed_competencia_data(conn: psycopg.Connection, product_ids: dict[str, int]) -> tuple[int, int]:
+    competencia = load_competencia()
+    sku_map = competencia["producto_sku_map"]
+    precio_count = 0
+    resumen_count = 0
+    with conn.cursor() as cur:
+        for row in competencia["precios"]:
+            sku = sku_map[row["producto"]]
+            precio_numerico = row["precio_numerico"]
+            cur.execute(
+                """
+                INSERT INTO competencia_precios
+                    (producto_id, competidor, precio_display, precio_numerico,
+                     tipo, canal, notas, fuente_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    product_ids[sku],
+                    row["competidor"],
+                    row["precio_display"],
+                    Decimal(str(precio_numerico)) if precio_numerico is not None else None,
+                    row["tipo"],
+                    row["canal"],
+                    row["notas"],
+                    row["fuente_url"],
+                ),
+            )
+            precio_count += 1
+
+        for row in competencia["resumen"]:
+            sku = sku_map[row["producto"]]
+            precio_min = row["precio_min"]
+            precio_max = row["precio_max"]
+            cur.execute(
+                """
+                INSERT INTO competencia_resumen
+                    (producto_id, precio_min, precio_max, num_competidores,
+                     canal_mas_economico)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    product_ids[sku],
+                    Decimal(str(precio_min)) if precio_min is not None else None,
+                    Decimal(str(precio_max)) if precio_max is not None else None,
+                    row["num_competidores"],
+                    row["canal_mas_economico"],
+                ),
+            )
+            resumen_count += 1
+    return precio_count, resumen_count
+
+
 def clear_demo_data(conn: psycopg.Connection) -> None:
     tables = [
+        "competencia_precios",
+        "competencia_resumen",
         "crm_actividades",
         "crm_oportunidades",
         "crm_contactos",
@@ -147,12 +263,28 @@ def seed_mexar_demo(conn_url: str, *, force: bool = False, random_seed: int = 42
     rng = random.Random(random_seed)
     catalog = load_catalog()
     schema_applied = False
+    competencia_schema_applied = False
 
     with psycopg.connect(conn_url) as conn:
         schema_applied = ensure_schema(conn)
+        competencia_schema_applied = ensure_competencia_schema(conn)
 
         if is_seeded(conn) and not force:
-            return {"skipped": True, "reason": "already_seeded"}
+            if is_competencia_seeded(conn):
+                return {"skipped": True, "reason": "already_seeded"}
+            with conn.cursor() as cur:
+                cur.execute("SELECT sku, id FROM comercial_productos")
+                product_ids = {sku: pid for sku, pid in cur.fetchall()}
+            precio_count, resumen_count = seed_competencia_data(conn, product_ids)
+            conn.commit()
+            return {
+                "skipped": False,
+                "schema_applied": schema_applied,
+                "competencia_schema_applied": competencia_schema_applied,
+                "competencia_only": True,
+                "competencia_precios": precio_count,
+                "competencia_resumen": resumen_count,
+            }
 
         if force and schema_is_ready(conn):
             clear_demo_data(conn)
@@ -188,6 +320,10 @@ def seed_mexar_demo(conn_url: str, *, force: bool = False, random_seed: int = 42
                     ),
                 )
                 product_ids[producto["sku"]] = cur.fetchone()[0]
+
+            competencia_precio_count, competencia_resumen_count = seed_competencia_data(
+                conn, product_ids
+            )
 
             instituciones: list[tuple[str, str, str, str, str]] = []
             for nombre, estado, ciudad, region in INSTITUCIONES_PUBLICAS:
@@ -404,11 +540,14 @@ def seed_mexar_demo(conn_url: str, *, force: bool = False, random_seed: int = 42
     return {
         "skipped": False,
         "schema_applied": schema_applied,
+        "competencia_schema_applied": competencia_schema_applied,
         "pedidos": pedido_count,
         "lineas": linea_count,
         "instituciones": len(institucion_ids),
         "productos": len(product_ids),
         "cuentas": len(cuenta_ids),
+        "competencia_precios": competencia_precio_count,
+        "competencia_resumen": competencia_resumen_count,
     }
 
 

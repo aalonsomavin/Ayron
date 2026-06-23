@@ -22,6 +22,8 @@ DEMO_TABLES = (
     "crm_contactos",
     "crm_oportunidades",
     "crm_actividades",
+    "competencia_precios",
+    "competencia_resumen",
 )
 
 FORBIDDEN_KEYWORDS = re.compile(

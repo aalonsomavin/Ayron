@@ -33,10 +33,20 @@ class TestValidateChartInput:
             series=[{"name": "Ingresos", "values": [486200, 248910]}],
             title="Por región",
             value_format="currency",
+            currency_label="pesos mexicanos",
         )
         assert payload["ok"] is True
         assert payload["chart_type"] == "bar"
         assert payload["point_count"] == 2
+
+    def test_currency_requires_label(self):
+        with pytest.raises(ValueError, match="currency_label"):
+            validate_chart_input(
+                chart_type="bar",
+                labels=["A"],
+                series=[{"name": "Precio", "values": [100]}],
+                value_format="currency",
+            )
 
     def test_rejects_invalid_chart_type(self):
         with pytest.raises(ValueError, match="chart_type must be"):

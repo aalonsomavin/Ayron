@@ -59,6 +59,7 @@ class TestValidateSelectOnly:
 class TestValidateTableName:
     def test_accepts_valid_name(self):
         assert validate_table_name("comercial_productos") == "comercial_productos"
+        assert validate_table_name("competencia_precios") == "competencia_precios"
 
     def test_accepts_case_insensitive_match(self):
         assert validate_table_name("COMERCIAL_PRODUCTOS") == "comercial_productos"
@@ -78,6 +79,7 @@ class TestSqlToolsIntegration:
         tables = json.loads(list_tables.invoke({}))
         assert "comercial_productos" in tables
         assert "crm_oportunidades" in tables
+        assert "competencia_precios" in tables
         assert set(tables).issubset(set(DEMO_TABLES))
 
     def test_describe_table_returns_columns(self):
@@ -123,6 +125,24 @@ class TestSqlToolsIntegration:
         )
         assert result["row_count"] >= 1
         assert "nombre" in result["rows"][0]
+
+    def test_run_sql_query_competencia_vs_lista(self):
+        result = json.loads(
+            run_sql_query.invoke(
+                {
+                    "sql": """
+                        SELECT p.marca_comercial, p.precio_lista, r.precio_min, r.precio_max
+                        FROM comercial_productos p
+                        JOIN competencia_resumen r ON r.producto_id = p.id
+                        WHERE p.sku = 'ARGLIPTIN-D'
+                    """
+                }
+            )
+        )
+        assert result["row_count"] == 1
+        assert result["rows"][0]["marca_comercial"] == "Argliptin-D"
+        assert result["rows"][0]["precio_lista"] is not None
+        assert result["rows"][0]["precio_min"] is not None
 
     def test_run_sql_query_rejects_non_select(self):
         result = json.loads(run_sql_query.invoke({"sql": "DELETE FROM comercial_productos"}))

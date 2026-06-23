@@ -138,6 +138,8 @@ document.addEventListener("DOMContentLoaded", function () {
 Reglas:
 - Único CDN externo permitido: Chart.js en jsdelivr
 - Valores numéricos en `data`, no strings formateados
+- Moneda: prefijo `$` + `toLocaleString("es-MX")`; indica la moneda en labels/caption \
+  (ej. «pesos mexicanos»), no en el símbolo del valor
 - En PDF el gráfico puede no renderizar (WeasyPrint); el HTML descargable sí
 
 ## Interactividad (dashboards)

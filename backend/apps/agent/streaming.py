@@ -401,6 +401,7 @@ class StreamEventHandler:
                     tool_input.get("title", ""),
                     tool_input.get("caption", ""),
                     tool_input.get("value_format", "number"),
+                    tool_input.get("currency_label", ""),
                 )
             except ValueError:
                 pass
@@ -517,6 +518,7 @@ class StreamEventHandler:
                 tool_input.get("title", ""),
                 tool_input.get("caption", ""),
                 tool_input.get("value_format", "number"),
+                tool_input.get("currency_label", ""),
             )
         except ValueError:
             return

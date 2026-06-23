@@ -29,7 +29,8 @@ Chart types:
 Payload (Chart.js-ready):
 - `labels`: category or time labels.
 - `datasets`: `[{ label, data, color_index }]` (pie uses `color_indices` per slice).
-- `value_format`: `number` | `currency` | `percent` for axis ticks and tooltips.
+- `value_format`: `number` | `currency` | `percent` for axis ticks and tooltips; \
+  `currency` uses `$` prefix and optional `currency_label` on the Y axis (e.g. pesos mexicanos).
 
 Anatomy:
 - Optional title: 13px, weight 600, sentence case, `--ay-text`.

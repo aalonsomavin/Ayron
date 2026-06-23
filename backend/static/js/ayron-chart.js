@@ -13,20 +13,25 @@
     return colors;
   }
 
+  function formatCurrencyAmount(value) {
+    var num = Number(value);
+    if (Number.isNaN(num)) return String(value);
+    return "$" + Math.round(num).toLocaleString("es-MX");
+  }
+
   function formatValue(value, valueFormat) {
     const num = Number(value);
     if (Number.isNaN(num)) return String(value);
     if (valueFormat === "currency") {
-      const rounded = Math.round(num);
-      return "€" + rounded.toLocaleString("es-ES");
+      return formatCurrencyAmount(num);
     }
     if (valueFormat === "percent") {
       return num.toFixed(1) + "%";
     }
     if (Math.abs(num - Math.round(num)) < 1e-9) {
-      return Math.round(num).toLocaleString("es-ES");
+      return Math.round(num).toLocaleString("es-MX");
     }
-    return num.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+    return num.toLocaleString("es-MX", { maximumFractionDigits: 2 });
   }
 
   function datasetColors(chart, dataset, palette) {
@@ -64,6 +69,7 @@
   function buildChartConfig(chart, liveOpts) {
     const palette = chartColors();
     const valueFormat = chart.value_format || "number";
+    const currencyLabel = chart.currency_label || "";
     const textMuted = cssVar("--ay-text-muted") || "#8a8a92";
     const borderSubtle = cssVar("--ay-border-subtle") || "#ededee";
     const fontSans = cssVar("--ay-font-sans") || "Geist, sans-serif";
@@ -120,6 +126,14 @@
             },
             y: {
               grid: { color: borderSubtle },
+              title: currencyLabel && valueFormat === "currency"
+                ? {
+                    display: true,
+                    text: currencyLabel,
+                    color: textMuted,
+                    font: { family: fontSans, size: 11 },
+                  }
+                : undefined,
               ticks: {
                 color: textMuted,
                 font: { family: fontMono, size: 11 },
@@ -299,6 +313,7 @@
       title: meta.title,
       caption: meta.caption,
       value_format: meta.value_format || "number",
+      currency_label: meta.currency_label || "",
       labels: labels,
       datasets: [
         {

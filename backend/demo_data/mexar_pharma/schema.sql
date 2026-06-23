@@ -90,8 +90,29 @@ CREATE TABLE crm_actividades (
     notas TEXT
 );
 
+CREATE TABLE competencia_resumen (
+    producto_id INTEGER PRIMARY KEY REFERENCES comercial_productos(id),
+    precio_min NUMERIC(12, 2),
+    precio_max NUMERIC(12, 2),
+    num_competidores INTEGER NOT NULL,
+    canal_mas_economico VARCHAR(300)
+);
+
+CREATE TABLE competencia_precios (
+    id SERIAL PRIMARY KEY,
+    producto_id INTEGER NOT NULL REFERENCES comercial_productos(id),
+    competidor VARCHAR(200) NOT NULL,
+    precio_display VARCHAR(50),
+    precio_numerico NUMERIC(12, 2),
+    tipo VARCHAR(50) NOT NULL,
+    canal VARCHAR(150) NOT NULL,
+    notas TEXT,
+    fuente_url VARCHAR(200)
+);
+
 CREATE INDEX idx_pedidos_fecha ON comercial_pedidos(fecha);
 CREATE INDEX idx_pedidos_institucion ON comercial_pedidos(institucion_id);
 CREATE INDEX idx_pedido_lineas_producto ON comercial_pedido_lineas(producto_id);
 CREATE INDEX idx_instituciones_region ON comercial_instituciones(region);
 CREATE INDEX idx_oportunidades_cierre ON crm_oportunidades(fecha_cierre_esperada);
+CREATE INDEX idx_competencia_precios_producto ON competencia_precios(producto_id);

@@ -1,0 +1,762 @@
+{
+  "producto_sku_map": {
+    "Hyperlub 5": "HYPERLUB-5",
+    "HyaluFresh 0.2%": "HYALUFRESH-02",
+    "HyaluFresh 0.4%": "HYALUFRESH-04",
+    "Argliptin-D": "ARGLIPTIN-D",
+    "Bitam": "BITAM",
+    "Selencor": "SELENCOR",
+    "Fibcorif": "FIBCORIF",
+    "Kamedix": "KAMEDIX",
+    "Brylupa": "BRYLUPA",
+    "Degehn": "DEGEHN",
+    "Asgen": "ASGEN",
+    "Iriaspe": "IRIASPE",
+    "Kebiras": "KEBIRAS",
+    "Mocedam": "MOCEDAM",
+    "Dacrolem": "DACROLEM",
+    "Vadismed": "VADISMED",
+    "Drastep": "DRASTEP",
+    "Varpharm": "VARPHARM"
+  },
+  "precios": [
+    {
+      "producto": "Hyperlub 5",
+      "competidor": "Corneregel (Bausch+Lomb)",
+      "precio_display": "$877",
+      "precio_numerico": 877.0,
+      "tipo": "Marca",
+      "canal": "Farmacias del Ahorro",
+      "notas": "Gel + carbómero. Marca referente del mercado.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "Hyperlub 5",
+      "competidor": "Corneregel (Bausch+Lomb)",
+      "precio_display": "$832",
+      "precio_numerico": 832.0,
+      "tipo": "Marca",
+      "canal": "Walmart / Prixz",
+      "notas": "Vendido por Farmacia Prixz en Walmart.",
+      "fuente_url": "walmart.com.mx"
+    },
+    {
+      "producto": "Hyperlub 5",
+      "competidor": "Corneregel (Bausch+Lomb)",
+      "precio_display": "$902",
+      "precio_numerico": 902.0,
+      "tipo": "Marca",
+      "canal": "Pharmafast",
+      "notas": "Sin existencias en consulta.",
+      "fuente_url": "pharmafast.com.mx"
+    },
+    {
+      "producto": "Hyperlub 5",
+      "competidor": "Acrylarm DX (Italmex)",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Genérico de marca",
+      "canal": "Farmacias Benavides",
+      "notas": "Alternativa genérica disponible.",
+      "fuente_url": "benavides.com.mx"
+    },
+    {
+      "producto": "Hyperlub 5",
+      "competidor": "Aquadran (Sophia Labs)",
+      "precio_display": "~$400–600",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Prixz",
+      "notas": "Estimado basado en gama genérica.",
+      "fuente_url": "prixz.com"
+    },
+    {
+      "producto": "HyaluFresh 0.2%",
+      "competidor": "Dropstar P (hialuronato+polietilenglicol)",
+      "precio_display": "$775",
+      "precio_numerico": 775.0,
+      "tipo": "Marca",
+      "canal": "Farmacias del Ahorro",
+      "notas": "Doble mecanismo ojo seco.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "HyaluFresh 0.2%",
+      "competidor": "Genérico de Marca 0.2%",
+      "precio_display": "$200–400",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Benavides / Similares",
+      "notas": "Amplia disponibilidad cadenas nacionales.",
+      "fuente_url": "benavides.com.mx"
+    },
+    {
+      "producto": "HyaluFresh 0.4%",
+      "competidor": "Genérico de Marca 0.4%",
+      "precio_display": "$400–600",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Farmacias Benavides",
+      "notas": "Mayor concentración; menos disponibilidad.",
+      "fuente_url": "benavides.com.mx"
+    },
+    {
+      "producto": "HyaluFresh 0.4%",
+      "competidor": "Varias marcas (Systane, Thea)",
+      "precio_display": "$400–800",
+      "precio_numerico": null,
+      "tipo": "Marca",
+      "canal": "Amazon.com.mx / Prixz",
+      "notas": "Rango según marca y volumen.",
+      "fuente_url": "amazon.com.mx"
+    },
+    {
+      "producto": "Argliptin-D",
+      "competidor": "Janumet 50/850mg 28 tabs (MSD)",
+      "precio_display": "$1,400–1,800",
+      "precio_numerico": 1600.0,
+      "tipo": "Marca",
+      "canal": "Vitau / Farmalisto",
+      "notas": "Marca original MSD. Precio estimado rango.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Argliptin-D",
+      "competidor": "Genérico 50/850mg 28 tabs",
+      "precio_display": "$245",
+      "precio_numerico": 245.0,
+      "tipo": "Genérico",
+      "canal": "Farmacias del Ahorro",
+      "notas": "Marca del Ahorro, precio online.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "Argliptin-D",
+      "competidor": "Genérico 50/850mg 56 tabs",
+      "precio_display": "$668",
+      "precio_numerico": 668.0,
+      "tipo": "Genérico",
+      "canal": "Farmacias del Ahorro",
+      "notas": "Precio especial 56 tabs.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "Argliptin-D",
+      "competidor": "Sitagliptina/Metformina (Camber) 56 tabs",
+      "precio_display": "~$429",
+      "precio_numerico": 429.0,
+      "tipo": "Genérico",
+      "canal": "MercadoLibre / Farmacia Gloria",
+      "notas": "Genérico Camber Pharma.",
+      "fuente_url": "mercadolibre.com.mx"
+    },
+    {
+      "producto": "Bitam",
+      "competidor": "Januvia 100mg 28 tabs (Merck)",
+      "precio_display": "$1,795",
+      "precio_numerico": 1795.0,
+      "tipo": "Marca",
+      "canal": "Vitau",
+      "notas": "Marca original Merck.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Bitam",
+      "competidor": "Januvia 100mg 14 tabs (Merck)",
+      "precio_display": "$824–989",
+      "precio_numerico": 906.0,
+      "tipo": "Marca",
+      "canal": "Farmacias YZA / Vitau",
+      "notas": "14 tabs; precio por caja.",
+      "fuente_url": "yza.mx"
+    },
+    {
+      "producto": "Bitam",
+      "competidor": "Genérico Sitagliptina 100mg 28 tabs",
+      "precio_display": "$555–700",
+      "precio_numerico": 627.0,
+      "tipo": "Genérico",
+      "canal": "MercadoLibre / F. del Ahorro",
+      "notas": "Genérico ampliamente disponible.",
+      "fuente_url": "mercadolibre.com.mx"
+    },
+    {
+      "producto": "Selencor",
+      "competidor": "Genérico Irb/HCTZ 150/12.5mg 28 tabs",
+      "precio_display": "$57–62",
+      "precio_numerico": 59.0,
+      "tipo": "Genérico",
+      "canal": "Farmacias del Ahorro",
+      "notas": "Precio online más bajo encontrado.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "Selencor",
+      "competidor": "Genérico Irb/HCTZ 300/12.5mg 28 tabs (Camber)",
+      "precio_display": "$349",
+      "precio_numerico": 349.0,
+      "tipo": "Genérico",
+      "canal": "MercadoLibre",
+      "notas": "Con 13% descuento; 8 unidades disponibles.",
+      "fuente_url": "mercadolibre.com.mx"
+    },
+    {
+      "producto": "Selencor",
+      "competidor": "Genérico Irb/HCTZ – Farmatodo / F. Benavides",
+      "precio_display": "$200–400",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Farmatodo / Benavides / Walmart",
+      "notas": "Múltiples canales, rango variable.",
+      "fuente_url": "farmatodo.com.mx"
+    },
+    {
+      "producto": "Fibcorif",
+      "competidor": "Primacor (Sanofi) 3 amp 10mL",
+      "precio_display": "$9,006",
+      "precio_numerico": 9006.0,
+      "tipo": "Marca",
+      "canal": "Vitau",
+      "notas": "Uso hospitalario. Marca referente Sanofi.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Fibcorif",
+      "competidor": "Caldronat (Kener) 3x10mL genérico",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Vitau",
+      "notas": "Alternativa genérica hospitalaria.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Fibcorif",
+      "competidor": "Genérico Milrinona – farmacias especialidad",
+      "precio_display": "$5,000–6,000",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Prixz / Farmacias esp.",
+      "notas": "Rango estimado genéricos según Prixz.",
+      "fuente_url": "prixz.com"
+    },
+    {
+      "producto": "Kamedix",
+      "competidor": "Kamedix (propio Mexar) – distribuidor Curitek",
+      "precio_display": "$610",
+      "precio_numerico": 610.0,
+      "tipo": "Marca propia",
+      "canal": "Curitek Farmacia",
+      "notas": "El propio producto Mexar en distribuidor.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Kamedix",
+      "competidor": "Drimitec (competidor directo) – Curitek",
+      "precio_display": "$900",
+      "precio_numerico": 900.0,
+      "tipo": "Competidor",
+      "canal": "Curitek Farmacia",
+      "notas": "Competidor en el mismo distribuidor.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Kamedix",
+      "competidor": "Krunamina (Pisa) 5 frascos",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Vitau / Farmacia La Paz",
+      "notas": "Alternativa genérica disponible.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Kamedix",
+      "competidor": "Precedex (Pfizer) 5 amp – original",
+      "precio_display": "Consultar (>$3,000)",
+      "precio_numerico": null,
+      "tipo": "Marca",
+      "canal": "Vitau / MercadoLibre",
+      "notas": "Marca original Pfizer; uso UCI.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Kamedix",
+      "competidor": "Precio mercado general – varias marcas",
+      "precio_display": "$3,000–4,500",
+      "precio_numerico": null,
+      "tipo": "Rango",
+      "canal": "Prixz / múltiples",
+      "notas": "Rango general citado por Prixz.",
+      "fuente_url": "prixz.com"
+    },
+    {
+      "producto": "Brylupa",
+      "competidor": "Noclorapin 150mg/20mL (Alvartis) – Curitek",
+      "precio_display": "$1,300",
+      "precio_numerico": 1300.0,
+      "tipo": "Genérico",
+      "canal": "Curitek Farmacia",
+      "notas": "Genérico de marca directa.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Brylupa",
+      "competidor": "Ropivacaína genérica 40mg/20mL – Curitek",
+      "precio_display": "$650",
+      "precio_numerico": 650.0,
+      "tipo": "Genérico",
+      "canal": "Curitek Farmacia",
+      "notas": "Presentación de menor concentración.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Brylupa",
+      "competidor": "Naropin (AstraZeneca) – marca original",
+      "precio_display": "$2,971–6,382",
+      "precio_numerico": null,
+      "tipo": "Marca",
+      "canal": "Prixz",
+      "notas": "Importado; precio según presentación.",
+      "fuente_url": "prixz.com"
+    },
+    {
+      "producto": "Brylupa",
+      "competidor": "Apirovin 150mg/20mL – Farmacia Sanorim",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Sanorim.mx",
+      "notas": "Genérico disponible en venta online.",
+      "fuente_url": "sanorim.mx"
+    },
+    {
+      "producto": "Degehn",
+      "competidor": "Purinethol (Aspen) – Vitau",
+      "precio_display": "$2,491",
+      "precio_numerico": 2491.0,
+      "tipo": "Marca",
+      "canal": "Vitau",
+      "notas": "Marca referente Aspen Labs.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Degehn",
+      "competidor": "Purinethol (Aspen) – Curitek",
+      "precio_display": "$2,600",
+      "precio_numerico": 2600.0,
+      "tipo": "Marca",
+      "canal": "Curitek Farmacia",
+      "notas": "Farmacia de alta especialidad.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Degehn",
+      "competidor": "Purinethol (Aspen) – Vida Farmacias",
+      "precio_display": "$2,299",
+      "precio_numerico": 2299.0,
+      "tipo": "Marca",
+      "canal": "Vida Farmacias",
+      "notas": "Precio más bajo encontrado.",
+      "fuente_url": "vidafarmacias.com"
+    },
+    {
+      "producto": "Degehn",
+      "competidor": "Purinethol (Aspen) – Kalan Farmacia",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Marca",
+      "canal": "Kalan Farmacia",
+      "notas": "Envío gratis a todo México.",
+      "fuente_url": "kalanfarmacia.com.mx"
+    },
+    {
+      "producto": "Asgen",
+      "competidor": "Uldeus 1g (Ulsa Tech) – Curitek",
+      "precio_display": "$730",
+      "precio_numerico": 730.0,
+      "tipo": "Genérico",
+      "canal": "Curitek Farmacia",
+      "notas": "Promo: compra 3 y llévate 1.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Asgen",
+      "competidor": "Accogem 200mg/5mL (Accord) – Curitek",
+      "precio_display": "$781",
+      "precio_numerico": 781.0,
+      "tipo": "Genérico",
+      "canal": "Curitek Farmacia",
+      "notas": "Presentación 200mg.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Asgen",
+      "competidor": "Uldeus 1g – Vida Farmacias",
+      "precio_display": "$770–800",
+      "precio_numerico": 785.0,
+      "tipo": "Genérico",
+      "canal": "Vida Farmacias",
+      "notas": "También en Kalan y Farmacia Oncológica.",
+      "fuente_url": "vidafarmacias.com"
+    },
+    {
+      "producto": "Iriaspe",
+      "competidor": "Badix 100mg/5mL (Hetero) – Curitek",
+      "precio_display": "$1,420",
+      "precio_numerico": 1420.0,
+      "tipo": "Genérico",
+      "canal": "Curitek Farmacia",
+      "notas": "Genérico Hetero Labs.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Iriaspe",
+      "competidor": "Iraplax 100mg/5mL (Accord) – Kalan Farmacia",
+      "precio_display": "$1,800",
+      "precio_numerico": 1800.0,
+      "tipo": "Genérico",
+      "canal": "Kalan Farmacia",
+      "notas": "Genérico Accord.",
+      "fuente_url": "kalanfarmacia.com.mx"
+    },
+    {
+      "producto": "Iriaspe",
+      "competidor": "Iraplax (Accord) – Probemedic / Vida Farmacias",
+      "precio_display": "$1,444–1,705",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Probemedic / Vida Farmacias",
+      "notas": "Rango múltiples distribuidores.",
+      "fuente_url": "probemedic.mx"
+    },
+    {
+      "producto": "Kebiras",
+      "competidor": "Miocerkel 80mg (Ulsa Tech) – Curitek",
+      "precio_display": "$2,300",
+      "precio_numerico": 2300.0,
+      "tipo": "Genérico",
+      "canal": "Curitek Farmacia",
+      "notas": "Promo plan 4+1. Req. cadena de frío.",
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Kebiras",
+      "competidor": "Somatixel 80mg (Teva) – Farmacia Oncológica",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Farmacia Oncológica Conexión",
+      "notas": "Genérico Teva disponible.",
+      "fuente_url": "farmaciaoncologica.mx"
+    },
+    {
+      "producto": "Kebiras",
+      "competidor": "Docetaxel 80mg (Sandoz) – Proasse",
+      "precio_display": "$6,200",
+      "precio_numerico": 6200.0,
+      "tipo": "Marca",
+      "canal": "Proasse",
+      "notas": "Marca Sandoz.",
+      "fuente_url": "proasse.mx"
+    },
+    {
+      "producto": "Kebiras",
+      "competidor": "Taxotere 80mg (Sanofi) – Proasse",
+      "precio_display": "$30,269",
+      "precio_numerico": 30269.0,
+      "tipo": "Marca original",
+      "canal": "Proasse",
+      "notas": "Referencia original de mercado.",
+      "fuente_url": "proasse.mx"
+    },
+    {
+      "producto": "Mocedam",
+      "competidor": "Mavifem Crema Vag. 30g (clindamicina/ketoconazol)",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Marca",
+      "canal": "Farmatodo / Farmacias Gi",
+      "notas": "Formulación 2g/8g clindamicina/ketoconazol.",
+      "fuente_url": "farmatodo.com.mx"
+    },
+    {
+      "producto": "Mocedam",
+      "competidor": "Genérico KCZ/Clin 30g – Farmacias del Ahorro",
+      "precio_display": "$146",
+      "precio_numerico": 146.0,
+      "tipo": "Genérico",
+      "canal": "Farmacias del Ahorro",
+      "notas": "Marca del Ahorro. Precio online.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "Mocedam",
+      "competidor": "Fabe KCZ/Clin 30g – Farmacias Benavides (Rappi)",
+      "precio_display": "$320",
+      "precio_numerico": 320.0,
+      "tipo": "Genérico",
+      "canal": "Rappi / Benavides",
+      "notas": "Disponible en delivery Rappi.",
+      "fuente_url": "rappi.com.mx"
+    },
+    {
+      "producto": "Mocedam",
+      "competidor": "YZA Ketoconazol/Clindamicina 30g – YZA.mx",
+      "precio_display": "$291",
+      "precio_numerico": 291.0,
+      "tipo": "Genérico",
+      "canal": "Farmacias YZA",
+      "notas": "Precio oferta online.",
+      "fuente_url": "yza.mx"
+    },
+    {
+      "producto": "Dacrolem",
+      "competidor": "Salofalk 500mg 40 tabs (Dr. Falk) – F. Guadalajara",
+      "precio_display": "~$569–800",
+      "precio_numerico": null,
+      "tipo": "Marca",
+      "canal": "F. Guadalajara / Walmart / Rappi",
+      "notas": "Marca original referente.",
+      "fuente_url": "farmaciasguadalajara.com"
+    },
+    {
+      "producto": "Dacrolem",
+      "competidor": "Musimir 500mg 40 tabs – Farmacias Benavides",
+      "precio_display": "Consultar",
+      "precio_numerico": null,
+      "tipo": "Genérico",
+      "canal": "Farmacias Benavides",
+      "notas": "Genérico de marca disponible.",
+      "fuente_url": "benavides.com.mx"
+    },
+    {
+      "producto": "Vadismed",
+      "competidor": "Buscapina Comp. 20 tabs (Boehringer) – Prixz",
+      "precio_display": "$423",
+      "precio_numerico": 423.0,
+      "tipo": "Marca",
+      "canal": "Prixz",
+      "notas": "Hioscina 10mg + Metamizol 250mg.",
+      "fuente_url": "prixz.com"
+    },
+    {
+      "producto": "Vadismed",
+      "competidor": "Buscapina Comp. 36 tabs – Farmacias del Ahorro",
+      "precio_display": "$652",
+      "precio_numerico": 652.0,
+      "tipo": "Marca",
+      "canal": "Farmacias del Ahorro",
+      "notas": "36 tabletas con metamizol.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "Vadismed",
+      "competidor": "Buscapina 10mg 24 tabs (simple) – Farmacias YZA",
+      "precio_display": "$246",
+      "precio_numerico": 246.0,
+      "tipo": "Marca",
+      "canal": "Farmacias YZA",
+      "notas": "Solo hioscina, sin metamizol.",
+      "fuente_url": "yza.mx"
+    },
+    {
+      "producto": "Drastep",
+      "competidor": "Genérico Clindamicina 300mg 16 caps – Vitau",
+      "precio_display": "$71",
+      "precio_numerico": 71.0,
+      "tipo": "Genérico",
+      "canal": "Vitau",
+      "notas": "Precio más bajo encontrado.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Drastep",
+      "competidor": "Genérico Clindamicina 300mg 16 caps – F. del Ahorro",
+      "precio_display": "$118",
+      "precio_numerico": 118.0,
+      "tipo": "Genérico",
+      "canal": "Farmacias del Ahorro",
+      "notas": "Marca del Ahorro.",
+      "fuente_url": "fahorro.com"
+    },
+    {
+      "producto": "Drastep",
+      "competidor": "Clendix 300mg 21 caps – Prixz / F. del Ahorro",
+      "precio_display": "$238–243",
+      "precio_numerico": 240.0,
+      "tipo": "Genérico de marca",
+      "canal": "Prixz / Farmacias del Ahorro",
+      "notas": "Marca Clendix (Sanofi).",
+      "fuente_url": "prixz.com"
+    },
+    {
+      "producto": "Varpharm",
+      "competidor": "Rifosar 800mg 180 tabs (Synthon) – Vitau",
+      "precio_display": "$2,900",
+      "precio_numerico": 2900.0,
+      "tipo": "Genérico",
+      "canal": "Vitau",
+      "notas": "Precio más bajo para genérico.",
+      "fuente_url": "vitau.mx"
+    },
+    {
+      "producto": "Varpharm",
+      "competidor": "Rifosar 800mg 180 tabs – Kalan Farmacia",
+      "precio_display": "$3,850",
+      "precio_numerico": 3850.0,
+      "tipo": "Genérico",
+      "canal": "Kalan Farmacia",
+      "notas": null,
+      "fuente_url": "kalanfarmacia.com.mx"
+    },
+    {
+      "producto": "Varpharm",
+      "competidor": "Sevelámero 800mg 180 tabs (Ultra) – Curitek",
+      "precio_display": "$3,380",
+      "precio_numerico": 3380.0,
+      "tipo": "Genérico",
+      "canal": "Curitek Farmacia",
+      "notas": null,
+      "fuente_url": "curitek.com"
+    },
+    {
+      "producto": "Varpharm",
+      "competidor": "Renagel (Sanofi) – referencia de mercado",
+      "precio_display": ">$4,000",
+      "precio_numerico": null,
+      "tipo": "Marca original",
+      "canal": "Farmacias especialidad",
+      "notas": "Marca original de referencia.",
+      "fuente_url": "farmalisto.com.mx"
+    }
+  ],
+  "resumen": [
+    {
+      "producto": "Hyperlub 5",
+      "precio_min": 832.0,
+      "precio_max": 902.0,
+      "num_competidores": 5,
+      "canal_mas_economico": "Walmart / Prixz – Corneregel (Bausch+Lomb)"
+    },
+    {
+      "producto": "HyaluFresh 0.2%",
+      "precio_min": 775.0,
+      "precio_max": 775.0,
+      "num_competidores": 2,
+      "canal_mas_economico": "Farmacias del Ahorro – Dropstar P (hialuronato+polietilenglicol)"
+    },
+    {
+      "producto": "HyaluFresh 0.4%",
+      "precio_min": null,
+      "precio_max": null,
+      "num_competidores": 2,
+      "canal_mas_economico": "N/D"
+    },
+    {
+      "producto": "Argliptin-D",
+      "precio_min": 245.0,
+      "precio_max": 1600.0,
+      "num_competidores": 4,
+      "canal_mas_economico": "Farmacias del Ahorro – Genérico 50/850mg 28 tabs"
+    },
+    {
+      "producto": "Bitam",
+      "precio_min": 627.0,
+      "precio_max": 1795.0,
+      "num_competidores": 3,
+      "canal_mas_economico": "MercadoLibre / F. del Ahorro – Genérico Sitagliptina 100mg 28 tabs"
+    },
+    {
+      "producto": "Selencor",
+      "precio_min": 59.0,
+      "precio_max": 349.0,
+      "num_competidores": 3,
+      "canal_mas_economico": "Farmacias del Ahorro – Genérico Irb/HCTZ 150/12.5mg 28 tabs"
+    },
+    {
+      "producto": "Fibcorif",
+      "precio_min": 9006.0,
+      "precio_max": 9006.0,
+      "num_competidores": 3,
+      "canal_mas_economico": "Vitau – Primacor (Sanofi) 3 amp 10mL"
+    },
+    {
+      "producto": "Kamedix",
+      "precio_min": 610.0,
+      "precio_max": 900.0,
+      "num_competidores": 5,
+      "canal_mas_economico": "Curitek Farmacia – Kamedix (propio Mexar) – distribuidor Curitek"
+    },
+    {
+      "producto": "Brylupa",
+      "precio_min": 650.0,
+      "precio_max": 1300.0,
+      "num_competidores": 4,
+      "canal_mas_economico": "Curitek Farmacia – Ropivacaína genérica 40mg/20mL – Curitek"
+    },
+    {
+      "producto": "Degehn",
+      "precio_min": 2299.0,
+      "precio_max": 2600.0,
+      "num_competidores": 4,
+      "canal_mas_economico": "Vida Farmacias – Purinethol (Aspen) – Vida Farmacias"
+    },
+    {
+      "producto": "Asgen",
+      "precio_min": 730.0,
+      "precio_max": 785.0,
+      "num_competidores": 3,
+      "canal_mas_economico": "Curitek Farmacia – Uldeus 1g (Ulsa Tech) – Curitek"
+    },
+    {
+      "producto": "Iriaspe",
+      "precio_min": 1420.0,
+      "precio_max": 1800.0,
+      "num_competidores": 3,
+      "canal_mas_economico": "Curitek Farmacia – Badix 100mg/5mL (Hetero) – Curitek"
+    },
+    {
+      "producto": "Kebiras",
+      "precio_min": 2300.0,
+      "precio_max": 30269.0,
+      "num_competidores": 4,
+      "canal_mas_economico": "Curitek Farmacia – Miocerkel 80mg (Ulsa Tech) – Curitek"
+    },
+    {
+      "producto": "Mocedam",
+      "precio_min": 146.0,
+      "precio_max": 320.0,
+      "num_competidores": 4,
+      "canal_mas_economico": "Farmacias del Ahorro – Genérico KCZ/Clin 30g – Farmacias del Ahorro"
+    },
+    {
+      "producto": "Dacrolem",
+      "precio_min": null,
+      "precio_max": null,
+      "num_competidores": 2,
+      "canal_mas_economico": "N/D"
+    },
+    {
+      "producto": "Vadismed",
+      "precio_min": 246.0,
+      "precio_max": 652.0,
+      "num_competidores": 3,
+      "canal_mas_economico": "Farmacias YZA – Buscapina 10mg 24 tabs (simple) – Farmacias YZA"
+    },
+    {
+      "producto": "Drastep",
+      "precio_min": 71.0,
+      "precio_max": 240.0,
+      "num_competidores": 3,
+      "canal_mas_economico": "Vitau – Genérico Clindamicina 300mg 16 caps – Vitau"
+    },
+    {
+      "producto": "Varpharm",
+      "precio_min": 2900.0,
+      "precio_max": 3850.0,
+      "num_competidores": 4,
+      "canal_mas_economico": "Vitau – Rifosar 800mg 180 tabs (Synthon) – Vitau"
+    }
+  ]
+}

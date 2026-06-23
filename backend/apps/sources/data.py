@@ -82,5 +82,37 @@ def get_connected_sources():
                     ],
                 },
             ],
-        }
+        },
+        {
+            "name": "Inteligencia de Mercado — Precios Competencia",
+            "type": "PostgreSQL",
+            "status": "connected",
+            "status_label": "Conectada",
+            "database": "mexar_demo",
+            "table_count": 2,
+            "last_sync": "Hace 1 hr",
+            "domains": [
+                {
+                    "name": "Precios de Competencia",
+                    "prefix": "competencia_*",
+                    "description": (
+                        "Precios observados de competidores por producto, canal y fuente."
+                    ),
+                    "tables": [
+                        {
+                            "name": "competencia_precios",
+                            "description": (
+                                "Precios de competidores por SKU, canal, tipo y fuente URL."
+                            ),
+                        },
+                        {
+                            "name": "competencia_resumen",
+                            "description": (
+                                "Rango min/max de mercado y canal más económico por producto."
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
     ]

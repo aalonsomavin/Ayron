@@ -164,19 +164,24 @@
     return value;
   }
 
+  function formatCurrencyAmount(value) {
+    var num = Number(value);
+    if (Number.isNaN(num)) return String(value);
+    return "$" + Math.round(num).toLocaleString("es-MX");
+  }
+
   function formatCalcValue(value, valueFormat) {
     if (typeof value !== "number" || !Number.isFinite(value)) return "—";
     if (valueFormat === "currency") {
-      var rounded = Math.round(value);
-      return "€" + rounded.toLocaleString("es-ES");
+      return formatCurrencyAmount(value);
     }
     if (valueFormat === "percent") {
       return (value * 100).toFixed(1) + "%";
     }
     if (Math.abs(value - Math.round(value)) < 1e-9) {
-      return Math.round(value).toLocaleString("es-ES");
+      return Math.round(value).toLocaleString("es-MX");
     }
-    return value.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+    return value.toLocaleString("es-MX", { maximumFractionDigits: 2 });
   }
 
   function resolveTabPanels(tabsEl) {

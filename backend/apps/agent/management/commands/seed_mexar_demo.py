@@ -28,6 +28,19 @@ class Command(BaseCommand):
         if result.get("schema_applied"):
             self.stdout.write("Applied Mexar demo schema.")
 
+        if result.get("competencia_schema_applied"):
+            self.stdout.write("Applied competencia schema.")
+
+        if result.get("competencia_only"):
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "Competencia seeded: "
+                    f"{result['competencia_precios']} precios, "
+                    f"{result['competencia_resumen']} resúmenes."
+                )
+            )
+            return
+
         self.stdout.write(
             self.style.SUCCESS(
                 "Mexar demo seeded: "
@@ -35,6 +48,8 @@ class Command(BaseCommand):
                 f"{result['instituciones']} instituciones, "
                 f"{result['pedidos']} pedidos, "
                 f"{result['lineas']} líneas, "
-                f"{result['cuentas']} cuentas CRM."
+                f"{result['cuentas']} cuentas CRM, "
+                f"{result['competencia_precios']} precios competencia, "
+                f"{result['competencia_resumen']} resúmenes competencia."
             )
         )
