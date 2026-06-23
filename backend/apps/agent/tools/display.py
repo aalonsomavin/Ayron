@@ -67,7 +67,7 @@ def _html_artifact_subtitle(tool_input: ToolInput) -> str:
 
 
 TOOL_DISPLAY: dict[str, tuple[str, SubtitleBuilder | None]] = {
-    "list_tables": ("Listar tablas", lambda _: "Base Chinook"),
+    "list_tables": ("Listar tablas", lambda _: "Mexar Pharma"),
     "describe_table": ("Describir tabla", _sql_table_subtitle),
     "run_sql_query": ("Buscando datos", _sql_query_subtitle),
     "show_data_table": ("Mostrar tabla", _table_subtitle),

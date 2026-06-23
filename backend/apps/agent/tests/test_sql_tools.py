@@ -4,9 +4,9 @@ import pytest
 from django.conf import settings
 
 from apps.agent.tools.sql import (
+    DEMO_TABLES,
     describe_table,
     list_tables,
-    normalize_chinook_sql,
     run_sql_query,
     validate_select_only,
     validate_table_name,
@@ -23,27 +23,33 @@ class TestValidateSelectOnly:
 
     def test_rejects_insert(self):
         with pytest.raises(ValueError, match="Only SELECT"):
-            validate_select_only("INSERT INTO artist (name) VALUES ('x')")
+            validate_select_only("INSERT INTO comercial_productos (sku) VALUES ('x')")
 
     def test_rejects_update(self):
         with pytest.raises(ValueError, match="Multiple SQL statements"):
-            validate_select_only("SELECT * FROM artist; UPDATE artist SET name = 'x'")
+            validate_select_only(
+                "SELECT * FROM comercial_productos; UPDATE comercial_productos SET sku = 'x'"
+            )
 
     def test_rejects_delete(self):
         with pytest.raises(ValueError, match="Only SELECT"):
-            validate_select_only("DELETE FROM artist")
+            validate_select_only("DELETE FROM comercial_productos")
 
     def test_rejects_drop(self):
         with pytest.raises(ValueError, match="Multiple SQL statements"):
-            validate_select_only("SELECT * FROM artist WHERE name = 'x'; DROP TABLE artist")
+            validate_select_only(
+                "SELECT * FROM comercial_productos WHERE sku = 'x'; DROP TABLE comercial_productos"
+            )
 
     def test_rejects_forbidden_keyword_in_select(self):
         with pytest.raises(ValueError, match="forbidden keywords"):
-            validate_select_only("SELECT * FROM artist WHERE name = 'x' AND 1 = 1 UNION DELETE FROM artist")
+            validate_select_only(
+                "SELECT * FROM comercial_productos WHERE sku = 'x' AND 1 = 1 UNION DELETE FROM comercial_productos"
+            )
 
     def test_rejects_select_into(self):
         with pytest.raises(ValueError, match="INTO clause"):
-            validate_select_only("SELECT * INTO backup FROM artist")
+            validate_select_only("SELECT * INTO backup FROM comercial_productos")
 
     def test_rejects_multiple_statements(self):
         with pytest.raises(ValueError, match="Multiple SQL statements"):
@@ -52,85 +58,87 @@ class TestValidateSelectOnly:
 
 class TestValidateTableName:
     def test_accepts_valid_name(self):
-        assert validate_table_name("album") == "Album"
+        assert validate_table_name("comercial_productos") == "comercial_productos"
+
+    def test_accepts_case_insensitive_match(self):
+        assert validate_table_name("COMERCIAL_PRODUCTOS") == "comercial_productos"
 
     def test_rejects_invalid_name(self):
         with pytest.raises(ValueError, match="Invalid table name"):
-            validate_table_name("album; DROP TABLE artist")
+            validate_table_name("comercial_productos; DROP TABLE crm_cuentas")
 
-
-class TestNormalizeChinookSql:
-    def test_quotes_unquoted_table(self):
-        sql = normalize_chinook_sql("SELECT * FROM Album LIMIT 5")
-        assert sql == 'SELECT * FROM "Album" LIMIT 5'
-
-    def test_quotes_lowercase_table(self):
-        sql = normalize_chinook_sql("SELECT * FROM album LIMIT 5")
-        assert sql == 'SELECT * FROM "Album" LIMIT 5'
-
-    def test_preserves_already_quoted_identifiers(self):
-        sql = normalize_chinook_sql('SELECT "ArtistId", "Name" FROM "Artist"')
-        assert sql == 'SELECT "ArtistId", "Name" FROM "Artist"'
-
-    def test_quotes_columns_in_join(self):
-        sql = normalize_chinook_sql(
-            "SELECT a.Title FROM Album a JOIN Artist ar ON a.ArtistId = ar.ArtistId"
-        )
-        assert '"Album"' in sql
-        assert '"Artist"' in sql
-        assert '"Title"' in sql
-        assert '"ArtistId"' in sql
-
-    def test_preserves_string_literals(self):
-        sql = normalize_chinook_sql("SELECT Name FROM Artist WHERE Name = 'AC/DC'")
-        assert sql.endswith("WHERE \"Name\" = 'AC/DC'")
+    def test_rejects_unknown_table(self):
+        with pytest.raises(ValueError, match="not available"):
+            validate_table_name("artist")
 
 
 @pytest.mark.skipif(not settings.DEMO_DB_URL, reason="DEMO_DB_URL not configured")
 class TestSqlToolsIntegration:
-    def test_list_tables_returns_chinook_tables(self):
+    def test_list_tables_returns_mexar_tables(self):
         tables = json.loads(list_tables.invoke({}))
-        assert "Artist" in tables
-        assert "Album" in tables
+        assert "comercial_productos" in tables
+        assert "crm_oportunidades" in tables
+        assert set(tables).issubset(set(DEMO_TABLES))
 
     def test_describe_table_returns_columns(self):
-        result = json.loads(describe_table.invoke({"table_name": "Artist"}))
-        assert result["table_name"] == "Artist"
+        result = json.loads(describe_table.invoke({"table_name": "comercial_productos"}))
+        assert result["table_name"] == "comercial_productos"
         column_names = {column["column_name"] for column in result["columns"]}
-        assert "ArtistId" in column_names
-        assert "Name" in column_names
+        assert "marca_comercial" in column_names
+        assert "molecula" in column_names
         assert "primary_keys" in result
 
-    def test_run_sql_query_returns_rows(self):
+    def test_run_sql_query_returns_products(self):
         result = json.loads(
             run_sql_query.invoke(
-                {"sql": 'SELECT "ArtistId", "Name" FROM "Artist" ORDER BY "ArtistId" LIMIT 3'}
+                {
+                    "sql": """
+                        SELECT marca_comercial, molecula
+                        FROM comercial_productos
+                        WHERE sku = 'ASGEN'
+                        LIMIT 1
+                    """
+                }
             )
         )
-        assert result["row_count"] == 3
-        assert result["truncated"] is False
-        assert result["rows"][0]["Name"]
+        assert result["row_count"] == 1
+        assert result["rows"][0]["marca_comercial"] == "Asgen"
+        assert "Gemcitabina" in result["rows"][0]["molecula"]
 
-    def test_run_sql_query_accepts_unquoted_table(self):
-        result = json.loads(run_sql_query.invoke({"sql": "SELECT * FROM Album LIMIT 3"}))
-        assert result["row_count"] == 3
-        assert "Title" in result["rows"][0]
+    def test_run_sql_query_sales_by_area(self):
+        result = json.loads(
+            run_sql_query.invoke(
+                {
+                    "sql": """
+                        SELECT a.nombre, SUM(pl.cantidad * pl.precio_unitario) AS ingreso
+                        FROM comercial_pedido_lineas pl
+                        JOIN comercial_productos p ON p.id = pl.producto_id
+                        JOIN comercial_areas_terapeuticas a ON a.id = p.area_id
+                        GROUP BY a.nombre
+                        ORDER BY ingreso DESC
+                        LIMIT 5
+                    """
+                }
+            )
+        )
+        assert result["row_count"] >= 1
+        assert "nombre" in result["rows"][0]
 
     def test_run_sql_query_rejects_non_select(self):
-        result = json.loads(run_sql_query.invoke({"sql": "DELETE FROM artist"}))
+        result = json.loads(run_sql_query.invoke({"sql": "DELETE FROM comercial_productos"}))
         assert result["ok"] is False
         assert "Only SELECT" in result["error"]
         assert "agent_instruction" in result
 
     def test_describe_table_not_found_returns_error_json(self):
-        result = json.loads(describe_table.invoke({"table_name": "NotARealTable"}))
+        result = json.loads(describe_table.invoke({"table_name": "not_a_real_table"}))
         assert result["ok"] is False
-        assert "not found" in result["error"].lower()
+        assert "not available" in result["error"].lower()
         assert "agent_instruction" in result
 
     def test_run_sql_query_db_error_returns_error_json(self):
         result = json.loads(
-            run_sql_query.invoke({"sql": 'SELECT * FROM "NotARealTable" LIMIT 1'})
+            run_sql_query.invoke({"sql": "SELECT * FROM not_a_real_table LIMIT 1"})
         )
         assert result["ok"] is False
         assert "agent_instruction" in result

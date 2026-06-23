@@ -9,66 +9,19 @@ from apps.agent.db import MAX_ROWS, demo_db_connection
 from apps.agent.tools.errors import build_query_error_response
 
 TABLE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-STRING_LITERAL_PATTERN = re.compile(r"'(?:''|[^'])*'")
 
-CHINOOK_TABLES = (
-    "Artist",
-    "Album",
-    "Track",
-    "Genre",
-    "MediaType",
-    "Playlist",
-    "PlaylistTrack",
-    "Customer",
-    "Invoice",
-    "InvoiceLine",
-    "Employee",
-)
-
-CHINOOK_COLUMNS = (
-    "ArtistId",
-    "AlbumId",
-    "TrackId",
-    "GenreId",
-    "MediaTypeId",
-    "PlaylistId",
-    "InvoiceId",
-    "InvoiceLineId",
-    "CustomerId",
-    "EmployeeId",
-    "SupportRepId",
-    "Name",
-    "Title",
-    "Composer",
-    "Milliseconds",
-    "Bytes",
-    "UnitPrice",
-    "Quantity",
-    "FirstName",
-    "LastName",
-    "Company",
-    "Address",
-    "City",
-    "State",
-    "Country",
-    "PostalCode",
-    "Phone",
-    "Fax",
-    "Email",
-    "ReportsTo",
-    "BirthDate",
-    "HireDate",
-    "InvoiceDate",
-    "BillingAddress",
-    "BillingCity",
-    "BillingState",
-    "BillingCountry",
-    "BillingPostalCode",
-    "Total",
-)
-
-CHINOOK_IDENTIFIERS = tuple(
-    sorted(set(CHINOOK_TABLES + CHINOOK_COLUMNS), key=len, reverse=True)
+DEMO_TABLES = (
+    "comercial_areas_terapeuticas",
+    "comercial_productos",
+    "comercial_instituciones",
+    "comercial_pedidos",
+    "comercial_pedido_lineas",
+    "comercial_inventario",
+    "crm_ejecutivos",
+    "crm_cuentas",
+    "crm_contactos",
+    "crm_oportunidades",
+    "crm_actividades",
 )
 
 FORBIDDEN_KEYWORDS = re.compile(
@@ -103,34 +56,15 @@ def validate_select_only(sql: str) -> str:
     return normalized
 
 
-def _quote_identifiers(fragment: str) -> str:
-    for identifier in CHINOOK_IDENTIFIERS:
-        fragment = re.sub(
-            rf'(?<!")\b{re.escape(identifier)}\b(?!")',
-            f'"{identifier}"',
-            fragment,
-            flags=re.IGNORECASE,
-        )
-    return fragment
-
-
-def normalize_chinook_sql(sql: str) -> str:
-    parts = []
-    last = 0
-    for match in STRING_LITERAL_PATTERN.finditer(sql):
-        parts.append(_quote_identifiers(sql[last : match.start()]))
-        parts.append(match.group(0))
-        last = match.end()
-    parts.append(_quote_identifiers(sql[last:]))
-    return "".join(parts)
-
-
 def validate_table_name(table_name: str) -> str:
     name = table_name.strip()
     if not TABLE_NAME_PATTERN.match(name):
         raise ValueError("Invalid table name")
-    canonical = {table.lower(): table for table in CHINOOK_TABLES}
-    return canonical.get(name.lower(), name)
+    canonical = {table.lower(): table for table in DEMO_TABLES}
+    resolved = canonical.get(name.lower())
+    if resolved is None:
+        raise ValueError(f"Table '{name}' is not available in the demo database")
+    return resolved
 
 
 def _rows_to_json(rows: list[dict]) -> str:
@@ -139,19 +73,21 @@ def _rows_to_json(rows: list[dict]) -> str:
 
 @tool
 def list_tables() -> str:
-    """List all tables in the public schema of the Chinook demo database."""
+    """List all tables in the Mexar Pharma demo database."""
     check_agent_not_cancelled()
-    query = """
+    placeholders = ", ".join(["%s"] * len(DEMO_TABLES))
+    query = f"""
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
           AND table_type = 'BASE TABLE'
+          AND table_name IN ({placeholders})
         ORDER BY table_name
     """
     try:
         with demo_db_connection() as conn:
             with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-                cur.execute(query)
+                cur.execute(query, DEMO_TABLES)
                 tables = [row["table_name"] for row in cur.fetchall()]
         return json.dumps(tables)
     except psycopg.Error as exc:
@@ -212,10 +148,10 @@ def describe_table(table_name: str) -> str:
 
 @tool
 def run_sql_query(sql: str) -> str:
-    """Execute a read-only SELECT query against the Chinook demo database."""
+    """Execute a read-only SELECT query against the Mexar Pharma demo database."""
     check_agent_not_cancelled()
     try:
-        query = normalize_chinook_sql(validate_select_only(sql))
+        query = validate_select_only(sql)
     except ValueError as exc:
         return build_query_error_response(str(exc))
     try:
@@ -227,8 +163,8 @@ def run_sql_query(sql: str) -> str:
                     return build_query_error_response(
                         str(exc).strip(),
                         hint=(
-                            'Chinook uses PascalCase identifiers. Example: '
-                            'SELECT * FROM "Album" LIMIT 5'
+                            "Use snake_case table names. Example: "
+                            "SELECT * FROM comercial_productos LIMIT 5"
                         ),
                         sql_executed=query,
                     )

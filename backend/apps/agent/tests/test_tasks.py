@@ -184,7 +184,7 @@ class TestRunAgentConversation:
         )
         assert tool_start.payload["tool"] == "list_tables"
         assert tool_start.payload["tool_label"] == "Listar tablas"
-        assert tool_start.payload["tool_subtitle"] == "Base Chinook"
+        assert tool_start.payload["tool_subtitle"] == "Mexar Pharma"
 
         tool_end = AgentEvent.objects.get(
             conversation=conversation,

@@ -8,7 +8,7 @@ x-web-env: &web-env
   CELERY_RESULT_BACKEND: redis://redis:6379/1
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-openai:gpt-4o}
-  DEMO_DB_URL: ${DEMO_DB_URL:-}
+  DEMO_DB_URL: ${DEMO_DB_URL:-postgres://demo:demo@demo-db:5432/mexar_demo}
   LANGSMITH_TRACING: ${LANGSMITH_TRACING:-}
   LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-}
   LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
@@ -28,6 +28,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      demo-db:
+        condition: service_healthy
       redis:
         condition: service_started
 
@@ -43,6 +45,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      demo-db:
+        condition: service_healthy
       redis:
         condition: service_started
 
@@ -56,6 +60,23 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U django -d django"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  demo-db:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: mexar_demo
+    volumes:
+      - demo_db_data:/var/lib/postgresql/data
+      - ./backend/demo_data/mexar_pharma/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d mexar_demo"]
       interval: 2s
       timeout: 5s
       retries: 5
@@ -81,3 +102,4 @@ services:
 
 volumes:
   postgres_data:
+  demo_db_data:

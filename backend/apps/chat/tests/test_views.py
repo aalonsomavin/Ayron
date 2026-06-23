@@ -376,7 +376,7 @@ class TestEventsReplay:
             payload={
                 "tool": "list_tables",
                 "tool_label": "List tables",
-                "tool_subtitle": "Chinook database",
+                "tool_subtitle": "Mexar Pharma database",
                 "tool_call_id": "call_1",
                 "input": {},
             },
@@ -389,7 +389,7 @@ class TestEventsReplay:
         data = response.json()
 
         assert data["events"][0]["tool_label"] == "Listar tablas"
-        assert data["events"][0]["tool_subtitle"] == "Base Chinook"
+        assert data["events"][0]["tool_subtitle"] == "Mexar Pharma"
 
     def test_serialize_agent_event_localizes_tool_events(self, conversation):
         assistant_message = Message.objects.create(
