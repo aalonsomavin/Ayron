@@ -1,47 +1,82 @@
 <article
-  class="ay-saved-card"
-  data-file-id="{{ item.file_id }}"
-  data-file-name="{{ item.name }}"
-  data-file-ext="{{ item.ext }}"
-  data-file-kind="dashboard"
-  data-file-meta="{{ item.meta }}"
-  data-file-version="{{ item.version }}"
-  data-download-url="{{ item.download_url }}"
-  data-download-pdf-url="{{ item.download_pdf_url|default:'' }}"
-  data-preview-url="{{ item.preview_url }}"
-  data-open-expanded="true"
-  data-author="{{ item.author }}"
-  data-date-label="{{ item.date_label }}"
+  id="saved-card-{{ item.file_id }}"
+  class="ay-saved-card{% if item.pinned %} ay-saved-card--pinned{% endif %}"
   data-pinned="{{ item.pinned|yesno:'true,false' }}"
-  data-tint="{{ item.tint }}"
-  data-series="{{ item.series|join:',' }}"
 >
+  <input type="checkbox" id="rename-{{ item.file_id }}" class="ay-saved-card__rename-toggle">
+  <a
+    href="{% url 'dashboards:detail' item.file_id %}"
+    class="ay-saved-card__hit"
+    aria-label="Abrir {{ item.name }}"
+    hx-get="{% url 'dashboards:detail' item.file_id %}"
+    hx-target="#dashboards-view"
+    hx-select="#dashboards-view"
+    hx-swap="outerHTML show:window:top"
+    hx-push-url="true"
+  ></a>
   <div class="ay-saved-card__thumb">
-    <canvas class="ay-saved-card__spark" width="320" height="108" aria-hidden="true"></canvas>
+    {% include "dashboards/partials/sparkline.html" with item=item %}
     <span class="ay-saved-card__metric">{{ item.metric }}</span>
     <div class="ay-saved-card__thumb-actions">
-      <button type="button" class="ay-saved-card__icon-btn" data-saved-pin title="Fijar">
-        {% include "components/icon.html" with name="star" size=14 %}
-      </button>
-      <button type="button" class="ay-saved-card__icon-btn" data-saved-menu title="Más acciones">
-        {% include "components/icon.html" with name="dots" size=15 %}
-      </button>
+      <form
+        class="ay-saved-card__pin-form"
+        hx-post="{% url 'files:pin' item.file_id %}"
+        hx-target="#dashboards-view"
+        hx-select="#dashboards-view"
+        hx-swap="outerHTML"
+        hx-include="#saved-search"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="pinned" value="{% if item.pinned %}false{% else %}true{% endif %}">
+        <button
+          type="submit"
+          class="ay-saved-card__icon-btn{% if item.pinned %} ay-saved-card__icon-btn--active{% endif %}"
+          title="{% if item.pinned %}Desfijar{% else %}Fijar{% endif %}"
+          aria-pressed="{% if item.pinned %}true{% else %}false{% endif %}"
+        >
+          {% include "components/icon.html" with name="star" size=14 %}
+        </button>
+      </form>
+      <details class="ay-saved-card__menu-wrap">
+        <summary class="ay-saved-card__icon-btn" title="Más acciones">
+          {% include "components/icon.html" with name="dots" size=15 %}
+        </summary>
+        <div class="ay-saved-card__menu">
+          <a
+            href="{% url 'dashboards:detail' item.file_id %}"
+            class="ay-saved-card__menu-item"
+            hx-get="{% url 'dashboards:detail' item.file_id %}"
+            hx-target="#dashboards-view"
+            hx-select="#dashboards-view"
+            hx-swap="outerHTML show:window:top"
+            hx-push-url="true"
+          >
+            {% include "components/icon.html" with name="chevright" size=14 %}
+            Abrir
+          </a>
+          <label for="rename-{{ item.file_id }}" class="ay-saved-card__menu-item">
+            {% include "components/icon.html" with name="pencil" size=14 %}
+            Renombrar
+          </label>
+          <div class="ay-saved-card__menu-divider"></div>
+          <form
+            class="ay-saved-card__menu-form"
+            hx-post="{% url 'files:unsave' item.file_id %}"
+            hx-target="#dashboards-view"
+            hx-select="#dashboards-view"
+            hx-swap="outerHTML"
+            hx-include="#saved-search"
+            hx-confirm="¿Eliminar este dashboard de Analíticas?"
+          >
+            {% csrf_token %}
+            <button type="submit" class="ay-saved-card__menu-item ay-saved-card__menu-item--danger">
+              {% include "components/icon.html" with name="trash" size=14 %}
+              Eliminar
+            </button>
+          </form>
+        </div>
+      </details>
     </div>
-  </div>
-  <div class="ay-saved-card__menu" hidden>
-    <button type="button" class="ay-saved-card__menu-item" data-saved-open>
-      {% include "components/icon.html" with name="chevright" size=14 %}
-      Abrir
-    </button>
-    <button type="button" class="ay-saved-card__menu-item" data-saved-rename>
-      {% include "components/icon.html" with name="pencil" size=14 %}
-      Renombrar
-    </button>
-    <div class="ay-saved-card__menu-divider"></div>
-    <button type="button" class="ay-saved-card__menu-item ay-saved-card__menu-item--danger" data-saved-remove>
-      {% include "components/icon.html" with name="trash" size=14 %}
-      Eliminar
-    </button>
   </div>
   <div class="ay-saved-card__body">
     <h3 class="ay-saved-card__title">{{ item.name }}</h3>
@@ -53,11 +88,19 @@
       <span class="ay-saved-card__date">{{ item.date_label }}</span>
     </div>
   </div>
-  <div class="ay-saved-card__rename" hidden>
-    <input type="text" class="ay-saved-card__rename-input" value="{{ item.name }}" aria-label="Nombre del dashboard">
-    <div class="ay-saved-card__rename-actions">
-      <button type="button" class="ay-saved-card__rename-save">Guardar</button>
-      <button type="button" class="ay-saved-card__rename-cancel">Cancelar</button>
-    </div>
+  <div class="ay-saved-card__rename">
+    <form
+      class="ay-saved-card__rename-form"
+      hx-post="{% url 'files:rename' item.file_id %}"
+      hx-target="#saved-card-{{ item.file_id }}"
+      hx-swap="outerHTML"
+    >
+      {% csrf_token %}
+      <input type="text" name="name" class="ay-saved-card__rename-input" value="{{ item.name }}" aria-label="Nombre del dashboard" required>
+      <div class="ay-saved-card__rename-actions">
+        <button type="submit" class="ay-saved-card__rename-save">Guardar</button>
+        <label for="rename-{{ item.file_id }}" class="ay-saved-card__rename-cancel">Cancelar</label>
+      </div>
+    </form>
   </div>
 </article>

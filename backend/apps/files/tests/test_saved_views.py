@@ -64,14 +64,108 @@ class TestSavedDashboardViews:
         client.force_login(user)
         response = client.get(reverse("dashboards:saved_list"))
         assert response.status_code == 200
-        assert b"Guardados" in response.content
+        assert b"Anal\xc3\xadticas" in response.content
         assert b"Ventas" in response.content
+        assert b"ay-saved-card__spark" in response.content
+
+    def test_saved_list_search_htmx(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        response = client.get(
+            reverse("dashboards:saved_list"),
+            {"q": "ventas"},
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 200
+        assert b"Ventas" in response.content
+        assert b"resultado" in response.content
+
+    def test_saved_list_pin_htmx_refreshes_grid(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        response = client.post(
+            reverse("files:pin", kwargs={"file_id": dashboard_file.id}),
+            {"pinned": "true"},
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET="dashboards-view",
+        )
+        assert response.status_code == 200
+        assert b'id="dashboards-view"' in response.content
+        assert b"Fijados" in response.content
 
     def test_saved_list_empty_state(self, client, user):
         client.force_login(user)
         response = client.get(reverse("dashboards:saved_list"))
         assert response.status_code == 200
         assert "Todavía no guardaste dashboards".encode() in response.content
+
+    def test_saved_dashboard_detail_requires_auth(self, client, dashboard_file):
+        url = reverse("dashboards:detail", kwargs={"file_id": dashboard_file.id})
+        response = client.get(url)
+        assert response.status_code == 302
+
+    def test_saved_dashboard_detail_renders_full_view(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        url = reverse("dashboards:detail", kwargs={"file_id": dashboard_file.id})
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Ventas" in response.content
+        assert b"hx-get" in response.content
+        assert f'/dashboards/{dashboard_file.id}/preview/'.encode() in response.content
+
+    def test_saved_dashboard_preview_returns_iframe(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        url = reverse("dashboards:preview", kwargs={"file_id": dashboard_file.id})
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"ay-dash-detail__iframe" in response.content
+        assert b"srcdoc=" in response.content
+
+    def test_saved_dashboard_detail_htmx_returns_partial(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        url = reverse("dashboards:detail", kwargs={"file_id": dashboard_file.id})
+        response = client.get(url, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert b'id="dashboards-view"' in response.content
+        assert b"<!DOCTYPE html>" not in response.content
+
+    def test_saved_dashboard_detail_shows_pinned_state(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        pin_url = reverse("files:pin", kwargs={"file_id": dashboard_file.id})
+        client.post(
+            pin_url,
+            data=json.dumps({"pinned": True}),
+            content_type="application/json",
+        )
+        url = reverse("dashboards:detail", kwargs={"file_id": dashboard_file.id})
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"ay-dash-detail__btn--active" in response.content
+        assert b'aria-pressed="true"' in response.content
+
+    def test_saved_dashboard_detail_rejects_non_dashboard(self, client, user, conversation):
+        from apps.files.services import save_generated_file
+
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Doc.docx",
+            content_json={
+                "title": "Doc",
+                "subtitle": "",
+                "sections": [{"heading": "S", "paragraphs": ["p"], "bullets": [], "table": None}],
+            },
+            file_bytes=b"docx",
+            preview_html="<div></div>",
+        )
+        client.force_login(user)
+        url = reverse("dashboards:detail", kwargs={"file_id": file_obj.id})
+        response = client.get(url)
+        assert response.status_code == 404
 
     def test_file_save_creates_bookmark(self, client, user, dashboard_file):
         client.force_login(user)
@@ -128,3 +222,28 @@ class TestSavedDashboardViews:
         url = reverse("files:save", kwargs={"file_id": dashboard_file.id})
         response = client.post(url)
         assert response.status_code == 404
+
+    def test_file_save_button_renders_guardar(self, client, user, dashboard_file):
+        client.force_login(user)
+        url = reverse("files:save_button", kwargs={"file_id": dashboard_file.id})
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Guardar" in response.content
+        assert b"bookmark" in response.content or b"ay-artifact-panel__save" in response.content
+
+    def test_file_save_button_renders_guardado_when_saved(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        url = reverse("files:save_button", kwargs={"file_id": dashboard_file.id})
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"Guardado" in response.content
+        assert b"ay-artifact-panel__save--saved" in response.content
+
+    def test_file_save_htmx_returns_artifact_button(self, client, user, dashboard_file):
+        client.force_login(user)
+        url = reverse("files:save", kwargs={"file_id": dashboard_file.id})
+        response = client.post(url, HTTP_HX_REQUEST="true", HTTP_HX_TARGET="artifact-save")
+        assert response.status_code == 200
+        assert b"Guardado" in response.content
+        assert b"ay-artifact-panel__save--saved" in response.content

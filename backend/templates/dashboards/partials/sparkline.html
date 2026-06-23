@@ -1,0 +1,10 @@
+<svg class="ay-saved-card__spark" viewBox="0 0 320 108" preserveAspectRatio="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="spark-fill-{{ item.file_id }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="{{ item.tint }}" stop-opacity="0.2"></stop>
+      <stop offset="100%" stop-color="{{ item.tint }}" stop-opacity="0"></stop>
+    </linearGradient>
+  </defs>
+  <path d="{{ item.sparkline_area }}" fill="url(#spark-fill-{{ item.file_id }})"></path>
+  <path d="{{ item.sparkline_line }}" fill="none" stroke="{{ item.tint }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>

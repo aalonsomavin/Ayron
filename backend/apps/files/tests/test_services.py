@@ -421,3 +421,5 @@ class TestSavedDashboardServices:
         assert data["saved"] is True
         assert data["author"]
         assert len(data["series"]) == 10
+        assert data["sparkline_line"].startswith("M")
+        assert data["sparkline_area"].endswith("Z")

@@ -1,0 +1,47 @@
+<title hx-swap-oob="true">{{ item.name }} — Ayron</title>
+<div id="dashboards-view" class="ay-dash-detail">
+  <header class="ay-dash-detail__header">
+    <a
+      href="{% url 'dashboards:saved_list' %}"
+      class="ay-dash-detail__back"
+      title="Volver a Analíticas"
+      hx-get="{% url 'dashboards:saved_list' %}"
+      hx-target="#dashboards-view"
+      hx-select="#dashboards-view"
+      hx-swap="outerHTML show:window:top"
+      hx-push-url="true"
+    >
+      {% include "components/icon.html" with name="chevleft" size=18 %}
+    </a>
+    <span class="ay-dash-detail__icon">
+      {% include "components/icon.html" with name="dashboard" size=19 %}
+    </span>
+    <div class="ay-dash-detail__title-wrap">
+      <h1 class="ay-dash-detail__title">{{ item.name }}</h1>
+      <p class="ay-dash-detail__meta">{{ item.author }} · {{ item.date_label }}</p>
+    </div>
+    <div class="ay-dash-detail__actions">
+      {% if item.saved %}
+        {% include "dashboards/partials/pin_button.html" with item=item %}
+      {% endif %}
+      <a href="{{ item.download_url }}" class="ay-dash-detail__btn" title="Descargar HTML">
+        {% include "components/icon.html" with name="download" size=16 %}
+      </a>
+      {% if item.download_pdf_url %}
+      <a href="{{ item.download_pdf_url }}" class="ay-dash-detail__btn" title="Descargar PDF">
+        {% include "components/icon.html" with name="filetext" size=16 %}
+      </a>
+      {% endif %}
+    </div>
+  </header>
+  <div
+    class="ay-dash-detail__body"
+    hx-get="{% url 'dashboards:preview' item.file_id %}"
+    hx-trigger="load"
+    hx-swap="innerHTML"
+  >
+    <div class="ay-dash-detail__loading" role="status" aria-label="Cargando dashboard">
+      <span class="ay-spinner" aria-hidden="true"></span>
+    </div>
+  </div>
+</div>

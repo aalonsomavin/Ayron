@@ -9,6 +9,7 @@ urlpatterns = [
     path("<uuid:file_id>/preview/", views.file_preview, name="preview"),
     path("<uuid:file_id>/rename/", views.file_rename, name="rename"),
     path("<uuid:file_id>/save/", views.file_save, name="save"),
+    path("<uuid:file_id>/save-button/", views.file_save_button, name="save_button"),
     path("<uuid:file_id>/unsave/", views.file_unsave, name="unsave"),
     path("<uuid:file_id>/pin/", views.file_pin, name="pin"),
 ]

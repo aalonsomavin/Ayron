@@ -1,0 +1,16 @@
+<form
+  class="ay-dash-detail__pin-form"
+  hx-post="{% url 'files:pin' item.file_id %}"
+  hx-swap="outerHTML"
+>
+  {% csrf_token %}
+  <input type="hidden" name="pinned" value="{% if item.pinned %}false{% else %}true{% endif %}">
+  <button
+    type="submit"
+    class="ay-dash-detail__btn{% if item.pinned %} ay-dash-detail__btn--active{% endif %}"
+    title="{% if item.pinned %}Desfijar{% else %}Fijar{% endif %}"
+    aria-pressed="{% if item.pinned %}true{% else %}false{% endif %}"
+  >
+    {% include "components/icon.html" with name="star" size=16 %}
+  </button>
+</form>

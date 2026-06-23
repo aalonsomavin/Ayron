@@ -282,16 +282,38 @@
   }
 
   function applyPanelSaveState(panelEl, file) {
-    const saveBtn = panelEl.querySelector("[data-artifact-save]");
-    if (!saveBtn) return;
+    const wrap = panelEl.querySelector("#artifact-save");
+    if (!wrap) return;
     const isDashboard = fileKind(file) === "dashboard";
-    saveBtn.hidden = !isDashboard;
-    if (!isDashboard) return;
-    const saved = Boolean(file.saved);
-    saveBtn.classList.toggle("is-saved", saved);
-    saveBtn.title = saved ? "Quitar de guardados" : "Guardar";
-    saveBtn.innerHTML = iconSvg("bookmark", 16);
+    wrap.hidden = !isDashboard;
+    if (!isDashboard) {
+      wrap.innerHTML = "";
+      return;
+    }
+    fetch("/files/" + file.file_id + "/save-button/", { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("save button failed");
+        return r.text();
+      })
+      .then(function (html) {
+        if (!wrap || wrap.hidden) return;
+        wrap.innerHTML = html;
+        if (window.htmx) {
+          window.htmx.process(wrap);
+        }
+      })
+      .catch(function () {
+        if (wrap) wrap.innerHTML = "";
+      });
   }
+
+  document.body.addEventListener("htmx:afterSwap", function (ev) {
+    const target = ev.detail.target;
+    if (!target || target.id !== "artifact-save") return;
+    const artifact = window.AyronArtifact;
+    if (!artifact || !artifact.openFile) return;
+    artifact.openFile.saved = Boolean(target.querySelector(".ay-artifact-panel__save--saved"));
+  });
 
   window.AyronArtifact = {
     panelEl: null,
@@ -327,12 +349,6 @@
         const url = downloadUrlForFile(self.openFile);
         if (url) window.location.href = url;
       });
-      const saveBtn = this.panelEl.querySelector("[data-artifact-save]");
-      if (saveBtn) {
-        saveBtn.addEventListener("click", function () {
-          self.toggleSaveDashboard();
-        });
-      }
 
       document.addEventListener("click", function (e) {
         const card = e.target.closest(".ay-file-card");
@@ -437,35 +453,6 @@
         .finally(function () {
           self._nameSaveInFlight = false;
         });
-    },
-
-    toggleSaveDashboard: function () {
-      const self = this;
-      const file = this.openFile;
-      if (!file || fileKind(file) !== "dashboard") return;
-
-      const saved = Boolean(file.saved);
-      const url = "/files/" + file.file_id + (saved ? "/unsave/" : "/save/");
-      const headers = { "Content-Type": "application/json" };
-      if (this.csrfToken) {
-        headers["X-CSRFToken"] = this.csrfToken();
-      }
-
-      return fetch(url, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: headers,
-      })
-        .then(function (r) {
-          if (!r.ok) throw new Error("save failed");
-          return r.json();
-        })
-        .then(function (data) {
-          if (!self.openFile || self.openFile.file_id !== file.file_id) return;
-          self.openFile.saved = Boolean(data.saved);
-          applyPanelSaveState(self.panelEl, self.openFile);
-        })
-        .catch(function () {});
     },
 
     setPanelWidth: function (width) {
@@ -619,10 +606,10 @@
       if (nameField) nameField.hidden = true;
       const metaLine = this.panelEl.querySelector(".ay-artifact-panel__meta-line");
       if (metaLine) metaLine.hidden = false;
-      const saveBtn = this.panelEl.querySelector("[data-artifact-save]");
-      if (saveBtn) {
-        saveBtn.hidden = true;
-        saveBtn.classList.remove("is-saved");
+      const saveWrap = this.panelEl.querySelector("#artifact-save");
+      if (saveWrap) {
+        saveWrap.hidden = true;
+        saveWrap.innerHTML = "";
       }
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
       teardownHtmlPreview(body);

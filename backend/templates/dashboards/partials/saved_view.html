@@ -1,0 +1,108 @@
+<title hx-swap-oob="true">Analíticas — Ayron</title>
+<div id="dashboards-view" class="ay-saved-shell">
+  <div class="ay-main ay-saved-main">
+    <div class="ay-saved-page">
+      {% if has_saved %}
+      <header class="ay-saved-page__header">
+        <div class="ay-saved-page__intro">
+          <h1 class="ay-saved-page__title">Analíticas</h1>
+          <p class="ay-saved-page__count">{{ count_label }}</p>
+        </div>
+        <div class="ay-saved-page__toolbar">
+          <form
+            id="saved-search-form"
+            class="ay-saved-page__search"
+            hx-get="{% url 'dashboards:saved_list' %}"
+            hx-target="#dashboards-view"
+            hx-select="#dashboards-view"
+            hx-swap="outerHTML"
+            hx-push-url="true"
+          >
+            {% include "components/icon.html" with name="search" size=14 %}
+            <input
+              type="search"
+              name="q"
+              id="saved-search"
+              value="{{ query }}"
+              placeholder="Buscar por nombre o autor…"
+              autocomplete="off"
+              hx-get="{% url 'dashboards:saved_list' %}"
+              hx-trigger="input changed delay:300ms, search"
+              hx-target="#dashboards-view"
+              hx-select="#dashboards-view"
+              hx-swap="outerHTML"
+              hx-push-url="true"
+              hx-include="#saved-search-form"
+            >
+            <a
+              href="{% url 'dashboards:saved_list' %}"
+              class="ay-saved-page__search-clear{% if not query %} ay-saved-page__search-clear--hidden{% endif %}"
+              aria-label="Limpiar búsqueda"
+              hx-get="{% url 'dashboards:saved_list' %}"
+              hx-target="#dashboards-view"
+              hx-select="#dashboards-view"
+              hx-swap="outerHTML"
+              hx-push-url="true"
+            >
+              {% include "components/icon.html" with name="close" size=11 %}
+            </a>
+          </form>
+          <a href="{{ chat_list_url }}?draft={{ new_dashboard_draft|urlencode }}" class="ay-saved-page__new">
+            {% include "components/icon.html" with name="sparkles" size=13 %}
+            Nuevo dashboard
+          </a>
+        </div>
+      </header>
+
+      {% if query and not saved_items %}
+      <div class="ay-saved-empty ay-saved-empty--search">
+        <div class="ay-saved-empty__icon">
+          {% include "components/icon.html" with name="search" size=22 %}
+        </div>
+        <h3 class="ay-saved-empty__title">Sin resultados</h3>
+        <p class="ay-saved-empty__text">Probá con otro término de búsqueda.</p>
+      </div>
+      {% else %}
+      <section class="ay-saved-pinned" id="saved-pinned"{% if query or not pinned_items %} hidden{% endif %}>
+        <h2 class="ay-saved-pinned__label">
+          {% include "components/icon.html" with name="star" size=12 %}
+          Fijados
+        </h2>
+        <div class="ay-saved-grid" id="saved-pinned-grid">
+          {% for item in pinned_items %}
+            {% include "dashboards/saved_card.html" with item=item %}
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="ay-saved-all">
+        <h2 class="ay-saved-all__label" id="saved-all-label">{{ all_label }}</h2>
+        <div class="ay-saved-grid" id="saved-all-grid">
+          {% for item in saved_items %}
+            {% if query or not item.pinned %}
+            {% include "dashboards/saved_card.html" with item=item %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+      {% else %}
+      <div class="ay-saved-empty ay-saved-empty--page">
+        <div class="ay-saved-empty__icon ay-saved-empty__icon--large">
+          {% include "components/icon.html" with name="bookmark" size=34 %}
+        </div>
+        <h2 class="ay-saved-empty__title">Todavía no guardaste dashboards</h2>
+        <p class="ay-saved-empty__text">
+          Cuando armes una vista que quieras volver a consultar, tocá <strong>Guardar</strong> y aparecerá acá, lista para abrir cuando la necesites.
+        </p>
+        <div class="ay-saved-empty__actions">
+          <a href="{{ chat_list_url }}?draft={{ new_dashboard_draft|urlencode }}" class="ay-saved-empty__cta">
+            {% include "components/icon.html" with name="sparkles" size=14 %}
+            Crear un dashboard
+          </a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

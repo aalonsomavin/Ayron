@@ -1,0 +1,27 @@
+<form
+  class="ay-artifact-panel__save-form"
+  hx-post="{% if saved %}{% url 'files:unsave' file_id %}{% else %}{% url 'files:save' file_id %}{% endif %}"
+  hx-target="#artifact-save"
+  hx-swap="innerHTML"
+>
+  {% csrf_token %}
+  <span class="ay-tooltip">
+    <button
+      type="submit"
+      class="ay-artifact-panel__save{% if saved %} ay-artifact-panel__save--saved{% endif %}"
+      aria-pressed="{% if saved %}true{% else %}false{% endif %}"
+      aria-describedby="artifact-save-tip-{{ file_id }}"
+    >
+      {% if saved %}
+        {% include "components/icon.html" with name="check" size=14 %}
+        Guardado
+      {% else %}
+        {% include "components/icon.html" with name="bookmark" size=14 %}
+        Guardar
+      {% endif %}
+    </button>
+    <span class="ay-tooltip__label" id="artifact-save-tip-{{ file_id }}" role="tooltip">
+      {% if saved %}Quitar de Analíticas{% else %}Guardar en Analíticas{% endif %}
+    </span>
+  </span>
+</form>

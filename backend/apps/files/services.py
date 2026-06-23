@@ -319,6 +319,26 @@ def _spark_series_for_file(file_id) -> list[int]:
     return values
 
 
+def _sparkline_paths(series: list[int], width: int = 320, height: int = 108, pad: int = 4) -> dict:
+    if len(series) < 2:
+        series = [40, 52, 48, 63, 70, 66, 82, 90, 86, 98]
+    mx = max(series)
+    mn = min(series)
+    n = len(series)
+
+    def xs(i: int) -> float:
+        return pad + (i / (n - 1)) * (width - 2 * pad)
+
+    def ys(v: int) -> float:
+        return height - pad - ((v - mn) / (mx - mn or 1)) * (height - 2 * pad)
+
+    line_path = f"M{xs(0):.1f},{ys(series[0]):.1f}"
+    for i in range(1, n):
+        line_path += f" L{xs(i):.1f},{ys(series[i]):.1f}"
+    area_path = f"{line_path} L{xs(n - 1):.1f},{height - pad:.1f} L{xs(0):.1f},{height - pad:.1f} Z"
+    return {"line": line_path, "area": area_path}
+
+
 def _spark_tint_for_file(file_id) -> str:
     palette = ["#3b6ef6", "#16a34a", "#8b5cf6", "#d97706", "#0d9aa8", "#e1568f"]
     digest = hashlib.md5(str(file_id).encode()).hexdigest()
@@ -378,6 +398,9 @@ def serialize_saved_dashboard(saved: SavedDashboard) -> dict:
     title = file_payload["name"]
     subtitle = file_obj.content_json.get("subtitle") or "Dashboard interactivo"
     updated_at = file_obj.updated_at or saved.saved_at
+    series = _spark_series_for_file(file_obj.id)
+    tint = _spark_tint_for_file(file_obj.id)
+    sparkline = _sparkline_paths(series)
     return {
         **file_payload,
         "saved": True,
@@ -388,6 +411,8 @@ def serialize_saved_dashboard(saved: SavedDashboard) -> dict:
         "date_label": _relative_date_label(updated_at),
         "metric": title,
         "sub": subtitle,
-        "tint": _spark_tint_for_file(file_obj.id),
-        "series": _spark_series_for_file(file_obj.id),
+        "tint": tint,
+        "series": series,
+        "sparkline_line": sparkline["line"],
+        "sparkline_area": sparkline["area"],
     }

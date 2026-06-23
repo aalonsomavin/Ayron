@@ -36,7 +36,7 @@
     <nav class="ay-topbar__nav">
       {% if user.is_authenticated %}
         <a href="{% url 'chat:list' %}"{% if request.resolver_match.app_name == 'chat' %} class="is-active"{% endif %}>Chat</a>
-        <a href="{% url 'dashboards:saved_list' %}"{% if request.resolver_match.url_name == 'saved_list' %} class="is-active"{% endif %}>Guardados</a>
+        <a href="{% url 'dashboards:saved_list' %}"{% if request.resolver_match.app_name == 'dashboards' %} class="is-active"{% endif %}>Analíticas</a>
       {% endif %}
     </nav>
     <div class="ay-topbar__end">
@@ -63,5 +63,13 @@
   {% endif %}
 
   {% block content %}{% endblock %}
+  <script>
+  document.body.addEventListener("htmx:configRequest", function (evt) {
+    const token = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
+    if (token) {
+      evt.detail.headers["X-CSRFToken"] = token;
+    }
+  });
+  </script>
 </body>
 </html>

@@ -111,6 +111,16 @@
   if (inputEl) {
     inputEl.addEventListener("input", updateSendState);
     updateSendState();
+
+    const draft = new URLSearchParams(window.location.search).get("draft");
+    if (draft) {
+      inputEl.value = draft;
+      updateSendState();
+      inputEl.focus();
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("draft");
+      window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search);
+    }
   }
 
   document.querySelectorAll("[data-suggestion]").forEach(function (chip) {
