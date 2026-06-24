@@ -6,6 +6,8 @@
         '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
       dashboard:
         '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+      sheet:
+        '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/>',
       download:
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
       expand:
@@ -32,15 +34,19 @@
 
   function fileKind(file) {
     if (file.kind === "dashboard") return "dashboard";
+    if (file.kind === "sheet") return "sheet";
     if (file.kind === "doc") return "doc";
     const meta = file.meta || "";
     if (meta === "Dashboard" || meta.indexOf("Dashboard ·") === 0) return "dashboard";
+    if (meta.indexOf("Spreadsheet ·") === 0 || (file.ext || "") === "XLSX") return "sheet";
     if (file.open_expanded && (file.ext || "") === "HTML") return "dashboard";
     return "doc";
   }
 
   function fileIconName(kind) {
-    return kind === "dashboard" ? "dashboard" : "filetext";
+    if (kind === "dashboard") return "dashboard";
+    if (kind === "sheet") return "sheet";
+    return "filetext";
   }
 
   function applyFileCardIcon(card, kind) {
@@ -113,7 +119,11 @@
   }
 
   function metaSuffix(meta) {
-    return (meta || "").replace(/^Document · /, "").replace(/^Report · /, "").replace(/^Dashboard · /, "");
+    return (meta || "")
+      .replace(/^Document · /, "")
+      .replace(/^Report · /, "")
+      .replace(/^Dashboard · /, "")
+      .replace(/^Spreadsheet · /, "");
   }
 
   function displayFileName(file) {
@@ -536,6 +546,7 @@
       }
 
       const isHtml = file.ext === "HTML";
+      const isSheet = fileKind(file) === "sheet";
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
       body.innerHTML =
         '<div class="ay-artifact-panel__loading" role="status" aria-label="Loading preview">' +
@@ -568,7 +579,9 @@
         .then(function (html) {
           if (!self.openFile || self.openFile.file_id !== file.file_id) return;
           body.innerHTML = html;
-          if (window.AyronDocPreview) {
+          if (isSheet && window.AyronSheetPreview) {
+            window.AyronSheetPreview.mount(body);
+          } else if (window.AyronDocPreview) {
             window.AyronDocPreview.mount(body);
           }
         })
@@ -613,6 +626,9 @@
       }
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
       teardownHtmlPreview(body);
+      if (window.AyronSheetPreview) {
+        window.AyronSheetPreview.teardown(body);
+      }
     },
 
     toggleExpand: function () {

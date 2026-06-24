@@ -11,6 +11,7 @@ from apps.agent.tools.chart import (
 )
 from apps.agent.tools.document import pop_document_display
 from apps.agent.tools.html_report import pop_html_report_display
+from apps.agent.tools.spreadsheet import pop_spreadsheet_display
 from apps.agent.tools.display import PLAN_TOOL_LABEL, get_tool_display
 from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
@@ -21,6 +22,8 @@ DISPLAY_TOOLS = {
     "show_chart",
     "create_document",
     "update_document",
+    "create_spreadsheet",
+    "update_spreadsheet",
     "publish_html_artifact",
 }
 TABLE_DISPLAY_TOOL = "show_data_table"
@@ -29,6 +32,8 @@ CHART_TYPE_PATTERN = re.compile(r'"chart_type"\s*:\s*"(bar|line|pie)"')
 VALID_CHART_TYPES = frozenset({"bar", "line", "pie"})
 CREATE_DOCUMENT_TOOL = "create_document"
 UPDATE_DOCUMENT_TOOL = "update_document"
+CREATE_SPREADSHEET_TOOL = "create_spreadsheet"
+UPDATE_SPREADSHEET_TOOL = "update_spreadsheet"
 PUBLISH_HTML_ARTIFACT_TOOL = "publish_html_artifact"
 OUTPUT_SUMMARY_MAX_LEN = 500
 
@@ -301,6 +306,8 @@ class StreamEventHandler:
         elif name in (
             CREATE_DOCUMENT_TOOL,
             UPDATE_DOCUMENT_TOOL,
+            CREATE_SPREADSHEET_TOOL,
+            UPDATE_SPREADSHEET_TOOL,
             PUBLISH_HTML_ARTIFACT_TOOL,
         ):
             result = self._resolve_file_display_result(output, tool_call_id)
@@ -317,12 +324,23 @@ class StreamEventHandler:
                     message=self.message,
                 )
             is_html = result.get("format") == "html" or result.get("ext") == "HTML"
+            is_sheet = (
+                result.get("format") == "xlsx"
+                or result.get("ext") == "XLSX"
+                or result.get("kind") == "sheet"
+            )
             if is_html:
                 output_summary = (
                     "Reporte actualizado"
                     if result.get("updated")
                     else "Reporte publicado"
                 ) if result.get("file_id") else "Error al publicar reporte"
+            elif is_sheet:
+                output_summary = (
+                    "Hoja de cálculo actualizada"
+                    if result.get("updated")
+                    else "Hoja de cálculo creada"
+                ) if result.get("file_id") else "Error al generar hoja de cálculo"
             else:
                 output_summary = (
                     "Documento actualizado"
@@ -419,7 +437,11 @@ class StreamEventHandler:
         output: str,
         tool_call_id: str | None,
     ) -> dict:
-        registry_result = pop_document_display(tool_call_id) or pop_html_report_display(tool_call_id)
+        registry_result = (
+            pop_document_display(tool_call_id)
+            or pop_spreadsheet_display(tool_call_id)
+            or pop_html_report_display(tool_call_id)
+        )
         if registry_result:
             return registry_result
 

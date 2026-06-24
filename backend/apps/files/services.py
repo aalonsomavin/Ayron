@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.timesince import timesince
 
 from apps.chat.models import Conversation
-from apps.files.models import DOCX_MIME, HTML_MIME, File, SavedDashboard
+from apps.files.models import DOCX_MIME, HTML_MIME, XLSX_MIME, File, SavedDashboard
 
 
 def _section_count(content_json: dict) -> int:
@@ -28,12 +28,21 @@ def _html_kind(content_json: dict) -> str:
     return "report"
 
 
+def _sheet_count(content_json: dict) -> int:
+    return len(content_json.get("sheets") or [])
+
+
 def _file_meta(content_json: dict) -> str:
     format_key = content_json.get("format", "docx")
     if format_key == "html":
         if _html_kind(content_json) == "dashboard":
             return "Dashboard"
         return "Report · HTML"
+    if format_key == "xlsx":
+        count = _sheet_count(content_json)
+        if count == 1:
+            return "Spreadsheet · 1 hoja"
+        return f"Spreadsheet · {count} hojas"
     sections = _section_count(content_json)
     page_word = "sección" if sections == 1 else "secciones"
     return f"Document · {sections} {page_word}"
@@ -43,6 +52,8 @@ def _file_ext(content_json: dict, mime_type: str) -> str:
     format_key = content_json.get("format")
     if format_key == "html" or mime_type == HTML_MIME:
         return "HTML"
+    if format_key == "xlsx" or mime_type == XLSX_MIME:
+        return "XLSX"
     return "DOCX"
 
 
@@ -50,6 +61,8 @@ def _file_kind(content_json: dict) -> str:
     format_key = content_json.get("format", "docx")
     if format_key == "html" and _html_kind(content_json) == "dashboard":
         return "dashboard"
+    if format_key == "xlsx":
+        return "sheet"
     return "doc"
 
 
@@ -212,6 +225,10 @@ def open_file_stream(file_obj: File) -> BytesIO:
         from apps.agent.tools.document import build_docx
 
         return BytesIO(build_docx(file_obj.content_json))
+    if file_obj.format_key == "xlsx":
+        from apps.agent.tools.spreadsheet import build_xlsx
+
+        return BytesIO(build_xlsx(file_obj.content_json))
 
     file_obj.file.open("rb")
     try:

@@ -1006,3 +1006,63 @@ class TestStreamEventHandler:
         )
         assert file_event["payload"]["file_id"] == file_id
         assert file_event["payload"]["name"] == "Informe.docx"
+
+    def test_stream_handler_emits_file_created_for_spreadsheet(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+
+        from apps.agent.tools.spreadsheet import _SPREADSHEET_DISPLAY_REGISTRY
+
+        file_id = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        _SPREADSHEET_DISPLAY_REGISTRY["call_sheet"] = {
+            "file_id": file_id,
+            "name": "Ventas.xlsx",
+            "ext": "XLSX",
+            "kind": "sheet",
+            "format": "xlsx",
+            "meta": "Spreadsheet · 1 hoja",
+            "version": 1,
+            "download_url": f"/files/{file_id}/download/",
+            "preview_url": f"/files/{file_id}/preview/",
+            "updated": False,
+        }
+
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=json.dumps(
+                            {
+                                "ok": True,
+                                "action": "created",
+                                "file_id": file_id,
+                                "name": "Ventas.xlsx",
+                                "version": 1,
+                            }
+                        ),
+                        name="create_spreadsheet",
+                        tool_call_id="call_sheet",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        file_events = [
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.FILE_CREATED
+        ]
+        assert len(file_events) == 1
+        assert file_events[0]["payload"]["file_id"] == file_id
+        assert file_events[0]["payload"]["kind"] == "sheet"

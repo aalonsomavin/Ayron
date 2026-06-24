@@ -5,6 +5,11 @@ from apps.agent.tools.document import (
     list_conversation_files,
     update_document,
 )
+from apps.agent.tools.spreadsheet import (
+    create_spreadsheet,
+    get_spreadsheet,
+    update_spreadsheet,
+)
 from apps.agent.tools.html_report import (
     hydrate_html_artifact,
     publish_html_artifact,
@@ -20,12 +25,15 @@ AGENT_TOOLS = [
     show_data_table,
     show_chart,
     create_document,
+    create_spreadsheet,
     hydrate_html_artifact,
     validate_html_artifact,
     publish_html_artifact,
     list_conversation_files,
     get_document,
+    get_spreadsheet,
     update_document,
+    update_spreadsheet,
 ]
 SQL_TOOLS = [
     list_tables,
@@ -39,8 +47,10 @@ __all__ = [
     "AGENT_TOOLS",
     "SQL_TOOLS",
     "create_document",
+    "create_spreadsheet",
     "describe_table",
     "get_document",
+    "get_spreadsheet",
     "hydrate_html_artifact",
     "list_conversation_files",
     "list_tables",
@@ -49,5 +59,6 @@ __all__ = [
     "show_chart",
     "show_data_table",
     "update_document",
+    "update_spreadsheet",
     "validate_html_artifact",
 ]

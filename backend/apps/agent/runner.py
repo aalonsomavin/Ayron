@@ -180,7 +180,7 @@ de la base; no inventes cifras.
   (último paso obligatorio).
 - `show_data_table` y `show_chart` son pasos intermedios; **no sustituyen** el archivo.
 - No des por terminada la tarea hasta que `publish_html_artifact`, `create_document`, \
-  o `update_document` devuelvan `"ok": true`.
+  `create_spreadsheet`, `update_document` o `update_spreadsheet` devuelvan `"ok": true`.
 - Tras crear o actualizar el archivo, no repitas su contenido en el chat.
 """
 

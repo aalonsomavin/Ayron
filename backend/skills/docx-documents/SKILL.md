@@ -32,7 +32,8 @@ No uses esta skill para:
 - Respuestas cortas solo en el chat
 - Tablas o gráficos interactivos del chat (`show_data_table`, `show_chart`) — usa
   `html-reports` si el usuario quiere un informe exportable con esos elementos
-- PDFs, Excel, Google Docs u otros formatos
+- PDFs, Google Docs u otros formatos
+- Hojas Excel o datos tabulares exportables → usa la skill `xlsx-spreadsheets`
 - Edición XML, cambios rastreados, comentarios Word, imágenes incrustadas,
   índice (TOC) o saltos de página — **no están soportados**. Los encabezados y pies
   de página del documento (título en cada página, «Generado con Ayron · fecha» y

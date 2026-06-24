@@ -5,6 +5,7 @@ from enum import Enum
 class DeliverableIntent(str, Enum):
     CREATE_HTML = "create_html"
     CREATE_DOCX = "create_docx"
+    CREATE_XLSX = "create_xlsx"
     UPDATE_FILE = "update_file"
     NONE = "none"
 
@@ -35,11 +36,15 @@ _IMPLICIT_FILE_REF_RE = re.compile(
     re.IGNORECASE,
 )
 _FILE_REF_RE = re.compile(
-    r"\b(informe|reporte|dashboard|documento|document|report|archivo|file)\b",
+    r"\b(informe|reporte|dashboard|documento|document|report|archivo|file|excel|hoja|spreadsheet)\b",
     re.IGNORECASE,
 )
 _DOCX_RE = re.compile(
     r"\b(word|docx|memo|carta|documento\s+word)\b",
+    re.IGNORECASE,
+)
+_XLSX_RE = re.compile(
+    r"\b(excel|xlsx|spreadsheet|hoja\s+de\s+c[aá]lculo|hoja\s+excel|csv\s+exportable)\b",
     re.IGNORECASE,
 )
 _HTML_DELIVERABLE_RE = re.compile(
@@ -58,7 +63,10 @@ _ANALYTICAL_ONLY_RE = re.compile(
 REQUIRED_TOOLS: dict[DeliverableIntent, frozenset[str]] = {
     DeliverableIntent.CREATE_HTML: frozenset({"publish_html_artifact"}),
     DeliverableIntent.CREATE_DOCX: frozenset({"create_document"}),
-    DeliverableIntent.UPDATE_FILE: frozenset({"publish_html_artifact", "update_document"}),
+    DeliverableIntent.CREATE_XLSX: frozenset({"create_spreadsheet"}),
+    DeliverableIntent.UPDATE_FILE: frozenset(
+        {"publish_html_artifact", "update_document", "update_spreadsheet"}
+    ),
 }
 
 
@@ -82,6 +90,9 @@ def detect_deliverable_intent(user_message: str) -> DeliverableIntent:
 
     if _DOCX_RE.search(text):
         return DeliverableIntent.CREATE_DOCX
+
+    if _XLSX_RE.search(text):
+        return DeliverableIntent.CREATE_XLSX
 
     if _HTML_DELIVERABLE_RE.search(text):
         return DeliverableIntent.CREATE_HTML
@@ -129,15 +140,31 @@ intermedios, no sustituyen el documento.
 5. No des por terminada la tarea hasta que `create_document` devuelva `"ok": true`.
 6. Tras crear el documento, no repitas su contenido en el chat."""
 
+    if intent == DeliverableIntent.CREATE_XLSX:
+        return """\
+## Entregable de este turno: hoja de cálculo Excel (.xlsx)
+
+El usuario pidió una hoja de cálculo o exportación tabular descargable.
+
+1. Planifica con `write_todos` antes de consultar datos. El último paso debe ser \
+**Generar archivo con create_spreadsheet**.
+2. Consulta datos con SQL si hace falta; tablas del chat son pasos intermedios, \
+no sustituyen el archivo Excel.
+3. Lee la skill `xlsx-spreadsheets` antes de estructurar las hojas.
+4. Llama `create_spreadsheet` con `title`, `sheets` (cada una con `name`, `headers`, `rows`).
+5. No des por terminada la tarea hasta que `create_spreadsheet` devuelva `"ok": true`.
+6. Tras crear la hoja, no repitas su contenido en el chat."""
+
     if intent == DeliverableIntent.UPDATE_FILE:
         return """\
 ## Entregable de este turno: actualizar archivo existente
 
-El usuario pidió modificar un informe, dashboard o documento ya generado.
+El usuario pidió modificar un informe, dashboard, documento o hoja de cálculo ya generado.
 
 1. Planifica con `write_todos`. El último paso debe ser **Publicar artifact** con \
 `hydrate_html_artifact` → editar en workspace → `validate_html_artifact` → \
-`publish_html_artifact(file_id=...)` para HTML, o `update_document` para Word.
+`publish_html_artifact(file_id=...)` para HTML, `update_document` para Word, o \
+`update_spreadsheet` para Excel.
 2. Usa el índice de archivos de la conversación o `list_conversation_files` para \
 obtener el `file_id` correcto.
 3. Para HTML: `hydrate_html_artifact(file_id)` carga el markup al workspace; edita con \
@@ -161,11 +188,17 @@ def format_deliverable_nudge(intent: DeliverableIntent) -> str:
             "Aún no generaste el entregable. El usuario pidió un documento Word. "
             "Llama a create_document con el contenido ya analizado. No respondas solo en texto."
         )
+    if intent == DeliverableIntent.CREATE_XLSX:
+        return (
+            "Aún no generaste el entregable. El usuario pidió una hoja Excel. "
+            "Llama a create_spreadsheet con los datos ya analizados. No respondas solo en texto."
+        )
     if intent == DeliverableIntent.UPDATE_FILE:
         return (
             "Aún no actualizaste el entregable. El usuario pidió modificar un archivo existente. "
             "Para HTML: hydrate_html_artifact, edita en workspace, validate_html_artifact y "
             "publish_html_artifact con file_id. Para Word: update_document. "
+            "Para Excel: get_spreadsheet y update_spreadsheet. "
             "No respondas solo en texto."
         )
     return ""

@@ -6,6 +6,7 @@ from django.views.decorators.http import require_POST
 
 from apps.agent.tools.document import preview_html_for_file as docx_preview_html_for_file
 from apps.agent.tools.html_report import build_export_html, preview_html_for_file as html_preview_html_for_file
+from apps.agent.tools.spreadsheet import preview_html_for_file as xlsx_preview_html_for_file
 from apps.files.models import File, SavedDashboard
 from apps.files.pdf import PdfGenerationError, html_to_pdf
 from apps.files.services import (
@@ -101,6 +102,8 @@ def _htmx_refresh_saved_list(request):
 def _preview_for_file(file_obj: File) -> str:
     if file_obj.format_key == "html":
         return html_preview_html_for_file(file_obj.content_json, file_obj.preview_html)
+    if file_obj.format_key == "xlsx":
+        return xlsx_preview_html_for_file(file_obj.content_json, file_obj.preview_html)
     return docx_preview_html_for_file(file_obj.content_json, file_obj.preview_html)
 
 

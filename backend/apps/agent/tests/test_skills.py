@@ -24,6 +24,7 @@ class TestPlatformSkills:
         assert skills_dir.is_dir()
         assert (skills_dir / "docx-documents" / "SKILL.md").is_file()
         assert (skills_dir / "html-reports" / "SKILL.md").is_file()
+        assert (skills_dir / "xlsx-spreadsheets" / "SKILL.md").is_file()
 
     def test_html_reports_guidelines_exist(self):
         skills_dir = get_platform_skills_dir() / "html-reports"

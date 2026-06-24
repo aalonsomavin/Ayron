@@ -5,10 +5,12 @@ from django.db import models
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 HTML_MIME = "text/html"
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 MIME_EXTENSIONS = {
     DOCX_MIME: ".docx",
     HTML_MIME: ".html",
+    XLSX_MIME: ".xlsx",
 }
 
 
@@ -50,9 +52,14 @@ class File(models.Model):
 
     @property
     def format_key(self) -> str:
-        return self.content_json.get("format") or (
-            "html" if self.mime_type == HTML_MIME else "docx"
-        )
+        format_key = self.content_json.get("format")
+        if format_key:
+            return format_key
+        if self.mime_type == HTML_MIME:
+            return "html"
+        if self.mime_type == XLSX_MIME:
+            return "xlsx"
+        return "docx"
 
 
 class SavedDashboard(models.Model):

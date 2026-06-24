@@ -16,6 +16,9 @@ class TestDetectDeliverableIntent:
             ("Hazme un dashboard de KPIs de facturación", DeliverableIntent.CREATE_HTML),
             ("Genera un reporte exportable en PDF", DeliverableIntent.CREATE_HTML),
             ("Genera un memo en Word sobre ventas", DeliverableIntent.CREATE_DOCX),
+            ("Genera una hoja Excel con ventas por región", DeliverableIntent.CREATE_XLSX),
+            ("Exporta los datos en xlsx", DeliverableIntent.CREATE_XLSX),
+            ("Necesito un spreadsheet con los números", DeliverableIntent.CREATE_XLSX),
             ("Necesito una carta formal para el cliente", DeliverableIntent.CREATE_DOCX),
             ("Actualiza el dashboard con los datos de junio", DeliverableIntent.UPDATE_FILE),
             ("Modifica el informe anterior", DeliverableIntent.UPDATE_FILE),
@@ -39,7 +42,12 @@ class TestDeliverableHelpers:
 
     def test_required_tools_for_update_file(self):
         assert required_tools_for_intent(DeliverableIntent.UPDATE_FILE) == frozenset(
-            {"publish_html_artifact", "update_document"}
+            {"publish_html_artifact", "update_document", "update_spreadsheet"}
+        )
+
+    def test_required_tools_for_create_xlsx(self):
+        assert required_tools_for_intent(DeliverableIntent.CREATE_XLSX) == frozenset(
+            {"create_spreadsheet"}
         )
 
     def test_format_prompt_block_for_html(self):
@@ -47,6 +55,11 @@ class TestDeliverableHelpers:
         assert "publish_html_artifact" in block
         assert "validate_html_artifact" in block
         assert "write_todos" in block
+
+    def test_format_prompt_block_for_xlsx(self):
+        block = format_deliverable_prompt_block(DeliverableIntent.CREATE_XLSX)
+        assert "create_spreadsheet" in block
+        assert "xlsx-spreadsheets" in block
 
     def test_format_prompt_block_none_is_empty(self):
         assert format_deliverable_prompt_block(DeliverableIntent.NONE) == ""

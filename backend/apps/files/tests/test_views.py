@@ -102,6 +102,36 @@ class TestFileViews:
         assert b"AyronOne" not in response.content
         assert b"Generado con AyronOne" not in response.content
 
+    def test_xlsx_preview_owner(self, client, user, conversation):
+        from apps.agent.tools.spreadsheet import build_preview_html, build_xlsx, validate_content_json
+        from apps.files.models import XLSX_MIME
+
+        content = validate_content_json(
+            "Desglose regional",
+            [
+                {
+                    "name": "Revenue",
+                    "headers": ["Region", "Revenue"],
+                    "rows": [["EMEA", "486,200"]],
+                }
+            ],
+        )
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="regional.xlsx",
+            content_json=content,
+            file_bytes=build_xlsx(content),
+            preview_html=build_preview_html(content),
+            mime_type=XLSX_MIME,
+        )
+        client.force_login(user)
+        url = reverse("files:preview", kwargs={"file_id": file_obj.id})
+        response = client.get(url)
+        assert response.status_code == 200
+        assert b"ay-sheet-preview" in response.content
+        assert b"EMEA" in response.content
+
     def test_html_preview_owner(self, client, user, conversation):
         from apps.agent.tools.html_report import (
             build_export_html,
