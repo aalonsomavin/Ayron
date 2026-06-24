@@ -4,6 +4,7 @@ from apps.agent.tools.report_content import (
     MAX_TABLE_ROWS,
     normalize_docx_row,
 )
+from apps.agent.tools.table_style_tokens import normalize_sheet_style
 
 MAX_SHEETS = 10
 MAX_COLUMNS = 30
@@ -33,8 +34,10 @@ def normalize_xlsx_sheet(sheet: dict) -> dict:
         normalized = normalize_docx_row(row)
         if normalized is not None:
             normalized_rows.append(normalized)
+    sheet_style = normalize_sheet_style(sheet.get("style"))
     return {
         "name": name,
+        "style": sheet_style,
         "headers": [str(h) for h in headers],
         "rows": normalized_rows,
     }

@@ -31,42 +31,13 @@ FONT_TITLE_PT = 26
 FONT_KICKER_PT = 9
 FONT_TABLE_PT = 10
 
-COLORS = {
-    "ink": "131316",
-    "text": "18181B",
-    "text_muted": "62626B",
-    "text_subtle": "8A8A92",
-    "text_inverse": "FFFFFF",
-    "emphasis": "44444C",
-    "heading": "2A2A30",
-    "border": "E6E6E8",
-    "border_subtle": "EDEDEE",
-    "bg_subtle": "FAFAFA",
-    "bg_muted": "F4F4F5",
-    "accent": "3B6EF6",
-    "info_bg": "EEF3FF",
-    "info_border": "3B6EF6",
-    "success_bg": "E9F7EF",
-    "success_border": "16A34A",
-    "warning_bg": "FDF3E7",
-    "warning_border": "D97706",
-    "danger_bg": "FDECEC",
-    "danger_border": "DC2626",
-}
+from apps.agent.tools.table_style_tokens import CELL_TONE_COLORS, COLORS
 
 CALLOUT_VARIANTS = {
     "info": {"bg": COLORS["info_bg"], "border": COLORS["info_border"], "label": "Nota"},
     "success": {"bg": COLORS["success_bg"], "border": COLORS["success_border"], "label": "Éxito"},
     "warning": {"bg": COLORS["warning_bg"], "border": COLORS["warning_border"], "label": "Atención"},
     "danger": {"bg": COLORS["danger_bg"], "border": COLORS["danger_border"], "label": "Importante"},
-}
-
-CELL_TONE_COLORS = {
-    "default": COLORS["text"],
-    "success": COLORS["success_border"],
-    "danger": COLORS["danger_border"],
-    "warning": COLORS["warning_border"],
-    "muted": COLORS["text_muted"],
 }
 
 ROW_STYLE_FILLS = {

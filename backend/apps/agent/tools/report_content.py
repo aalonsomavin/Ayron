@@ -2,6 +2,7 @@ import ast
 import json
 
 from apps.agent.tools.document_style import CALLOUT_VARIANTS
+from apps.agent.tools.table_style_tokens import normalize_fill
 
 MAX_SECTIONS = 20
 MAX_TABLE_ROWS = 50
@@ -68,7 +69,7 @@ def normalize_docx_cell(cell, *, default_bold: bool = False) -> dict:
         embedded_value = _parse_embedded_cell(raw_value)
         if embedded_value is not None:
             merged = dict(embedded_value)
-            for key in ("tone", "align", "bold"):
+            for key in ("tone", "align", "bold", "fill"):
                 if key in cell and key not in merged:
                     merged[key] = cell[key]
             return normalize_docx_cell(merged, default_bold=default_bold)
@@ -84,12 +85,14 @@ def normalize_docx_cell(cell, *, default_bold: bool = False) -> dict:
                 f"cell align must be one of: {', '.join(sorted(VALID_CELL_ALIGNS))}"
             )
         bold = bool(cell.get("bold", default_bold))
-        return {"value": value, "tone": tone, "align": align, "bold": bold}
+        fill = normalize_fill(cell.get("fill", "default"))
+        return {"value": value, "tone": tone, "align": align, "bold": bold, "fill": fill}
     return {
         "value": str(cell),
         "tone": "default",
         "align": "left",
         "bold": default_bold,
+        "fill": "default",
     }
 
 

@@ -2275,7 +2275,46 @@ body {
 
 .ay-sheet-preview__cell--header {
   font-weight: 600;
+}
+
+.ay-sheet-preview__cell--striped {
   background: var(--ay-bg-subtle);
+}
+
+.ay-sheet-preview__cell--fill-muted {
+  background: var(--ay-bg-muted);
+}
+
+.ay-sheet-preview__cell--fill-subtle {
+  background: var(--ay-bg-subtle);
+}
+
+.ay-sheet-preview__cell--fill-accent_light {
+  background: var(--ay-blue-50);
+}
+
+.ay-sheet-preview__cell--fill-success_light {
+  background: var(--ay-success-50);
+}
+
+.ay-sheet-preview__cell--fill-warning_light {
+  background: var(--ay-warning-50);
+}
+
+.ay-sheet-preview__cell--fill-danger_light {
+  background: var(--ay-danger-50);
+}
+
+.ay-sheet-preview__cell--fill-accent {
+  background: var(--ay-accent);
+  color: var(--ay-text-inverse);
+}
+
+.ay-sheet-preview__cell--fill-accent.ay-sheet-preview__cell--success,
+  .ay-sheet-preview__cell--fill-accent.ay-sheet-preview__cell--danger,
+  .ay-sheet-preview__cell--fill-accent.ay-sheet-preview__cell--warning,
+  .ay-sheet-preview__cell--fill-accent.ay-sheet-preview__cell--muted {
+  color: var(--ay-text-inverse);
 }
 
 .ay-sheet-preview__cell--right {
@@ -2291,8 +2330,11 @@ body {
   font-weight: 600;
 }
 
-.ay-sheet-preview__cell--total,
-  .ay-sheet-preview__cell--subtotal {
+.ay-sheet-preview__cell--total {
+  background: var(--ay-bg-muted);
+}
+
+.ay-sheet-preview__cell--subtotal {
   background: var(--ay-bg-subtle);
 }
 

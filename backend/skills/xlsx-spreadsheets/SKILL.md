@@ -43,7 +43,8 @@ No uses esta skill para:
 
 ## Esquema de contenido
 
-Pasa `title`, `filename` opcional y `sheets`. Cada hoja tiene `name`, `headers` y `rows`.
+Pasa `title`, `filename` opcional y `sheets`. Cada hoja tiene `name`, `headers`, `rows`
+y opcionalmente `style`.
 
 ```json
 {
@@ -51,15 +52,26 @@ Pasa `title`, `filename` opcional y `sheets`. Cada hoja tiene `name`, `headers` 
   "sheets": [
     {
       "name": "Revenue",
-      "headers": ["Region", "Revenue", "Orders", "AOV", "MoM %"],
+      "style": {
+        "striped": true,
+        "header_fill": "muted"
+      },
+      "headers": ["Region", "Revenue", "Orders", "MoM %"],
       "rows": [
-        ["EMEA", {"value": "486,200", "align": "right"}, {"value": "5,632", "align": "right"}, {"value": "$86.32", "align": "right"}, {"value": "+18.2%", "tone": "success", "align": "right"}],
-        {"style": "total", "cells": ["Total", {"value": "1,284,920", "align": "right"}, {"value": "15,209", "align": "right"}, {"value": "$84.48", "align": "right"}, {"value": "+12.4%", "tone": "success", "align": "right"}]}
+        ["EMEA", {"value": "486,200", "align": "right"}, {"value": "5,632", "align": "right"}, {"value": "+18.2%", "tone": "success", "align": "right"}],
+        {"style": "total", "cells": ["Total", {"value": "1,284,920", "align": "right"}, {"value": "15,209", "align": "right"}, {"value": "+12.4%", "tone": "success", "align": "right"}]}
       ]
     }
   ]
 }
 ```
+
+### Estilos de hoja (`style`)
+
+Opcional por hoja. Si no lo pasas, se aplican defaults legibles:
+
+- `striped` (bool, default `true`) — filas de datos alternan fondo claro
+- `header_fill` (token, default `muted`) — relleno de la fila de cabecera
 
 ### Celdas enriquecidas
 
@@ -67,8 +79,27 @@ Cada celda puede ser un string o un objeto con:
 
 - `value` — texto mostrado
 - `align` — `left`, `right`, `center`
-- `tone` — `success`, `danger`, `warning`, `muted`
+- `tone` — color de **texto**: `success`, `danger`, `warning`, `muted`
+- `fill` — color de **fondo** (token semántico, ver tabla abajo)
 - `bold` — `true` / `false`
+
+Prioridad del relleno: `cell.fill` > estilo de fila (`total`/`subtotal`) > zebra (`striped`) > blanco.
+
+### Tokens de relleno (`fill`)
+
+| Token | Cuándo usarlo |
+|-------|---------------|
+| `default` | Sin relleno (blanco) |
+| `muted` | Cabeceras, filas total |
+| `subtle` | Filas alternas, subtotales |
+| `accent_light` | Destacar una celda informativa |
+| `success_light` | Celda con resultado positivo |
+| `warning_light` | Alerta o dato a revisar |
+| `danger_light` | Celda con resultado negativo |
+| `accent` | KPI o celda muy destacada (texto blanco) |
+
+Usa `tone` para variaciones +/- en columnas numéricas. Reserva `fill` para pocas celdas clave;
+no colorees toda la tabla celda a celda.
 
 ### Filas con estilo
 
@@ -78,9 +109,10 @@ Las filas pueden ser listas simples o objetos con `style` (`total`, `subtotal`) 
 
 1. Consulta datos con SQL si hace falta.
 2. Estructura una o más hojas con headers claros y filas alineadas.
-3. Usa `tone` en columnas de variación o estado.
-4. Marca la fila de totales con `"style": "total"`.
-5. Llama `create_spreadsheet` y no repitas la tabla en el chat.
+3. Deja `striped: true` y `header_fill: "muted"` para tablas legibles por defecto.
+4. Usa `tone` en columnas de variación o estado.
+5. Marca la fila de totales con `"style": "total"`.
+6. Llama `create_spreadsheet` y no repitas la tabla en el chat.
 
 ## Editar una hoja existente
 
@@ -88,8 +120,11 @@ Las filas pueden ser listas simples o objetos con `style` (`total`, `subtotal`) 
 2. Llama `get_spreadsheet(file_id)` para leer el contenido actual.
 3. Llama `update_spreadsheet(file_id=..., sheets=...)` con el contenido actualizado.
 
-## Límites
+## Límites y no soportado
 
 - Máximo 10 hojas por archivo
 - Máximo 50 filas y 30 columnas por hoja
 - Nombres de hoja: máximo 31 caracteres, sin `\ / * ? : [ ]`
+- Colores hex arbitrarios, merge de celdas, freeze panes, anchos de columna
+- Fórmulas Excel, formato numérico nativo, formato condicional automático
+- Bordes personalizados por celda

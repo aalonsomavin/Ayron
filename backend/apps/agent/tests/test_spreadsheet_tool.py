@@ -16,6 +16,7 @@ from apps.agent.tools.spreadsheet import (
     validate_content_json,
 )
 from apps.agent.tools.spreadsheet_content import revalidate_xlsx_content_json
+from apps.agent.tools.table_style_tokens import COLORS
 from apps.chat.models import Conversation
 from apps.files.models import File
 from apps.files.services import open_file_stream, serialize_file_for_ui
@@ -218,3 +219,101 @@ class TestSpreadsheetTool:
         restored = revalidate_xlsx_content_json(content)
         assert restored["format"] == "xlsx"
         assert restored["sheets"][0]["headers"] == ["Region", "Revenue", "MoM %"]
+
+    def test_normalize_sheet_style_defaults(self, sample_content):
+        content = validate_content_json(sample_content["title"], sample_content["sheets"])
+        style = content["sheets"][0]["style"]
+        assert style == {"striped": True, "header_fill": "muted"}
+
+    def test_normalize_sheet_style_custom(self):
+        content = validate_content_json(
+            "Test",
+            [
+                {
+                    "name": "Data",
+                    "style": {"striped": False, "header_fill": "accent_light"},
+                    "headers": ["A"],
+                    "rows": [["1"]],
+                }
+            ],
+        )
+        assert content["sheets"][0]["style"] == {
+            "striped": False,
+            "header_fill": "accent_light",
+        }
+
+    def test_validate_rejects_invalid_fill(self):
+        with pytest.raises(ValueError, match="cell fill"):
+            validate_content_json(
+                "Test",
+                [
+                    {
+                        "name": "Data",
+                        "headers": ["A"],
+                        "rows": [[{"value": "x", "fill": "purple"}]],
+                    }
+                ],
+            )
+
+    def test_build_xlsx_applies_cell_and_header_fills(self):
+        content = validate_content_json(
+            "Styled",
+            [
+                {
+                    "name": "Styled",
+                    "style": {"striped": True, "header_fill": "muted"},
+                    "headers": ["Metric", "Change"],
+                    "rows": [
+                        [
+                            "Revenue",
+                            {
+                                "value": "+18%",
+                                "tone": "success",
+                                "fill": "success_light",
+                                "align": "right",
+                            },
+                        ],
+                        {
+                            "style": "total",
+                            "cells": ["Total", {"value": "100", "align": "right"}],
+                        },
+                    ],
+                }
+            ],
+        )
+        workbook = load_workbook(BytesIO(build_xlsx(content)))
+        ws = workbook["Styled"]
+        header_fill = ws.cell(row=1, column=1).fill.start_color.rgb
+        assert header_fill.endswith(COLORS["bg_muted"])
+        success_fill = ws.cell(row=2, column=2).fill.start_color.rgb
+        assert success_fill.endswith(COLORS["success_bg"])
+        total_fill = ws.cell(row=3, column=1).fill.start_color.rgb
+        assert total_fill.endswith(COLORS["bg_muted"])
+        assert ws.cell(row=2, column=2).font.color.rgb.endswith(COLORS["success_border"])
+
+    def test_build_preview_html_includes_fill_and_striped_classes(self):
+        content = validate_content_json(
+            "Styled",
+            [
+                {
+                    "name": "Styled",
+                    "style": {"striped": True, "header_fill": "muted"},
+                    "headers": ["Metric", "Change"],
+                    "rows": [
+                        [
+                            "Revenue",
+                            {"value": "+18%", "fill": "success_light", "align": "right"},
+                        ],
+                        {
+                            "style": "total",
+                            "cells": ["Total", {"value": "100", "align": "right"}],
+                        },
+                    ],
+                }
+            ],
+        )
+        html = build_preview_html(content)
+        assert "ay-sheet-preview__cell--fill-muted" in html
+        assert "ay-sheet-preview__cell--fill-success_light" in html
+        assert "ay-sheet-preview__cell--striped" in html
+        assert "ay-sheet-preview__cell--total" in html
