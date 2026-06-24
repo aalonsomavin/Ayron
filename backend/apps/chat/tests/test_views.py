@@ -1039,7 +1039,7 @@ class TestConversationSidebarActions:
         url = reverse("chat:delete", kwargs={"conversation_id": conversation.id})
         response = client.post(url, HTTP_HX_REQUEST="true")
 
-        assert response.status_code == 204
+        assert response.status_code == 200
         assert not Conversation.objects.filter(id=conversation.id).exists()
         assert "ayronToast" in response.headers.get("HX-Trigger", "")
 
@@ -1048,7 +1048,7 @@ class TestConversationSidebarActions:
         url = reverse("chat:delete", kwargs={"conversation_id": conversation.id})
         response = client.post(url, {"active": "1"}, HTTP_HX_REQUEST="true")
 
-        assert response.status_code == 204
+        assert response.status_code == 200
         assert response.headers.get("HX-Redirect") == reverse("chat:list")
         assert "ayronToast" in response.headers.get("HX-Trigger", "")
 
@@ -1058,3 +1058,73 @@ class TestConversationSidebarActions:
         response = client.post(url, HTTP_HX_REQUEST="true")
         assert response.status_code == 404
         assert Conversation.objects.filter(id=conversation.id).exists()
+
+    def test_delete_conversation_preserves_files(self, client, user, conversation):
+        from apps.files.models import HTML_MIME
+        from apps.files.services import save_generated_file
+
+        content = {
+            "format": "html",
+            "html_kind": "report",
+            "title": "Informe Q1",
+            "html": "<html></html>",
+            "body_html": "<html></html>",
+            "full_document": True,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Informe Q1.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        file_id = file_obj.id
+
+        client.force_login(user)
+        url = reverse("chat:delete", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, HTTP_HX_REQUEST="true")
+
+        assert response.status_code == 200
+        assert not Conversation.objects.filter(id=conversation.id).exists()
+        file_obj.refresh_from_db()
+        assert file_obj.conversation_id is None
+
+    def test_delete_conversation_preserves_saved_dashboard(self, client, user, conversation):
+        from apps.files.models import HTML_MIME, SavedDashboard
+        from apps.files.services import list_saved_dashboards, save_dashboard, save_generated_file
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "Ventas",
+            "subtitle": "412 facturas",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Ventas.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        save_dashboard(user, file_obj)
+
+        client.force_login(user)
+        url = reverse("chat:delete", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, HTTP_HX_REQUEST="true")
+
+        assert response.status_code == 200
+        assert not Conversation.objects.filter(id=conversation.id).exists()
+        assert SavedDashboard.objects.filter(user=user, file=file_obj).exists()
+        saved = list(list_saved_dashboards(user))
+        assert len(saved) == 1
+        assert saved[0].file_id == file_obj.id
+        file_obj.refresh_from_db()
+        assert file_obj.conversation_id is None

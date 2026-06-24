@@ -602,7 +602,7 @@ def conversation_delete(request, conversation_id):
 
     conversation.delete()
 
-    response = HttpResponse(status=204)
+    response = HttpResponse(status=200)
     response["HX-Trigger"] = json.dumps({"ayronToast": {"message": "Chat eliminado"}})
     if is_active:
         response["HX-Redirect"] = reverse("chat:list")

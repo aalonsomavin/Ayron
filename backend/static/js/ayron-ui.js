@@ -41,7 +41,15 @@ window.AyronUI = (function () {
 
     if (form) {
       form.addEventListener("htmx:afterRequest", function (e) {
-        if (e.detail.successful) closeConfirm();
+        if (!e.detail.successful) return;
+        var target = form.getAttribute("hx-target") || "";
+        if (target.indexOf("#sidebar-chat-") === 0) {
+          var chatId = target.slice("#sidebar-chat-".length);
+          document.querySelectorAll('[data-sidebar-chat-id="' + chatId + '"]').forEach(function (el) {
+            el.remove();
+          });
+        }
+        closeConfirm();
       });
     }
 

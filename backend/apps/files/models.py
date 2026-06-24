@@ -29,7 +29,7 @@ class File(models.Model):
     )
     conversation = models.ForeignKey(
         "chat.Conversation",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="files",
         null=True,
         blank=True,
