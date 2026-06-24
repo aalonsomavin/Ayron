@@ -167,7 +167,7 @@ def build_grid_template_columns(
     parts = []
     for col_idx, width in enumerate(widths):
         if width == "fill":
-            parts.append("minmax(0, 1fr)")
+            parts.append("minmax(max-content, 1fr)")
             continue
         max_len = _max_column_content_len(columns[col_idx], rows, col_idx)
         if width == "narrow":

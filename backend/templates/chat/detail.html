@@ -678,7 +678,11 @@
       });
       grid.appendChild(rowEl);
     });
-    card.appendChild(grid);
+
+    const scroll = document.createElement("div");
+    scroll.className = "ay-data-table__scroll";
+    scroll.appendChild(grid);
+    card.appendChild(scroll);
 
     if (table.caption) {
       const caption = document.createElement("div");

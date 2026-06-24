@@ -99,7 +99,7 @@ class TestPrepareTableForRender:
             ]
         ]
         assert "ch" in table["grid_template_columns"]
-        assert "1fr" in table["grid_template_columns"]
+        assert "minmax(max-content, 1fr)" in table["grid_template_columns"]
 
 
 class TestColumnWidths:

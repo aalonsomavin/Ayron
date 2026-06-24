@@ -1,18 +1,20 @@
 <div class="ay-data-table">
   <div class="ay-card ay-data-table__card">
-    <div class="ay-data-table__grid" style="grid-template-columns: {{ table.grid_template_columns }};">
-      <div class="ay-data-table__head">
-        {% for column in table.render_columns %}
-          <span class="ay-data-table__head-cell ay-data-table__head-cell--{{ column.width }}{% if column.mono %} ay-data-table__head-cell--mono{% endif %}">{{ column.label }}</span>
-        {% endfor %}
-      </div>
-      {% for row in table.render_rows %}
-        <div class="ay-data-table__row">
-          {% for cell in row %}
-            <span class="ay-data-table__cell ay-data-table__cell--{{ cell.width }}{% if cell.mono %} ay-data-table__cell--mono{% endif %}">{{ cell.value }}</span>
+    <div class="ay-data-table__scroll">
+      <div class="ay-data-table__grid" style="grid-template-columns: {{ table.grid_template_columns }};">
+        <div class="ay-data-table__head">
+          {% for column in table.render_columns %}
+            <span class="ay-data-table__head-cell ay-data-table__head-cell--{{ column.width }}{% if column.mono %} ay-data-table__head-cell--mono{% endif %}">{{ column.label }}</span>
           {% endfor %}
         </div>
-      {% endfor %}
+        {% for row in table.render_rows %}
+          <div class="ay-data-table__row">
+            {% for cell in row %}
+              <span class="ay-data-table__cell ay-data-table__cell--{{ cell.width }}{% if cell.mono %} ay-data-table__cell--mono{% endif %}">{{ cell.value }}</span>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
     </div>
     {% if table.caption %}
       <div class="ay-data-table__caption">{{ table.caption }}</div>
