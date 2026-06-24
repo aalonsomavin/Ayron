@@ -18,6 +18,7 @@ from apps.files.services import (
     set_dashboard_pinned,
     unsave_dashboard,
     update_generated_file,
+    _normalize_html_filename,
 )
 
 User = get_user_model()
@@ -205,6 +206,38 @@ class TestFileServices:
         assert normalized["name"] == "Ventas"
         assert normalized["meta"] == "Dashboard"
         assert normalized["kind"] == "dashboard"
+
+    def test_normalize_html_filename_strips_malformed_trailing_json(self):
+        corrupted = (
+            "brecha-precio-vs-volumen-mexar.html'}] "
+            "【analysis to=functions.publish_html_artifact malformed JSON"
+        )
+        assert _normalize_html_filename(corrupted, "fallback") == "brecha-precio-vs-volumen-mexar.html"
+
+    def test_serialize_file_for_ui_cleans_corrupted_dashboard_name(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "Brecha de precio vs volumen vendido",
+            "subtitle": "",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="brecha-precio-vs-volumen-mexar.html'}] 【analysis to=functions.publish_html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        data = serialize_file_for_ui(file_obj)
+        assert data["name"] == "brecha-precio-vs-volumen-mexar"
 
     def test_rename_dashboard_file_updates_name_and_title(self, user, conversation):
         from apps.files.models import HTML_MIME

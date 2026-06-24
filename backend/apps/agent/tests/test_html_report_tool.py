@@ -558,3 +558,60 @@ class TestHtmlReportTool:
             )
         )
         assert result["ok"] is False
+
+    def test_publish_html_artifact_sanitizes_malformed_filename(self, user, conversation, workspace_backend):
+        set_agent_context(conversation, user)
+        path = draft_artifact_path()
+        write_workspace_file(workspace_backend, path, DASHBOARD_HTML)
+        corrupted_filename = (
+            "brecha-precio-vs-volumen-mexar.html'}] "
+            "【analysis to=functions.publish_html_artifact malformed JSON"
+        )
+        result = json.loads(
+            run_publish_html_artifact(
+                path,
+                "Brecha de precio vs volumen vendido",
+                filename=corrupted_filename,
+                tool_call_id="call_pub_malformed",
+            )
+        )
+        assert result["ok"] is True
+        file_obj = File.objects.get(id=result["file_id"])
+        assert file_obj.original_name == "brecha-precio-vs-volumen-mexar.html"
+        display = pop_html_report_display("call_pub_malformed")
+        assert display["name"] == "brecha-precio-vs-volumen-mexar"
+
+    def test_publish_html_artifact_update_sanitizes_existing_corrupted_name(
+        self, user, conversation, workspace_backend
+    ):
+        set_agent_context(conversation, user)
+        path = draft_artifact_path()
+        write_workspace_file(workspace_backend, path, DASHBOARD_HTML)
+        created = json.loads(
+            run_publish_html_artifact(
+                path,
+                "Brecha de precio vs volumen vendido",
+                filename="brecha-precio-vs-volumen-mexar.html",
+                tool_call_id="call_pub_create",
+            )
+        )
+        file_obj = File.objects.get(id=created["file_id"])
+        file_obj.original_name = (
+            "brecha-precio-vs-volumen-mexar.html'}] "
+            "【analysis to=functions.publish_html_artifact malformed JSON"
+        )
+        file_obj.save(update_fields=["original_name"])
+
+        updated = json.loads(
+            run_publish_html_artifact(
+                path,
+                "Brecha de precio vs volumen vendido",
+                file_id=created["file_id"],
+                tool_call_id="call_pub_update",
+            )
+        )
+        assert updated["ok"] is True
+        file_obj.refresh_from_db()
+        assert file_obj.original_name == "brecha-precio-vs-volumen-mexar.html"
+        display = pop_html_report_display("call_pub_update")
+        assert display["name"] == "brecha-precio-vs-volumen-mexar"

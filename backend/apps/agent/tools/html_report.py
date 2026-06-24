@@ -29,6 +29,7 @@ from apps.files.services import (
     save_generated_file,
     serialize_file_for_ui,
     update_generated_file,
+    _normalize_html_filename,
 )
 
 _HTML_REPORT_DISPLAY_REGISTRY: dict[str, dict] = {}
@@ -53,12 +54,7 @@ def pop_html_report_display(tool_call_id: str | None) -> dict | None:
 
 
 def _sanitize_filename(name: str, fallback: str) -> str:
-    cleaned = re.sub(r'[<>:"/\\|?*]', "", name).strip()
-    if not cleaned:
-        cleaned = fallback
-    if not cleaned.lower().endswith(".html"):
-        cleaned = f"{cleaned}.html"
-    return cleaned[:200]
+    return _normalize_html_filename(name, fallback)
 
 
 def infer_html_kind(body_html: str) -> str:
@@ -291,6 +287,7 @@ def _persist_html_file(
             preview_html=preview_html,
             mime_type=HTML_MIME,
         )
+    file_obj.original_name = original_name
     return update_generated_file(
         file_obj=file_obj,
         content_json=content_json,
@@ -450,7 +447,8 @@ def run_publish_html_artifact(
 
     try:
         if existing_file:
-            original_name = existing_file.original_name
+            source_name = filename.strip() or existing_file.original_name
+            original_name = _sanitize_filename(source_name, content_json["title"])
             file_obj = _persist_html_file(
                 conversation=conversation,
                 user=user,

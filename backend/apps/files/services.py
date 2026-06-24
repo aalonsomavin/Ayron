@@ -54,7 +54,11 @@ def _file_kind(content_json: dict) -> str:
 
 
 def _display_name(original_name: str, content_json: dict) -> str:
-    name = original_name or ""
+    if content_json.get("format") == "html":
+        fallback = content_json.get("title") or "report"
+        name = _normalize_html_filename(original_name, fallback)
+    else:
+        name = original_name or ""
     if _file_kind(content_json) == "dashboard" and name.lower().endswith(".html"):
         return name[:-5]
     return name
@@ -234,15 +238,28 @@ def escape_preview_text(value: str) -> str:
     return html.escape(value or "")
 
 
+def _normalize_html_filename(name: str, fallback: str) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*]', "", str(name or "")).strip()
+    html_pos = cleaned.lower().find(".html")
+    if html_pos >= 0:
+        cleaned = cleaned[: html_pos + 5]
+    else:
+        slug_match = re.match(r"^[\w\-]+", cleaned)
+        if slug_match:
+            cleaned = slug_match.group(0)
+    if not cleaned:
+        fallback_clean = re.sub(r'[<>:"/\\|?*]', "", str(fallback or "")).strip()
+        slug_match = re.match(r"^[\w\-]+", fallback_clean)
+        cleaned = slug_match.group(0) if slug_match else ""
+    if not cleaned:
+        cleaned = "report"
+    if not cleaned.lower().endswith(".html"):
+        cleaned = f"{cleaned}.html"
+    return cleaned[:200]
+
+
 def _sanitize_dashboard_filename(name: str, fallback: str) -> str:
-    cleaned = re.sub(r'[<>:"/\\|?*]', "", name).strip()
-    if not cleaned:
-        cleaned = fallback
-    if cleaned.lower().endswith(".html"):
-        cleaned = cleaned[:-5]
-    if not cleaned:
-        cleaned = fallback
-    return f"{cleaned}.html"[:200]
+    return _normalize_html_filename(name, fallback)
 
 
 def rename_dashboard_file(file_obj: File, name: str) -> File:
