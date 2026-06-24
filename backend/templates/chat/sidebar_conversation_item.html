@@ -1,0 +1,58 @@
+<li class="ay-sidebar__item" id="sidebar-chat-{{ item.id }}">
+  <input type="checkbox" id="rename-chat-{{ item.id }}" class="ay-sidebar__rename-toggle">
+  <div class="ay-sidebar__item-row">
+    <a
+      href="{% url 'chat:detail' conversation_id=item.id %}"
+      class="ay-sidebar__link{% if active_conversation_id == item.id %} ay-sidebar__link--active{% endif %}"
+    >
+      {{ item.title|default:"Untitled" }}
+    </a>
+    <details class="ay-sidebar__menu-wrap">
+      <summary class="ay-sidebar__menu-btn" aria-label="Más acciones">
+        {% include "components/icon.html" with name="dots-vertical" size=13 %}
+      </summary>
+      <div class="ay-sidebar__menu">
+        <label for="rename-chat-{{ item.id }}" class="ay-sidebar__menu-item">
+          {% include "components/icon.html" with name="pencil" size=12 %}
+          Renombrar
+        </label>
+        <div class="ay-sidebar__menu-divider"></div>
+        <button
+          type="button"
+          class="ay-sidebar__menu-item ay-sidebar__menu-item--danger"
+          data-confirm-delete
+          data-delete-url="{% url 'chat:delete' conversation_id=item.id %}"
+          data-delete-target="#sidebar-chat-{{ item.id }}"
+          data-delete-active="{% if active_conversation_id == item.id %}1{% else %}0{% endif %}"
+        >
+          {% include "components/icon.html" with name="trash" size=12 %}
+          Eliminar
+        </button>
+      </div>
+    </details>
+  </div>
+  <div class="ay-sidebar__rename">
+    <form
+      class="ay-sidebar__rename-form"
+      hx-post="{% url 'chat:rename' conversation_id=item.id %}"
+      hx-target="#sidebar-chat-{{ item.id }}"
+      hx-swap="outerHTML"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="active_conversation_id" value="{{ active_conversation_id|default:'' }}">
+      <input
+        type="text"
+        name="title"
+        class="ay-sidebar__rename-input"
+        value="{{ item.title|default:'' }}"
+        aria-label="Nombre del chat"
+        required
+        maxlength="255"
+      >
+      <div class="ay-sidebar__rename-actions">
+        <button type="submit" class="ay-sidebar__rename-save">Guardar</button>
+        <label for="rename-chat-{{ item.id }}" class="ay-sidebar__rename-cancel">Cancelar</label>
+      </div>
+    </form>
+  </div>
+</li>

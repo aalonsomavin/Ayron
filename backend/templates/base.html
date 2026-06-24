@@ -64,7 +64,11 @@
     </div>
   {% endif %}
 
+  {% include "components/toast_stack.html" %}
+  {% include "components/confirm_dialog.html" %}
+
   {% block content %}{% endblock %}
+  <script src="{% static 'js/ayron-ui.js' %}"></script>
   <script>
   document.body.addEventListener("htmx:configRequest", function (evt) {
     const token = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];

@@ -1000,3 +1000,61 @@ class TestConversationStart:
         response = client.post(reverse("chat:start"), {"content": "   "})
         assert response.status_code == 400
         assert Conversation.objects.filter(user=user).count() == 0
+
+
+@pytest.mark.django_db
+class TestConversationSidebarActions:
+    def test_rename_updates_title(self, client, user, conversation):
+        client.force_login(user)
+        url = reverse("chat:rename", kwargs={"conversation_id": conversation.id})
+        response = client.post(
+            url,
+            {
+                "title": "Ventas Q1",
+                "active_conversation_id": str(conversation.id),
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        conversation.refresh_from_db()
+        assert conversation.title == "Ventas Q1"
+        assert b"Ventas Q1" in response.content
+        assert b'sidebar-chat-' in response.content
+
+    def test_rename_rejects_empty_title(self, client, user, conversation):
+        client.force_login(user)
+        url = reverse("chat:rename", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, {"title": "   "}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 400
+
+    def test_rename_other_user_404(self, client, other_user, conversation):
+        client.force_login(other_user)
+        url = reverse("chat:rename", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, {"title": "Nope"}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 404
+
+    def test_delete_removes_conversation(self, client, user, conversation):
+        client.force_login(user)
+        url = reverse("chat:delete", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, HTTP_HX_REQUEST="true")
+
+        assert response.status_code == 204
+        assert not Conversation.objects.filter(id=conversation.id).exists()
+        assert "ayronToast" in response.headers.get("HX-Trigger", "")
+
+    def test_delete_active_conversation_redirects(self, client, user, conversation):
+        client.force_login(user)
+        url = reverse("chat:delete", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, {"active": "1"}, HTTP_HX_REQUEST="true")
+
+        assert response.status_code == 204
+        assert response.headers.get("HX-Redirect") == reverse("chat:list")
+        assert "ayronToast" in response.headers.get("HX-Trigger", "")
+
+    def test_delete_other_user_404(self, client, other_user, conversation):
+        client.force_login(other_user)
+        url = reverse("chat:delete", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, HTTP_HX_REQUEST="true")
+        assert response.status_code == 404
+        assert Conversation.objects.filter(id=conversation.id).exists()

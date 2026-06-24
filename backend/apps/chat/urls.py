@@ -13,4 +13,6 @@ urlpatterns = [
     path("<uuid:conversation_id>/retry/", views.retry_message, name="retry"),
     path("<uuid:conversation_id>/events/", views.events_replay, name="events"),
     path("<uuid:conversation_id>/stream/", views.event_stream, name="stream"),
+    path("<uuid:conversation_id>/rename/", views.conversation_rename, name="rename"),
+    path("<uuid:conversation_id>/delete/", views.conversation_delete, name="delete"),
 ]

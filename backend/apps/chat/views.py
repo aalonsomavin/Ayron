@@ -1,13 +1,15 @@
 import json
 import random
+from uuid import UUID
 
 from django.db.models import Max
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.agent.cancellation import clear_cancel, request_cancel
-from apps.agent.checkpoint import rollback_thread_to_turn
+from apps.agent.checkpoint import get_checkpointer, rollback_thread_to_turn
 from apps.agent.events import get_redis_client, persist_event
 from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_display
 from apps.agent.tools.chart import prepare_chart_for_render
@@ -551,4 +553,57 @@ def event_stream(request, conversation_id):
     response = StreamingHttpResponse(generate(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
     response["X-Accel-Buffering"] = "no"
+    return response
+
+
+@require_POST
+def conversation_rename(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    title = (request.POST.get("title") or "").strip()
+    if not title:
+        return HttpResponseBadRequest("Title is required.")
+    conversation.title = title[:255]
+    conversation.save(update_fields=["title", "updated_at"])
+
+    active_param = (request.POST.get("active_conversation_id") or "").strip()
+    active_conversation_id = None
+    if active_param:
+        try:
+            active_conversation_id = UUID(active_param)
+        except ValueError:
+            pass
+
+    return render(
+        request,
+        "chat/sidebar_conversation_item.html",
+        {
+            "item": conversation,
+            "active_conversation_id": active_conversation_id,
+        },
+    )
+
+
+@require_POST
+def conversation_delete(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    is_active = request.POST.get("active") == "1"
+
+    if conversation.status == Conversation.Status.PROCESSING:
+        request_cancel(conversation.id)
+        _finalize_cancelled_conversation(conversation)
+        conversation.refresh_from_db()
+        if conversation.celery_task_id:
+            celery_app.control.revoke(conversation.celery_task_id, terminate=True)
+
+    try:
+        get_checkpointer().delete_thread(str(conversation.id))
+    except Exception:
+        pass
+
+    conversation.delete()
+
+    response = HttpResponse(status=204)
+    response["HX-Trigger"] = json.dumps({"ayronToast": {"message": "Chat eliminado"}})
+    if is_active:
+        response["HX-Redirect"] = reverse("chat:list")
     return response
