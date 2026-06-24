@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "apps.agent",
     "apps.files",
     "apps.sources",
+    "apps.automations",
 ]
 
 MIDDLEWARE = [

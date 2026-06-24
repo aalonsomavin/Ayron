@@ -38,6 +38,7 @@
         <a href="{% url 'chat:list' %}"{% if request.resolver_match.app_name == 'chat' %} class="is-active"{% endif %}>Chat</a>
         <a href="{% url 'dashboards:saved_list' %}"{% if request.resolver_match.app_name == 'dashboards' %} class="is-active"{% endif %}>Analíticas</a>
         <a href="{% url 'sources:list' %}"{% if request.resolver_match.app_name == 'sources' %} class="is-active"{% endif %}>Fuentes</a>
+        <a href="{% url 'automations:list' %}"{% if request.resolver_match.app_name == 'automations' %} class="is-active"{% endif %}>Automatizaciones</a>
       {% endif %}
     </nav>
     <div class="ay-topbar__end">

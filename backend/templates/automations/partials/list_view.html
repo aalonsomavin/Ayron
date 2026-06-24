@@ -1,0 +1,43 @@
+<title hx-swap-oob="true">Automatizaciones — Ayron</title>
+<div id="automations-view" class="ay-saved-shell ay-automations-shell">
+  <div class="ay-main ay-saved-main">
+    <div class="ay-saved-page ay-automations-page">
+      <header class="ay-saved-page__header ay-automations-page__header">
+        <div class="ay-saved-page__intro">
+          <p class="ay-automations-page__eyebrow">Ayron · Programación</p>
+          <h1 class="ay-saved-page__title">Automatizaciones</h1>
+          <p class="ay-automations-page__subtitle">
+            Programá y gestioná consultas automáticas que se ejecutan según un calendario definido.
+          </p>
+          <div class="ay-automations-stats">
+            {% for chip in stat_chips %}
+            {% include "components/badge.html" with tone=chip.tone label=chip.label %}
+            {% endfor %}
+          </div>
+        </div>
+        <div class="ay-automations-toolbar">
+          <span class="ay-automations-toolbar__tab is-active">Automatizaciones</span>
+          <button
+            type="button"
+            class="ay-automations-toolbar__new"
+            disabled
+            title="Próximamente"
+          >
+            {% include "components/icon.html" with name="plus" size=14 %}
+            Nueva
+          </button>
+        </div>
+      </header>
+
+      <section class="ay-automations-list">
+        {% for item in automations %}
+        {% include "automations/automation_card.html" with item=item %}
+        {% empty %}
+        <div class="ay-automations-empty">
+          <p>No hay automatizaciones configuradas.</p>
+        </div>
+        {% endfor %}
+      </section>
+    </div>
+  </div>
+</div>

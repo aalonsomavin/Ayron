@@ -10,6 +10,7 @@ urlpatterns = [
     path("files/", include("apps.files.urls")),
     path("dashboards/", include("apps.files.urls_pages")),
     path("sources/", include("apps.sources.urls")),
+    path("automations/", include("apps.automations.urls")),
     path("", include("apps.core.urls")),
 ]
 

@@ -1,0 +1,33 @@
+<article class="ay-card ay-automations-card{% if not item.is_active %} ay-automations-card--inactive{% endif %}">
+  <div class="ay-automations-card__body">
+    <span class="ay-automations-card__icon" aria-hidden="true">
+      {% include "components/icon.html" with name="zap" size=18 %}
+    </span>
+    <div class="ay-automations-card__content">
+      <div class="ay-automations-card__title-row">
+        <h2 class="ay-automations-card__title">{{ item.name }}</h2>
+        {% include "components/badge.html" with tone=item.status_tone dot=True label=item.status_label %}
+      </div>
+      <p class="ay-automations-card__description">{{ item.description }}</p>
+      <div class="ay-automations-card__meta">
+        <span class="ay-automations-card__meta-item">{{ item.frequency_label }}</span>
+        <span class="ay-automations-card__meta-item">Última: {{ item.last_run_label }}</span>
+        <span class="ay-automations-card__meta-item">Próxima: {{ item.next_run_label }}</span>
+      </div>
+    </div>
+    <div class="ay-automations-card__actions">
+      <button type="button" class="ay-automations-card__action-btn" disabled title="Próximamente" aria-label="Ejecutar ahora">
+        {% include "components/icon.html" with name="play" size=15 %}
+      </button>
+      <button type="button" class="ay-automations-card__action-btn" disabled title="Próximamente" aria-label="Editar">
+        {% include "components/icon.html" with name="pencil" size=15 %}
+      </button>
+      <button type="button" class="ay-automations-card__action-btn" disabled title="Próximamente" aria-label="Ver detalle">
+        {% include "components/icon.html" with name="eye" size=15 %}
+      </button>
+      <button type="button" class="ay-automations-card__action-btn ay-automations-card__action-btn--danger" disabled title="Próximamente" aria-label="Eliminar">
+        {% include "components/icon.html" with name="trash" size=15 %}
+      </button>
+    </div>
+  </div>
+</article>
