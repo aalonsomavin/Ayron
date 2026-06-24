@@ -6,9 +6,21 @@ from .data import get_connected_sources
 
 def _sources_list_context():
     sources = get_connected_sources()
+    stats = {
+        "total": len(sources),
+        "connected": sum(1 for s in sources if s["status"] == "connected"),
+        "syncing": sum(1 for s in sources if s["status"] == "syncing"),
+        "error": sum(1 for s in sources if s["status"] == "error"),
+    }
     return {
         "sources": sources,
-        "source_count": len(sources),
+        "stats": stats,
+        "stat_chips": [
+            {"tone": "neutral", "label": f"{stats['total']} fuentes"},
+            {"tone": "success", "label": f"{stats['connected']} conectadas"},
+            {"tone": "warning", "label": f"{stats['syncing']} sincronizando"},
+            {"tone": "danger", "label": f"{stats['error']} con error"},
+        ],
     }
 
 

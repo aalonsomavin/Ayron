@@ -4,57 +4,55 @@
     <div class="ay-saved-page ay-sources-page">
       <header class="ay-saved-page__header ay-sources-page__header">
         <div class="ay-saved-page__intro">
+          <p class="ay-sources-page__eyebrow">Ayron · Conexiones</p>
           <h1 class="ay-saved-page__title">Fuentes de datos</h1>
           <p class="ay-sources-page__subtitle">
-            Las bases y sistemas que alimentan las respuestas del agente.
+            Orígenes de datos conectados al espacio de trabajo de tu empresa. Vista de solo lectura.
           </p>
+          <div class="ay-sources-stats">
+            {% for chip in stat_chips %}
+            {% include "components/badge.html" with tone=chip.tone label=chip.label %}
+            {% endfor %}
+          </div>
         </div>
       </header>
 
-      <section class="ay-sources-section">
-        <div class="ay-sources-section__head">
-          <h2 class="ay-sources-section__title">Fuentes conectadas</h2>
-          {% include "components/badge.html" with tone="neutral" label=source_count %}
-        </div>
-
-        {% for source in sources %}
-        <article class="ay-card ay-sources-card">
-          <div class="ay-sources-card__row">
-            <span class="ay-sources-card__logo">
-              {% include "components/icon.html" with name="database" size=18 %}
-            </span>
-            <div class="ay-sources-card__info">
-              <div class="ay-sources-card__name">{{ source.name }}</div>
-              <div class="ay-sources-card__meta">
-                {{ source.type }} ·
-                <span class="ay-sources-mono">{{ source.database }} · {{ source.table_count }} tablas</span>
+      <section class="ay-card ay-sources-table-card">
+        <div class="ay-sources-table">
+          <div class="ay-sources-table__head">
+            <span class="ay-sources-table__head-cell ay-sources-table__head-cell--source">Fuente</span>
+            <span class="ay-sources-table__head-cell">Tipo</span>
+            <span class="ay-sources-table__head-cell">Estado</span>
+            <span class="ay-sources-table__head-cell">Estructura</span>
+            <span class="ay-sources-table__head-cell">Volumen</span>
+            <span class="ay-sources-table__head-cell">Última sync</span>
+          </div>
+          {% for source in sources %}
+          <div class="ay-sources-table__row">
+            <div class="ay-sources-table__cell ay-sources-table__cell--source">
+              <span
+                class="ay-sources-row-logo"
+                style="--source-color: {{ source.color }};"
+              >
+                {% include "components/icon.html" with name=source.icon size=18 %}
+              </span>
+              <div class="ay-sources-table__source-info">
+                <div class="ay-sources-table__source-name">{{ source.name }}</div>
+                <div class="ay-sources-table__source-sub">{{ source.subtitle }}</div>
               </div>
             </div>
-            <div class="ay-sources-card__status">
-              <span class="ay-sources-mono ay-sources-card__sync">{{ source.last_sync }}</span>
-              {% include "components/badge.html" with tone="success" dot=True label=source.status_label %}
+            <div class="ay-sources-table__cell">
+              <span class="ay-sources-type">{{ source.type_label }}</span>
             </div>
-          </div>
-
-          {% for domain in source.domains %}
-          <div class="ay-sources-domain">
-            <div class="ay-sources-domain__head">
-              <h3 class="ay-sources-domain__name">{{ domain.name }}</h3>
-              <span class="ay-sources-mono ay-sources-domain__prefix">{{ domain.prefix }}</span>
+            <div class="ay-sources-table__cell">
+              {% include "components/badge.html" with tone=source.status_tone dot=True label=source.status_label %}
             </div>
-            <p class="ay-sources-domain__desc">{{ domain.description }}</p>
-            <ul class="ay-sources-tables">
-              {% for table in domain.tables %}
-              <li class="ay-sources-tables__row">
-                <span class="ay-sources-mono ay-sources-tables__name">{{ table.name }}</span>
-                <span class="ay-sources-tables__desc">{{ table.description }}</span>
-              </li>
-              {% endfor %}
-            </ul>
+            <div class="ay-sources-table__cell">{{ source.structure_label }}</div>
+            <div class="ay-sources-table__cell ay-sources-table__cell--mono">{{ source.volume_label }}</div>
+            <div class="ay-sources-table__cell ay-sources-table__cell--sync">{{ source.last_sync }}</div>
           </div>
           {% endfor %}
-        </article>
-        {% endfor %}
+        </div>
       </section>
     </div>
   </div>
