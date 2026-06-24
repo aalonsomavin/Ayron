@@ -289,13 +289,15 @@
         var wrap = document.createElement("div");
         wrap.className = "ay-dash-filter";
 
-        var label = document.createElement("label");
-        label.className = "ay-dash-filter__label";
-        label.textContent = filter.label || filter.id;
-
         var select = document.createElement("select");
         select.className = "ay-dash-filter__select";
         select.dataset.filterId = filter.id;
+        select.id = "ay-dash-filter-" + filter.id;
+
+        var label = document.createElement("label");
+        label.className = "ay-dash-filter__label";
+        label.setAttribute("for", select.id);
+        label.textContent = filter.label || filter.id;
 
         (filter.options || []).forEach(function (optionValue) {
           var option = document.createElement("option");

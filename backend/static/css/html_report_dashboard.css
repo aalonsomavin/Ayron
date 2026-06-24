@@ -518,7 +518,57 @@
 }
 
 .ay-dash-filter-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
   margin-bottom: 24px;
+}
+
+.ay-dash-filter-scope > .ay-dash-grid,
+.ay-dash-filter-scope > .ay-dash-slicer-bar,
+.ay-dash-filter-scope > .ay-dash-filter-chips,
+.ay-dash-filter-scope > .ay-dash-tabs,
+.ay-dash-filter-scope > .ay-dash-tab-panels,
+.ay-dash-filter-scope > .ay-dash-calculator,
+.ay-dash-filter-scope > .ay-dash-filter-bar,
+.ay-dash-filter-scope > .ay-chart {
+  flex-basis: 100%;
+  width: 100%;
+}
+
+.ay-dash-filter-scope > div:has(> select) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.ay-dash-filter-scope > div:has(> div > select):not(:has(.ay-dash-grid)):not(:has(.ay-dash-card)) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  flex-basis: 100%;
+}
+
+.ay-dash-filter-scope > div:has(> div > select) > div:has(> select) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.ay-dash-filter-scope > div:has(> select) > label,
+.ay-dash-filter-scope > div:has(> div > select) > div:has(> select) > label {
+  font-family: "Geist Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a92;
+  flex: none;
+  white-space: nowrap;
+  margin: 0;
 }
 
 .ay-dash-slicer-bar {
@@ -760,33 +810,56 @@
 .ay-dash-filter-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  gap: 12px 16px;
 }
 
 .ay-dash-filter {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
-.ay-dash-filter__label {
+.ay-dash-filter__label,
+.ay-dash-filter-bar label:not([class]) {
   font-family: "Geist Mono", monospace;
   font-size: 10.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #8a8a92;
+  flex: none;
+  white-space: nowrap;
 }
 
-.ay-dash-filter__select {
+.ay-dash-page select:not(.ay-dash-calc-select) {
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
+  display: inline-block;
+  height: 32px;
+  margin: 0;
+  padding: 0 32px 0 11px;
   border: 1px solid #e6e6e8;
-  background: #fff;
+  border-radius: 8px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
   color: #18181b;
   font-family: "Geist", system-ui, sans-serif;
   font-size: 13px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  font-weight: 500;
+  line-height: 30px;
   min-width: 140px;
+  cursor: pointer;
+}
+
+.ay-dash-page select:not(.ay-dash-calc-select):focus-visible {
+  outline: 2px solid #c8d9fc;
+  outline-offset: 1px;
 }
 
 .ay-dash-th-sortable {
@@ -891,15 +964,22 @@
 
 .ay-dash-card--calc-input .ay-dash-calc-select,
 .ay-dash-calc-slot.ay-dash-card .ay-dash-calc-select {
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
   border: none;
   padding: 0;
+  height: auto;
+  line-height: inherit;
   background: transparent;
+  background-image: none;
   font-family: "Geist Mono", monospace;
   font-size: 22px;
   font-weight: 600;
   width: 100%;
   min-width: 0;
   color: #18181b;
+  cursor: default;
 }
 
 .ay-dash-card--calc-input .ay-dash-calc-range,
@@ -930,14 +1010,31 @@
 
 .ay-dash-calc-input {
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
+  height: 32px;
+  margin: 0;
+  padding: 0 11px;
   border: 1px solid #e6e6e8;
+  border-radius: 8px;
   background: #fff;
   color: #18181b;
   font-family: "Geist", system-ui, sans-serif;
   font-size: 13px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  font-weight: 500;
+  line-height: 30px;
   min-width: 140px;
+}
+
+.ay-dash-calc-input.ay-dash-calc-select {
+  padding-right: 32px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+  cursor: pointer;
 }
 
 .ay-dash-calc-number {
