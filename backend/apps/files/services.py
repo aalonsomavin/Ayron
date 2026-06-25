@@ -260,14 +260,8 @@ def _normalize_html_filename(name: str, fallback: str) -> str:
     html_pos = cleaned.lower().find(".html")
     if html_pos >= 0:
         cleaned = cleaned[: html_pos + 5]
-    else:
-        slug_match = re.match(r"^[\w\-]+", cleaned)
-        if slug_match:
-            cleaned = slug_match.group(0)
     if not cleaned:
-        fallback_clean = re.sub(r'[<>:"/\\|?*]', "", str(fallback or "")).strip()
-        slug_match = re.match(r"^[\w\-]+", fallback_clean)
-        cleaned = slug_match.group(0) if slug_match else ""
+        cleaned = re.sub(r'[<>:"/\\|?*]', "", str(fallback or "")).strip()
     if not cleaned:
         cleaned = "report"
     if not cleaned.lower().endswith(".html"):

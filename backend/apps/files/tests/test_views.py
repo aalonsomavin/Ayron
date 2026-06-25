@@ -271,6 +271,22 @@ class TestFileRename:
         assert file_obj.original_name == "dashboard-hyalufresh.html"
         assert file_obj.content_json["title"] == "dashboard-hyalufresh"
 
+    def test_rename_dashboard_with_spaces(self, client, user, conversation):
+        file_obj = _dashboard_file(user, conversation)
+        client.force_login(user)
+        url = reverse("files:rename", kwargs={"file_id": file_obj.id})
+        response = client.post(
+            url,
+            data=json.dumps({"name": "mexar vs farmacias"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "mexar vs farmacias"
+        file_obj.refresh_from_db()
+        assert file_obj.original_name == "mexar vs farmacias.html"
+        assert file_obj.content_json["title"] == "mexar vs farmacias"
+
     def test_rename_dashboard_empty_name(self, client, user, conversation):
         file_obj = _dashboard_file(user, conversation)
         client.force_login(user)

@@ -214,6 +214,9 @@ class TestFileServices:
         )
         assert _normalize_html_filename(corrupted, "fallback") == "brecha-precio-vs-volumen-mexar.html"
 
+    def test_normalize_html_filename_preserves_spaces(self):
+        assert _normalize_html_filename("mexar vs farmacias", "fallback") == "mexar vs farmacias.html"
+
     def test_serialize_file_for_ui_cleans_corrupted_dashboard_name(self, user, conversation):
         from apps.files.models import HTML_MIME
 
@@ -265,6 +268,32 @@ class TestFileServices:
         assert updated.original_name == "ventas-hyalu.html"
         assert updated.content_json["title"] == "ventas-hyalu"
         assert updated.version == 1
+
+    def test_rename_dashboard_file_preserves_spaces(self, user, conversation):
+        from apps.files.models import HTML_MIME
+
+        dashboard_html = '<div class="ay-dash-page"><div class="ay-dash-inner"></div></div>'
+        content = {
+            "format": "html",
+            "html_kind": "dashboard",
+            "title": "Ventas",
+            "subtitle": "",
+            "html": dashboard_html,
+            "body_html": dashboard_html,
+            "full_document": False,
+        }
+        file_obj = save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Ventas.html",
+            content_json=content,
+            file_bytes=b"<html></html>",
+            preview_html="<div></div>",
+            mime_type=HTML_MIME,
+        )
+        updated = rename_dashboard_file(file_obj, "mexar vs farmacias")
+        assert updated.original_name == "mexar vs farmacias.html"
+        assert updated.content_json["title"] == "mexar vs farmacias"
 
     def test_rename_dashboard_file_sanitizes_invalid_chars(self, user, conversation):
         from apps.files.models import HTML_MIME
