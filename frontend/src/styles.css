@@ -2455,25 +2455,99 @@
     display: none;
   }
 
+  .ay-tool-trace.is-collapsed .ay-tool-trace__expand-steps {
+    display: none;
+  }
+
+  .ay-tool-trace.is-steps-collapsed .ay-tool-trace__item--overflow {
+    display: none;
+  }
+
+  .ay-tool-trace__expand-steps {
+    display: inline-flex;
+    margin: 8px 0 0 21px;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    color: var(--ay-text-muted);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .ay-tool-trace__expand-steps:hover {
+    color: var(--ay-text);
+  }
+
   .ay-tool-trace__list {
     list-style: none;
-    margin: 2px 0 0;
-    padding: 0;
+    margin: 6px 0 0 7px;
+    padding: 0 0 0 14px;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 10px;
+    border-left: 1px solid var(--ay-border);
   }
 
   .ay-tool-trace__item {
     display: flex;
-    align-items: baseline;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    position: relative;
+  }
+
+  .ay-tool-trace__item::before {
+    content: "";
+    position: absolute;
+    left: -14px;
+    top: 8px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ay-bg);
+    border: 1px solid var(--ay-border);
+    transform: translateX(-50%);
+  }
+
+  .ay-tool-trace__item--done::before {
+    background: var(--ay-bg-subtle);
+  }
+
+  .ay-tool-trace__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    color: var(--ay-text-subtle);
+  }
+
+  .ay-tool-trace__body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
     min-width: 0;
   }
 
   .ay-tool-trace__verb {
     color: var(--ay-text-muted);
-    flex-shrink: 0;
+  }
+
+  .ay-tool-trace__tag {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--ay-border);
+    background: var(--ay-bg-subtle);
+    font-family: var(--ay-font-mono);
+    font-size: 11px;
+    color: var(--ay-text-subtle);
+    line-height: 1.4;
   }
 
   .ay-tool-trace__detail {
@@ -2484,6 +2558,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+  }
+
+  .ay-tool-trace__item.is-running .ay-tool-trace__verb {
+    opacity: 0.75;
   }
 
   .ay-tool-trace__item.is-running .ay-tool-trace__verb::after {

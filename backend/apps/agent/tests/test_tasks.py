@@ -183,14 +183,15 @@ class TestRunAgentConversation:
             event_type=AgentEvent.EventType.TOOL_START,
         )
         assert tool_start.payload["tool"] == "list_tables"
-        assert tool_start.payload["tool_label"] == "Listar tablas"
+        assert tool_start.payload["tool_label"] == "Revisó tablas disponibles"
         assert tool_start.payload["tool_subtitle"] == "Mexar Pharma"
+        assert tool_start.payload["tool_tag"] == "Base de datos"
 
         tool_end = AgentEvent.objects.get(
             conversation=conversation,
             event_type=AgentEvent.EventType.TOOL_END,
         )
-        assert tool_end.payload["tool_label"] == "Listar tablas"
+        assert tool_end.payload["tool_label"] == "Revisó tablas disponibles"
 
     def test_run_agent_conversation_stops_when_cancelled(self, conversation_with_messages):
         conversation, user_message, assistant_message = conversation_with_messages
@@ -500,7 +501,9 @@ class TestStreamEventHandler:
 
         assert len(emitted) == 1
         assert emitted[0]["event_type"] == AgentEvent.EventType.PLAN
-        assert emitted[0]["payload"]["tool_label"] == "Planificar"
+        assert emitted[0]["payload"]["tool_label"] == "Planificó 1 paso"
+        assert emitted[0]["payload"]["tool_tag"] == "Plan"
+        assert emitted[0]["payload"]["tool_icon"] == "list-checks"
         assert emitted[0]["payload"]["todos"] == [
             {"content": "List tables", "status": "pending"}
         ]
@@ -540,8 +543,9 @@ class TestStreamEventHandler:
 
         assert len(emitted) == 1
         assert emitted[0]["event_type"] == AgentEvent.EventType.TOOL_START
-        assert emitted[0]["payload"]["tool_label"] == "Buscando datos"
+        assert emitted[0]["payload"]["tool_label"] == "Consultó datos de Artist"
         assert emitted[0]["payload"]["tool_subtitle"] == 'SELECT * FROM "Artist" LIMIT 5'
+        assert emitted[0]["payload"]["tool_tag"] == "SQL"
 
     def test_tool_error_emits_success_false_in_tool_end(self, conversation_with_messages):
         conversation, _, assistant_message = conversation_with_messages

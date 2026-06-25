@@ -12,7 +12,7 @@ from apps.agent.tools.chart import (
 from apps.agent.tools.document import pop_document_display
 from apps.agent.tools.html_report import pop_html_report_display
 from apps.agent.tools.spreadsheet import pop_spreadsheet_display
-from apps.agent.tools.display import PLAN_TOOL_LABEL, get_tool_display
+from apps.agent.tools.display import get_tool_display
 from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
 
@@ -489,7 +489,7 @@ class StreamEventHandler:
                     "todos": todos,
                     "tool_call_id": tool_call_id,
                     "tool": "write_todos",
-                    "tool_label": PLAN_TOOL_LABEL,
+                    **get_tool_display(name, {"todos": todos}),
                 },
                 message=self.message,
             )

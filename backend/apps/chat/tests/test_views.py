@@ -388,8 +388,9 @@ class TestEventsReplay:
         response = client.get(url)
         data = response.json()
 
-        assert data["events"][0]["tool_label"] == "Listar tablas"
+        assert data["events"][0]["tool_label"] == "Revisó tablas disponibles"
         assert data["events"][0]["tool_subtitle"] == "Mexar Pharma"
+        assert data["events"][0]["tool_tag"] == "Base de datos"
 
     def test_serialize_agent_event_localizes_tool_events(self, conversation):
         assistant_message = Message.objects.create(
@@ -412,8 +413,10 @@ class TestEventsReplay:
 
         data = serialize_agent_event(event)
 
-        assert data["tool_label"] == "Buscando datos"
+        assert data["tool_label"] == "Consultó datos de Artist"
         assert data["tool_subtitle"] == 'SELECT * FROM "Artist" LIMIT 5'
+        assert data["tool_tag"] == "SQL"
+        assert data["tool_icon"] == "terminal"
 
     def test_events_other_user_gets_404(self, client, other_user, conversation):
         client.force_login(other_user)
@@ -745,7 +748,9 @@ class TestConversationDetail:
         content = response.content.decode()
 
         assert "ay-tool-trace" in content
+        assert "ay-tool-trace__tag" in content
         assert "Buscó datos 1 vez, mostró 1 tabla" in content
+        assert "Listo" in content
 
     def test_detail_renders_cancelled_notice(self, client, user, conversation):
         Message.objects.create(

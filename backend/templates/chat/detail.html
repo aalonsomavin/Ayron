@@ -122,6 +122,7 @@
 <script src="{% static 'js/ayron-chart.js' %}"></script>
 <script src="{% static 'js/ayron-dashboard.js' %}"></script>
 <script src="{% static 'js/ayron-content-skeleton.js' %}"></script>
+<script src="{% static 'js/ayron-tool-trace.js' %}"></script>
 <script src="{% static 'js/ayron-markdown.js' %}"></script>
 <script src="{% static 'js/ayron-doc-preview.js' %}"></script>
 <script src="{% static 'js/ayron-sheet-preview.js' %}"></script>
@@ -164,6 +165,8 @@
   const chatThreadEl = agentStreamEl.closest(".ay-chat__thread");
   let activeMessageId = {{ active_message_id|default:"null" }};
   const TOOL_LABELS = {{ tool_labels_json|safe }};
+  const TOOL_TAGS = {{ tool_tags_json|safe }};
+  const TOOL_ICONS = {{ tool_icons_json|safe }};
 
   function resolveToolLabel(event) {
     return event.tool_label || TOOL_LABELS[event.tool] || event.tool || "Herramienta";
@@ -171,6 +174,14 @@
 
   function resolveToolSubtitle(event) {
     return event.tool_subtitle || "";
+  }
+
+  function resolveToolTag(event) {
+    return event.tool_tag || TOOL_TAGS[event.tool] || "";
+  }
+
+  function resolveToolIcon(event) {
+    return event.tool_icon || TOOL_ICONS[event.tool] || "file";
   }
 
   function isNearBottom() {
@@ -512,6 +523,7 @@
       const collapsed = trace.classList.toggle("is-collapsed");
       this.setAttribute("aria-expanded", collapsed ? "false" : "true");
     });
+    if (window.AyronToolTrace) window.AyronToolTrace.initTrace(trace);
   }
 
   function initToolTraces(root) {
@@ -536,14 +548,17 @@
   }
 
   function buildTraceSummary(items, runningCount) {
-    if (!items.length) return "";
-    if (items.length === 1) {
-      const text = items[0].dataset.label || "Herramienta";
+    const actionable = Array.prototype.filter.call(items, function (item) {
+      return item.dataset.tool !== "done";
+    });
+    if (!actionable.length) return "";
+    if (actionable.length === 1) {
+      const text = actionable[0].dataset.label || "Herramienta";
       return runningCount ? text + "…" : text;
     }
 
     const counts = {};
-    items.forEach(function (item) {
+    actionable.forEach(function (item) {
       const tool = item.dataset.tool || item.dataset.label || "unknown";
       counts[tool] = (counts[tool] || 0) + 1;
     });
@@ -567,13 +582,38 @@
       parts.push("mostró " + n + (n === 1 ? " gráfico" : " gráficos"));
     }
     if (counts.plan || counts.write_todos) parts.push("planificó pasos");
+    if (counts.create_document) {
+      const n = counts.create_document;
+      parts.push("creó " + n + (n === 1 ? " documento" : " documentos"));
+    }
+    if (counts.update_document) {
+      const n = counts.update_document;
+      parts.push("actualizó " + n + (n === 1 ? " documento" : " documentos"));
+    }
+    if (counts.create_spreadsheet) {
+      const n = counts.create_spreadsheet;
+      parts.push("creó " + n + (n === 1 ? " hoja" : " hojas") + " de cálculo");
+    }
+    if (counts.read_file) {
+      const n = counts.read_file;
+      parts.push("leyó " + n + (n === 1 ? " archivo" : " archivos"));
+    }
+    if (counts.write_file) {
+      const n = counts.write_file;
+      parts.push("escribió " + n + (n === 1 ? " archivo" : " archivos"));
+    }
+    if (counts.edit_file) {
+      const n = counts.edit_file;
+      parts.push("editó " + n + (n === 1 ? " archivo" : " archivos"));
+    }
 
-    const unknown = items.length - Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
+    const known = Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
+    const unknown = actionable.length - known;
     if (unknown > 0) {
       parts.push("usó " + unknown + (unknown === 1 ? " herramienta" : " herramientas"));
     }
 
-    let text = parts.length ? parts.join(", ") : "Usó " + items.length + (items.length === 1 ? " herramienta" : " herramientas");
+    let text = parts.length ? parts.join(", ") : "Usó " + actionable.length + (actionable.length === 1 ? " herramienta" : " herramientas");
     text = text.charAt(0).toUpperCase() + text.slice(1);
     return runningCount ? text.replace(/…?$/, "") + "…" : text;
   }
@@ -592,20 +632,30 @@
     summary.textContent = buildTraceSummary(items, runningCount);
   }
 
-  function appendTraceItem(trace, label, detail, toolCallId, running, toolName) {
+  function appendTraceItem(trace, label, detail, toolCallId, running, toolName, tag, icon) {
     const li = document.createElement("li");
     li.className = "ay-tool-trace__item" + (running ? " is-running" : "");
     if (toolCallId) li.dataset.toolCallId = toolCallId;
     li.dataset.label = label;
     if (toolName) li.dataset.tool = toolName;
     if (detail) li.dataset.detail = detail;
-    li.innerHTML =
-      '<span class="ay-tool-trace__verb"></span>' +
-      (detail ? '<span class="ay-tool-trace__detail"></span>' : "");
+    li.dataset.icon = icon || (toolName && TOOL_ICONS[toolName]) || "file";
+    const itemHtml = window.AyronToolTrace
+      ? window.AyronToolTrace.buildItemHtml({ tag: tag, detail: detail })
+      : '<span class="ay-tool-trace__icon"></span><div class="ay-tool-trace__body"><span class="ay-tool-trace__verb"></span></div>';
+    li.innerHTML = itemHtml;
     li.querySelector(".ay-tool-trace__verb").textContent = label;
-    if (detail) li.querySelector(".ay-tool-trace__detail").textContent = detail;
+    if (window.AyronToolTrace) window.AyronToolTrace.populateItemIcon(li);
     trace.querySelector(".ay-tool-trace__list").appendChild(li);
     updateTraceSummary(trace);
+    if (window.AyronToolTrace) window.AyronToolTrace.syncStepVisibility(trace);
+    return li;
+  }
+
+  function appendDoneTraceItem(trace) {
+    if (trace.querySelector('.ay-tool-trace__item[data-tool="done"]')) return;
+    const li = appendTraceItem(trace, "Listo", "", "done", false, "done", "", "check-circle");
+    li.classList.add("ay-tool-trace__item--done");
     return li;
   }
 
@@ -866,7 +916,9 @@
         todos.map(function (t) { return t.content || t; }).join(", "),
         event.tool_call_id,
         false,
-        "write_todos"
+        "write_todos",
+        resolveToolTag(event),
+        resolveToolIcon(event)
       );
     } else if (event.type === "tool_start" && bubble) {
       finalizeCurrentTextBlock();
@@ -874,7 +926,16 @@
       const trace = ensureToolTrace(tools);
       const title = resolveToolLabel(event);
       const subtitle = resolveToolSubtitle(event);
-      appendTraceItem(trace, title, subtitle, event.tool_call_id || event.tool, true, event.tool);
+      appendTraceItem(
+        trace,
+        title,
+        subtitle,
+        event.tool_call_id || event.tool,
+        true,
+        event.tool,
+        resolveToolTag(event),
+        resolveToolIcon(event)
+      );
       appendContentPlaceholder(bubble, event);
     } else if (event.type === "tool_end" && bubble) {
       finalizeCurrentTextBlock();
@@ -883,7 +944,16 @@
       let item = findTraceItem(trace, event.tool_call_id);
       if (!item) {
         const title = resolveToolLabel(event);
-        item = appendTraceItem(trace, title, "", event.tool_call_id, false, event.tool);
+        item = appendTraceItem(
+          trace,
+          title,
+          "",
+          event.tool_call_id,
+          false,
+          event.tool,
+          resolveToolTag(event),
+          resolveToolIcon(event)
+        );
       }
       item.classList.remove("is-running");
       updateTraceSummary(trace);
@@ -915,6 +985,18 @@
           markBubbleCancelled(streamContainer);
         } else if (doneMessageId) {
           markBubbleCancelled(ensureCancelledBubble(doneMessageId));
+        }
+      } else {
+        const doneMessageId = event.message_id || getProcessingMessageId();
+        const doneBubble = streamContainer || (
+          doneMessageId
+            ? chatThreadEl.querySelector('[data-message-id="' + doneMessageId + '"]')
+            : null
+        );
+        if (doneBubble) {
+          const tools = doneBubble.querySelector(".ay-msg-agent__tools");
+          const trace = tools && tools.querySelector(".ay-tool-trace");
+          if (trace) appendDoneTraceItem(trace);
         }
       }
       activeMessageId = null;

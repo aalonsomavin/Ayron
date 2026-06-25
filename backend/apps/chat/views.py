@@ -11,7 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.agent.cancellation import clear_cancel, request_cancel
 from apps.agent.checkpoint import get_checkpointer, rollback_thread_to_turn
 from apps.agent.events import get_redis_client, persist_event
-from apps.agent.tools.display import PLAN_TOOL_LABEL, TOOL_LABELS, get_tool_display
+from apps.agent.tools.display import TOOL_ICONS, TOOL_LABELS, TOOL_TAGS, get_tool_display
 from apps.agent.tools.chart import prepare_chart_for_render
 from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
@@ -97,8 +97,8 @@ def serialize_agent_event(event: AgentEvent, *, user=None) -> dict:
         )
 
     if event.event_type == AgentEvent.EventType.PLAN:
-        data.setdefault("tool_label", PLAN_TOOL_LABEL)
         data.setdefault("tool", "write_todos")
+        data.update(get_tool_display("write_todos", {"todos": data.get("todos")}))
 
     return data
 
@@ -373,6 +373,8 @@ def conversation_detail(request, conversation_id):
             "last_sequence": _conversation_last_sequence(conversation),
             "active_message_id": _active_message_id(conversation),
             "tool_labels_json": json.dumps(TOOL_LABELS),
+            "tool_tags_json": json.dumps(TOOL_TAGS),
+            "tool_icons_json": json.dumps(TOOL_ICONS),
             "user_initials": _user_initials(request.user),
         },
     )

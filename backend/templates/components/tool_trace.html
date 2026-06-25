@@ -1,18 +1,29 @@
 <div class="ay-msg-agent__tools">
-  <div class="ay-tool-trace is-collapsed">
+  <div class="ay-tool-trace is-collapsed{% if trace.has_overflow_steps %} is-steps-collapsed{% endif %}">
     <button type="button" class="ay-tool-trace__toggle" aria-expanded="false">
       <span class="ay-tool-trace__summary">{{ trace.summary }}</span>
       <svg class="ay-tool-trace__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
     </button>
     <ul class="ay-tool-trace__list">
       {% for item in trace.items %}
-        <li class="ay-tool-trace__item" data-label="{{ item.label }}"{% if item.tool %} data-tool="{{ item.tool }}"{% endif %}>
-          <span class="ay-tool-trace__verb">{{ item.label }}</span>
-          {% if item.detail %}
-            <span class="ay-tool-trace__detail">{{ item.detail }}</span>
-          {% endif %}
+        <li class="ay-tool-trace__item{% if item.tool == 'done' %} ay-tool-trace__item--done{% endif %}{% if item.overflow %} ay-tool-trace__item--overflow{% endif %}" data-label="{{ item.label }}" data-icon="{{ item.icon|default:'file' }}"{% if item.tool %} data-tool="{{ item.tool }}"{% endif %}>
+          <span class="ay-tool-trace__icon"></span>
+          <div class="ay-tool-trace__body">
+            <span class="ay-tool-trace__verb">{{ item.label }}</span>
+            {% if item.tag %}
+              <span class="ay-tool-trace__tag">{{ item.tag }}</span>
+            {% endif %}
+            {% if item.detail %}
+              <span class="ay-tool-trace__detail">{{ item.detail }}</span>
+            {% endif %}
+          </div>
         </li>
       {% endfor %}
     </ul>
+    {% if trace.has_overflow_steps %}
+      <button type="button" class="ay-tool-trace__expand-steps" aria-expanded="false">
+        {% if trace.hidden_step_count == 1 %}Ver 1 paso más{% else %}Ver {{ trace.hidden_step_count }} pasos más{% endif %}
+      </button>
+    {% endif %}
   </div>
 </div>
