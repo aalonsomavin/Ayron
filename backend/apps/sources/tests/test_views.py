@@ -23,7 +23,7 @@ class TestSourcesList:
         assert response.status_code == 200
         assert "Fuentes de datos" in response.content.decode()
 
-    def test_page_shows_table_and_mexar_sources(self, client, user):
+    def test_page_shows_table_and_yivtol_sources(self, client, user):
         client.force_login(user)
         response = client.get(reverse("sources:list"))
         content = response.content.decode()
@@ -33,10 +33,10 @@ class TestSourcesList:
         assert "Fuente" in content
         assert "Estado" in content
         assert "Volumen" in content
-        assert "Mexar Pharma — Producción" in content
-        assert "Inteligencia de Mercado — Precios Competencia" in content
+        assert "YIVTOL S-ZERO — Vuelos Aéreos" in content
+        assert "AyronOne — Agricultura y Ganadería" in content
         assert "Conectada" in content
-        assert "842k filas · 128 MB" in content
+        assert "18.2k filas · 96 MB" in content
 
     def test_htmx_returns_partial(self, client, user):
         client.force_login(user)

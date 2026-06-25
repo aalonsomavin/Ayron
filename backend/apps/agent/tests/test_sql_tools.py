@@ -23,33 +23,33 @@ class TestValidateSelectOnly:
 
     def test_rejects_insert(self):
         with pytest.raises(ValueError, match="Only SELECT"):
-            validate_select_only("INSERT INTO comercial_productos (sku) VALUES ('x')")
+            validate_select_only("INSERT INTO agricola_lotes (codigo) VALUES ('x')")
 
     def test_rejects_update(self):
         with pytest.raises(ValueError, match="Multiple SQL statements"):
             validate_select_only(
-                "SELECT * FROM comercial_productos; UPDATE comercial_productos SET sku = 'x'"
+                "SELECT * FROM agricola_lotes; UPDATE agricola_lotes SET codigo = 'x'"
             )
 
     def test_rejects_delete(self):
         with pytest.raises(ValueError, match="Only SELECT"):
-            validate_select_only("DELETE FROM comercial_productos")
+            validate_select_only("DELETE FROM agricola_lotes")
 
     def test_rejects_drop(self):
         with pytest.raises(ValueError, match="Multiple SQL statements"):
             validate_select_only(
-                "SELECT * FROM comercial_productos WHERE sku = 'x'; DROP TABLE comercial_productos"
+                "SELECT * FROM agricola_lotes WHERE codigo = 'x'; DROP TABLE agricola_lotes"
             )
 
     def test_rejects_forbidden_keyword_in_select(self):
         with pytest.raises(ValueError, match="forbidden keywords"):
             validate_select_only(
-                "SELECT * FROM comercial_productos WHERE sku = 'x' AND 1 = 1 UNION DELETE FROM comercial_productos"
+                "SELECT * FROM agricola_lotes WHERE codigo = 'x' AND 1 = 1 UNION DELETE FROM agricola_lotes"
             )
 
     def test_rejects_select_into(self):
         with pytest.raises(ValueError, match="INTO clause"):
-            validate_select_only("SELECT * INTO backup FROM comercial_productos")
+            validate_select_only("SELECT * INTO backup FROM agricola_lotes")
 
     def test_rejects_multiple_statements(self):
         with pytest.raises(ValueError, match="Multiple SQL statements"):
@@ -58,15 +58,15 @@ class TestValidateSelectOnly:
 
 class TestValidateTableName:
     def test_accepts_valid_name(self):
-        assert validate_table_name("comercial_productos") == "comercial_productos"
-        assert validate_table_name("competencia_precios") == "competencia_precios"
+        assert validate_table_name("agricola_lotes") == "agricola_lotes"
+        assert validate_table_name("ganaderia_animales") == "ganaderia_animales"
 
     def test_accepts_case_insensitive_match(self):
-        assert validate_table_name("COMERCIAL_PRODUCTOS") == "comercial_productos"
+        assert validate_table_name("AGRICOLA_LOTES") == "agricola_lotes"
 
     def test_rejects_invalid_name(self):
         with pytest.raises(ValueError, match="Invalid table name"):
-            validate_table_name("comercial_productos; DROP TABLE crm_cuentas")
+            validate_table_name("agricola_lotes; DROP TABLE ganaderia_corrales")
 
     def test_rejects_unknown_table(self):
         with pytest.raises(ValueError, match="not available"):
@@ -75,77 +75,74 @@ class TestValidateTableName:
 
 @pytest.mark.skipif(not settings.DEMO_DB_URL, reason="DEMO_DB_URL not configured")
 class TestSqlToolsIntegration:
-    def test_list_tables_returns_mexar_tables(self):
+    def test_list_tables_returns_yivtol_tables(self):
         tables = json.loads(list_tables.invoke({}))
-        assert "comercial_productos" in tables
-        assert "crm_oportunidades" in tables
-        assert "competencia_precios" in tables
+        assert "agricola_lotes" in tables
+        assert "ganaderia_animales" in tables
+        assert "yivtol_vuelos" in tables
         assert set(tables).issubset(set(DEMO_TABLES))
 
     def test_describe_table_returns_columns(self):
-        result = json.loads(describe_table.invoke({"table_name": "comercial_productos"}))
-        assert result["table_name"] == "comercial_productos"
+        result = json.loads(describe_table.invoke({"table_name": "agricola_lotes"}))
+        assert result["table_name"] == "agricola_lotes"
         column_names = {column["column_name"] for column in result["columns"]}
-        assert "marca_comercial" in column_names
-        assert "molecula" in column_names
+        assert "codigo" in column_names
+        assert "cultivo" in column_names
         assert "primary_keys" in result
 
-    def test_run_sql_query_returns_products(self):
+    def test_run_sql_query_returns_lote_7(self):
         result = json.loads(
             run_sql_query.invoke(
                 {
                     "sql": """
-                        SELECT marca_comercial, molecula
-                        FROM comercial_productos
-                        WHERE sku = 'ASGEN'
+                        SELECT codigo, cultivo, superficie_ha
+                        FROM agricola_lotes
+                        WHERE codigo = 'Lote 7'
                         LIMIT 1
                     """
                 }
             )
         )
         assert result["row_count"] == 1
-        assert result["rows"][0]["marca_comercial"] == "Asgen"
-        assert "Gemcitabina" in result["rows"][0]["molecula"]
+        assert result["rows"][0]["codigo"] == "Lote 7"
+        assert result["rows"][0]["cultivo"] == "Soja"
 
-    def test_run_sql_query_sales_by_area(self):
+    def test_run_sql_query_lote_ranking(self):
         result = json.loads(
             run_sql_query.invoke(
                 {
                     "sql": """
-                        SELECT a.nombre, SUM(pl.cantidad * pl.precio_unitario) AS ingreso
-                        FROM comercial_pedido_lineas pl
-                        JOIN comercial_productos p ON p.id = pl.producto_id
-                        JOIN comercial_areas_terapeuticas a ON a.id = p.area_id
-                        GROUP BY a.nombre
-                        ORDER BY ingreso DESC
+                        SELECT l.codigo, m.rinde_proyectado_kg_ha
+                        FROM agricola_mediciones m
+                        JOIN agricola_lotes l ON l.id = m.lote_id
+                        JOIN yivtol_vuelos v ON v.id = m.vuelo_id
+                        ORDER BY m.rinde_proyectado_kg_ha DESC
                         LIMIT 5
                     """
                 }
             )
         )
         assert result["row_count"] >= 1
-        assert "nombre" in result["rows"][0]
+        assert "codigo" in result["rows"][0]
 
-    def test_run_sql_query_competencia_vs_lista(self):
+    def test_run_sql_query_corral_5_alerts(self):
         result = json.loads(
             run_sql_query.invoke(
                 {
                     "sql": """
-                        SELECT p.marca_comercial, p.precio_lista, r.precio_min, r.precio_max
-                        FROM comercial_productos p
-                        JOIN competencia_resumen r ON r.producto_id = p.id
-                        WHERE p.sku = 'ARGLIPTIN-D'
+                        SELECT codigo, cabezas_actuales
+                        FROM ganaderia_corrales
+                        WHERE codigo = 'Corral 5'
                     """
                 }
             )
         )
         assert result["row_count"] == 1
-        assert result["rows"][0]["marca_comercial"] == "Argliptin-D"
-        assert result["rows"][0]["precio_lista"] is not None
-        assert result["rows"][0]["precio_min"] is not None
+        assert result["rows"][0]["codigo"] == "Corral 5"
+        assert result["rows"][0]["cabezas_actuales"] == 495
 
     def test_run_sql_query_rejects_non_select(self):
-        result = json.loads(run_sql_query.invoke({"sql": "DELETE FROM comercial_productos"}))
+        result = json.loads(run_sql_query.invoke({"sql": "DELETE FROM agricola_lotes"}))
         assert result["ok"] is False
         assert "Only SELECT" in result["error"]
         assert "agent_instruction" in result

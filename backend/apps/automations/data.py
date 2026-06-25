@@ -12,32 +12,43 @@ STATUS_LABELS = {
 def get_automations():
     automations = [
         {
-            "name": "Resumen mensual de ventas por área terapéutica",
+            "name": "Reporte de rodeo semanal para banco",
             "description": (
-                "Consulta ingresos del mes por oncología, diabetes y cardiología; "
-                "genera reporte HTML y Excel para dirección comercial."
+                "Conteo certificado, peso promedio y BCS por corral del Feedlot Cliente Cero; "
+                "genera PDF con hash RTK del último vuelo YIVTOL."
             ),
-            "frequency_label": "Mensual",
-            "last_run_label": "1/6/2026",
-            "next_run_label": "1/7/2026",
+            "frequency_label": "Semanal",
+            "last_run_label": "23/6/2026",
+            "next_run_label": "30/6/2026",
             "is_active": True,
         },
         {
-            "name": "Monitoreo diario de precios vs competencia",
+            "name": "Alerta sanitaria — temperatura animal > 39.5°C",
             "description": (
-                "Revisa brechas de precio de Argliptin-D, Bitam y línea oncología "
-                "frente a genéricos; alerta por email si el desvío supera el 5%."
+                "Monitorea termografía del último vuelo; notifica si algún animal supera "
+                "el umbral o está 1.5°C sobre el promedio del corral."
+            ),
+            "frequency_label": "Tiempo real",
+            "last_run_label": "26/6/2026",
+            "next_run_label": "Continuo",
+            "is_active": True,
+        },
+        {
+            "name": "Alerta biomasa de potrero bajo umbral",
+            "description": (
+                "Revisa LiDAR de pasturas; avisa si la biomasa disponible cae por debajo "
+                "del 40% y sugiere rotación."
             ),
             "frequency_label": "Diario",
-            "last_run_label": "23/6/2026",
-            "next_run_label": "24/6/2026",
+            "last_run_label": "25/6/2026",
+            "next_run_label": "26/6/2026",
             "is_active": False,
         },
         {
-            "name": "Pipeline CRM — oportunidades por vencer",
+            "name": "Resumen semanal de lotes en estrés hídrico",
             "description": (
-                "Lista oportunidades de licenciamiento que cierran en los próximos 60 días "
-                "y envía resumen semanal al equipo comercial."
+                "Lista lotes con alertas activas, ha afectadas y prescripción de riego; "
+                "envía reporte HTML al gerente de campo."
             ),
             "frequency_label": "Semanal",
             "last_run_label": "16/6/2026",

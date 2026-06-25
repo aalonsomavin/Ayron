@@ -1,0 +1,41 @@
+{
+  "agricola_establecimiento": {
+    "nombre": "Estancia Cliente Cero",
+    "provincia": "Buenos Aires",
+    "superficie_total_ha": 4200
+  },
+  "ganaderia_establecimiento": {
+    "nombre": "Feedlot Cliente Cero",
+    "provincia": "Buenos Aires",
+    "tipo": "feedlot",
+    "cabezas_nominales": 3000
+  },
+  "lotes": [
+    {"codigo": "Lote 1", "nombre": "Lote Este", "cultivo": "Soja", "superficie_ha": 520},
+    {"codigo": "Lote 2", "nombre": "Lote Sur", "cultivo": "Maíz", "superficie_ha": 480},
+    {"codigo": "Lote 3", "nombre": "Lote Oeste", "cultivo": "Soja", "superficie_ha": 610},
+    {"codigo": "Lote 4", "nombre": "Lote Central", "cultivo": "Trigo", "superficie_ha": 390},
+    {"codigo": "Lote 5", "nombre": "Lote Alto", "cultivo": "Soja", "superficie_ha": 550},
+    {"codigo": "Lote 6", "nombre": "Lote Bajo", "cultivo": "Maíz", "superficie_ha": 440},
+    {"codigo": "Lote 7", "nombre": "Lote Siete", "cultivo": "Soja", "superficie_ha": 500},
+    {"codigo": "Lote Norte", "nombre": "Lote Norte", "cultivo": "Soja", "superficie_ha": 580}
+  ],
+  "corrales": [
+    {"codigo": "Corral 1", "capacidad": 450, "cabezas_actuales": 420},
+    {"codigo": "Corral 2", "capacidad": 500, "cabezas_actuales": 485},
+    {"codigo": "Corral 3", "capacidad": 520, "cabezas_actuales": 510},
+    {"codigo": "Corral 4", "capacidad": 480, "cabezas_actuales": 460},
+    {"codigo": "Corral 5", "capacidad": 500, "cabezas_actuales": 495},
+    {"codigo": "Corral 6", "capacidad": 550, "cabezas_actuales": 530}
+  ],
+  "potreros": [
+    {"codigo": "Potrero A", "superficie_ha": 85},
+    {"codigo": "Potrero B", "superficie_ha": 92},
+    {"codigo": "Potrero C", "superficie_ha": 78}
+  ],
+  "pilotos": [
+    "Martín Acosta",
+    "Lucía Fernández",
+    "Diego Ríos"
+  ]
+}

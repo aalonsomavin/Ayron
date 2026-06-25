@@ -7,13 +7,13 @@ class TestGetToolDisplay:
     def test_list_tables(self):
         assert get_tool_display("list_tables") == {
             "tool_label": "Listar tablas",
-            "tool_subtitle": "Mexar Pharma",
+            "tool_subtitle": "YIVTOL · AyronOne",
         }
 
     def test_describe_table_with_name(self):
-        assert get_tool_display("describe_table", {"table_name": "comercial_productos"}) == {
+        assert get_tool_display("describe_table", {"table_name": "agricola_lotes"}) == {
             "tool_label": "Describir tabla",
-            "tool_subtitle": "comercial_productos",
+            "tool_subtitle": "agricola_lotes",
         }
 
     def test_describe_table_without_name(self):
@@ -22,14 +22,14 @@ class TestGetToolDisplay:
         }
 
     def test_run_sql_query_truncates_long_sql(self):
-        sql = "SELECT " + "a, " * 40 + "b FROM comercial_productos"
+        sql = "SELECT " + "a, " * 40 + "b FROM agricola_lotes"
         display = get_tool_display("run_sql_query", {"sql": sql})
         assert display["tool_label"] == "Buscando datos"
         assert display["tool_subtitle"].endswith("…")
         assert len(display["tool_subtitle"]) == 80
 
     def test_run_sql_query_short_sql(self):
-        sql = "SELECT * FROM comercial_productos LIMIT 5"
+        sql = "SELECT * FROM agricola_lotes LIMIT 5"
         assert get_tool_display("run_sql_query", {"sql": sql}) == {
             "tool_label": "Buscando datos",
             "tool_subtitle": sql,

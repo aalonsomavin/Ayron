@@ -11,19 +11,18 @@ from apps.agent.tools.errors import build_query_error_response
 TABLE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 DEMO_TABLES = (
-    "comercial_areas_terapeuticas",
-    "comercial_productos",
-    "comercial_instituciones",
-    "comercial_pedidos",
-    "comercial_pedido_lineas",
-    "comercial_inventario",
-    "crm_ejecutivos",
-    "crm_cuentas",
-    "crm_contactos",
-    "crm_oportunidades",
-    "crm_actividades",
-    "competencia_precios",
-    "competencia_resumen",
+    "agricola_establecimientos",
+    "ganaderia_establecimientos",
+    "yivtol_vuelos",
+    "agricola_lotes",
+    "agricola_mediciones",
+    "agricola_zonas",
+    "agricola_alertas",
+    "ganaderia_corrales",
+    "ganaderia_animales",
+    "ganaderia_mediciones_corral",
+    "ganaderia_potreros",
+    "ganaderia_alertas",
 )
 
 FORBIDDEN_KEYWORDS = re.compile(
@@ -75,7 +74,7 @@ def _rows_to_json(rows: list[dict]) -> str:
 
 @tool
 def list_tables() -> str:
-    """List all tables in the Mexar Pharma demo database."""
+    """List all tables in the YIVTOL AyronOne demo database."""
     check_agent_not_cancelled()
     placeholders = ", ".join(["%s"] * len(DEMO_TABLES))
     query = f"""
@@ -150,7 +149,7 @@ def describe_table(table_name: str) -> str:
 
 @tool
 def run_sql_query(sql: str) -> str:
-    """Execute a read-only SELECT query against the Mexar Pharma demo database."""
+    """Execute a read-only SELECT query against the YIVTOL AyronOne demo database."""
     check_agent_not_cancelled()
     try:
         query = validate_select_only(sql)
