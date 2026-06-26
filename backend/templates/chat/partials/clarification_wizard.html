@@ -113,19 +113,6 @@
             </button>
           {% endif %}
         </div>
-
-        {% if clarification.allow_skip %}
-          <button
-            type="submit"
-            formaction="{% url 'chat:clarification_submit' conversation_id=clarification.conversation.id %}"
-            formmethod="post"
-            name="skipped"
-            value="1"
-            class="ay-clarification__skip"
-          >
-            Saltar y continuar igual
-          </button>
-        {% endif %}
       </div>
     </div>
   </form>
