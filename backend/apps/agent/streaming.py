@@ -4,6 +4,10 @@ from collections.abc import Callable
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
+from apps.agent.tools.clarification import (
+    pop_clarification_display,
+    validate_clarification_input,
+)
 from apps.agent.tools.chart import (
     pop_chart_display,
     prepare_chart_for_render,
@@ -17,6 +21,8 @@ from apps.agent.tools.table import pop_table_display, prepare_table_for_render, 
 from apps.chat.models import AgentEvent, Conversation, Message
 
 PLAN_TOOLS = {"write_todos"}
+CLARIFICATION_TOOL = "ask_clarification"
+HIDDEN_TRACE_TOOLS = PLAN_TOOLS | {CLARIFICATION_TOOL}
 DISPLAY_TOOLS = {
     "show_data_table",
     "show_chart",
@@ -110,6 +116,7 @@ class StreamEventHandler:
         self.completed_tool_calls: set[str] = set()
         self.pending_table_displays: dict[str, dict] = {}
         self.pending_chart_displays: dict[str, dict] = {}
+        self.pending_clarification_displays: dict[str, dict] = {}
         self.tool_call_inputs: dict[str, dict] = {}
         self.tool_call_args_text: dict[str, str] = {}
 
@@ -181,6 +188,12 @@ class StreamEventHandler:
     ) -> bool:
         return self._resolve_chart_type_hint(tool_call_id, tool_input, args_text) is not None
 
+    def _clarification_tool_start_ready(self, tool_call_id: str, tool_input: dict) -> bool:
+        if tool_call_id in self.pending_clarification_displays:
+            return True
+        questions = tool_input.get("questions")
+        return isinstance(questions, list) and len(questions) > 0
+
     def _maybe_emit_tool_start(
         self,
         name: str,
@@ -190,6 +203,13 @@ class StreamEventHandler:
     ) -> None:
         if tool_call_id in self.started_tool_calls:
             return
+
+        if name == CHART_DISPLAY_TOOL:
+            if not self._chart_tool_start_ready(tool_call_id, tool_input, args_text):
+                return
+        elif name == CLARIFICATION_TOOL:
+            if not self._clarification_tool_start_ready(tool_call_id, tool_input):
+                return
 
         self.started_tool_calls.add(tool_call_id)
         resolved_input = self.tool_call_inputs.get(tool_call_id, tool_input)
@@ -248,7 +268,7 @@ class StreamEventHandler:
 
         self.completed_tool_calls.add(dedupe_key)
         name = getattr(token, "name", "")
-        if name in PLAN_TOOLS:
+        if name in HIDDEN_TRACE_TOOLS:
             return
 
         output = extract_text_content(getattr(token, "content", ""))
@@ -480,6 +500,10 @@ class StreamEventHandler:
         tool_call_id: str,
         args_text: str = "",
     ) -> None:
+        if name == CLARIFICATION_TOOL:
+            self._emit_clarification(tool_input, tool_call_id)
+            return
+
         if name in PLAN_TOOLS:
             todos = tool_input.get("todos", tool_input)
             self.persist(
@@ -514,10 +538,56 @@ class StreamEventHandler:
         )
 
     def _stage_display_tool(self, name: str, tool_input: dict, tool_call_id: str) -> None:
-        if name == TABLE_DISPLAY_TOOL:
+        if name == CLARIFICATION_TOOL:
+            self._stage_clarification_display(tool_input, tool_call_id)
+        elif name == TABLE_DISPLAY_TOOL:
             self._stage_table_display(tool_input, tool_call_id)
         elif name == CHART_DISPLAY_TOOL:
             self._stage_chart_display(tool_input, tool_call_id)
+
+    def _stage_clarification_display(self, tool_input: dict, tool_call_id: str) -> None:
+        try:
+            payload = validate_clarification_input(
+                tool_input.get("questions", []),
+                tool_input.get("allow_skip", True),
+                tool_input.get("submit_label", "Analizar con esto"),
+            )
+        except ValueError:
+            return
+        self.pending_clarification_displays[tool_call_id] = payload
+
+    def ensure_clarification_event(self, messages: list) -> None:
+        from apps.agent.clarification_interrupt import find_clarification_tool_call
+
+        match = find_clarification_tool_call(messages)
+        if not match:
+            return
+        tool_call_id, args = match
+        if tool_call_id in self.started_tool_calls:
+            return
+        self.started_tool_calls.add(tool_call_id)
+        self._emit_clarification(args, tool_call_id)
+
+    def _emit_clarification(self, tool_input: dict, tool_call_id: str) -> None:
+        payload = self.pending_clarification_displays.get(tool_call_id)
+        if not payload:
+            try:
+                payload = validate_clarification_input(
+                    tool_input.get("questions", []),
+                    tool_input.get("allow_skip", True),
+                    tool_input.get("submit_label", "Analizar con esto"),
+                )
+            except ValueError:
+                return
+        self.persist(
+            conversation=self.conversation,
+            event_type=AgentEvent.EventType.CLARIFICATION,
+            payload={
+                **payload,
+                "tool_call_id": tool_call_id,
+            },
+            message=self.message,
+        )
 
     def _stage_table_display(self, tool_input: dict, tool_call_id: str) -> None:
         try:

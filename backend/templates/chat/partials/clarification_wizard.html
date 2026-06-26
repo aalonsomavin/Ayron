@@ -1,0 +1,143 @@
+<div
+  id="clarification-{{ clarification.tool_call_id }}"
+  class="ay-clarification"
+  data-assistant-message-id="{{ clarification.assistant_message_id }}"
+  data-tool-call-id="{{ clarification.tool_call_id }}"
+  {% if clarification.question %}
+  data-question-optional="{% if clarification.question.optional %}true{% else %}false{% endif %}"
+  data-question-kind="{{ clarification.question.kind }}"
+  {% endif %}
+>
+  <form
+    id="clarification-form-{{ clarification.tool_call_id }}"
+    class="ay-clarification__form"
+    hx-post="{% url 'chat:clarification_step' conversation_id=clarification.conversation.id %}"
+    hx-target="#clarification-{{ clarification.tool_call_id }}"
+    hx-swap="outerHTML"
+  >
+    {% csrf_token %}
+    <input type="hidden" name="assistant_message_id" value="{{ clarification.assistant_message_id }}">
+    <input type="hidden" name="tool_call_id" value="{{ clarification.tool_call_id }}">
+    <input type="hidden" name="step" value="{{ clarification.step }}">
+    <input type="hidden" name="answers_json" value="{{ clarification.answers_json }}">
+
+    <div class="ay-clarification__card">
+      <div class="ay-clarification__header">
+        <span class="ay-clarification__step">Paso {{ clarification.step|add:1 }} de {{ clarification.total_steps }}</span>
+        <div class="ay-clarification__dots" aria-hidden="true">
+          {% for q in clarification.questions %}
+            <span class="ay-clarification__dot{% if forloop.counter0 == clarification.step %} is-active{% elif forloop.counter0 < clarification.step %} is-complete{% endif %}"></span>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if clarification.question %}
+        <div class="ay-clarification__body">
+          <div class="ay-clarification__title">{{ clarification.question.title }}</div>
+          {% if clarification.question.hint %}
+            <div class="ay-clarification__hint">{{ clarification.question.hint }}</div>
+          {% endif %}
+
+          {% if clarification.question.kind == "text" %}
+            <textarea
+              class="ay-clarification__textarea"
+              name="answer_{{ clarification.question.id }}"
+              rows="3"
+              placeholder="Ej.: excluye reembolsos, compara contra el plan…"
+            >{{ clarification.current_answer.text|default:"" }}</textarea>
+          {% else %}
+            <div class="ay-clarification__options">
+              {% for option in clarification.question.options %}
+                {% if clarification.question.selection == "single" %}
+                  <label class="ay-clarification__option{% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %} is-selected{% endif %}">
+                    <input
+                      type="radio"
+                      class="ay-clarification__input"
+                      name="answer_{{ clarification.question.id }}"
+                      value="{{ option.id }}"
+                      {% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %}checked{% endif %}
+                    >
+                    <span class="ay-clarification__option-indicator"></span>
+                    <span class="ay-clarification__option-label">{{ option.label }}</span>
+                  </label>
+                {% else %}
+                  <label class="ay-clarification__option{% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %} is-selected{% endif %}">
+                    <input
+                      type="checkbox"
+                      class="ay-clarification__input"
+                      name="answer_{{ clarification.question.id }}"
+                      value="{{ option.id }}"
+                      {% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %}checked{% endif %}
+                    >
+                    <span class="ay-clarification__option-indicator ay-clarification__option-indicator--check"></span>
+                    <span class="ay-clarification__option-label">{{ option.label }}</span>
+                  </label>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <div class="ay-clarification__footer">
+        <div class="ay-clarification__nav">
+          <button
+            type="submit"
+            name="direction"
+            value="back"
+            class="ay-btn ay-btn--ghost ay-btn--sm"
+            {% if not clarification.can_go_back %}disabled{% endif %}
+          >
+            Atrás
+          </button>
+
+          {% if clarification.is_last_step %}
+            <button
+              type="submit"
+              formaction="{% url 'chat:clarification_submit' conversation_id=clarification.conversation.id %}"
+              formmethod="post"
+              class="ay-btn ay-btn--primary ay-btn--sm"
+              {% if not clarification.can_go_next %}disabled{% endif %}
+            >
+              {{ clarification.next_label }}
+            </button>
+          {% else %}
+            <button
+              type="submit"
+              name="direction"
+              value="next"
+              class="ay-btn ay-btn--primary ay-btn--sm"
+              {% if not clarification.can_go_next %}disabled{% endif %}
+            >
+              {{ clarification.next_label }}
+            </button>
+          {% endif %}
+        </div>
+
+        {% if clarification.allow_skip %}
+          <button
+            type="submit"
+            formaction="{% url 'chat:clarification_submit' conversation_id=clarification.conversation.id %}"
+            formmethod="post"
+            name="skipped"
+            value="1"
+            class="ay-clarification__skip"
+          >
+            Saltar y continuar igual
+          </button>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+</div>
+
+<input
+  id="chat-input"
+  hx-swap-oob="true"
+  class="ay-composer__input"
+  type="text"
+  name="content"
+  placeholder="Ask about artists, albums, sales…"
+  autocomplete="off"
+  disabled
+>

@@ -333,6 +333,21 @@ def _publish_html_artifact_display(tool_input: ToolInput) -> dict[str, str]:
     }
 
 
+def _ask_clarification_display(tool_input: ToolInput) -> dict[str, str]:
+    count = 0
+    if tool_input and isinstance(tool_input.get("questions"), list):
+        count = len(tool_input["questions"])
+    if count:
+        label = f"Precisa {count} {'consulta' if count == 1 else 'consultas'}"
+    else:
+        label = "Precisa consulta"
+    return {
+        "tool_label": label,
+        "tool_tag": "Consulta",
+        "tool_icon": "help-circle",
+    }
+
+
 def _write_todos_display(tool_input: ToolInput) -> dict[str, str]:
     todos = tool_input.get("todos") if tool_input else None
     count = len(todos) if isinstance(todos, list) else 0
@@ -364,6 +379,7 @@ TOOL_DISPLAY_BUILDERS: dict[str, DisplayBuilder] = {
     "hydrate_html_artifact": _hydrate_html_artifact_display,
     "validate_html_artifact": _validate_html_artifact_display,
     "publish_html_artifact": _publish_html_artifact_display,
+    "ask_clarification": _ask_clarification_display,
     "write_todos": _write_todos_display,
     "read_file": _read_file_display,
     "write_file": _write_file_display,

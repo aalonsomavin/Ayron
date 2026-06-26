@@ -2,10 +2,12 @@ import logging
 import time
 
 from celery import shared_task
+from langgraph.types import Command
 from openai import OpenAIError
 
 from apps.agent.cancellation import AgentCancelledError, clear_cancel, is_cancelled
 from apps.agent.checkpoint import agent_config, has_checkpoint, rollback_thread_to_turn
+from apps.agent.clarification_interrupt import find_clarification_tool_call, has_clarification_interrupt
 from apps.agent.context import set_agent_context
 from apps.agent.deliverable_intent import detect_deliverable_intent
 from apps.agent.events import persist_event
@@ -59,9 +61,23 @@ def build_stream_input(
     conversation: Conversation,
     user_message: Message,
     assistant_message_id: int,
-) -> tuple[dict, dict]:
+    *,
+    resume_tool_call_id: str = "",
+    resume_tool_result: str = "",
+) -> tuple[dict | Command, dict]:
     config = agent_config(conversation.id)
-    if has_checkpoint(conversation.id):
+    if resume_tool_result:
+        input_state = Command(
+            resume={
+                "decisions": [
+                    {
+                        "type": "respond",
+                        "message": resume_tool_result,
+                    }
+                ]
+            }
+        )
+    elif has_checkpoint(conversation.id):
         input_state = {"messages": [{"role": "user", "content": user_message.content}]}
     else:
         input_state = {
@@ -73,8 +89,49 @@ def build_stream_input(
     return input_state, config
 
 
+def finalize_awaiting_clarification(
+    *,
+    conversation: Conversation,
+    assistant_message: Message,
+    handler: StreamEventHandler,
+    agent,
+    config: dict,
+) -> bool:
+    state = agent.get_state(config)
+    if not has_clarification_interrupt(state):
+        return False
+
+    messages = (state.values or {}).get("messages", []) if state else []
+    handler.ensure_clarification_event(messages)
+
+    conversation.refresh_from_db()
+    if conversation.status != Conversation.Status.PROCESSING:
+        return True
+
+    assistant_message.content = handler.get_content()
+    assistant_message.save(update_fields=["content"])
+
+    persist_event(
+        conversation=conversation,
+        event_type=AgentEvent.EventType.DONE,
+        payload={"awaiting_clarification": True},
+        message=assistant_message,
+    )
+
+    conversation.status = Conversation.Status.AWAITING_CLARIFICATION
+    conversation.save(update_fields=["status", "updated_at"])
+    return True
+
+
 @shared_task(bind=True)
-def run_agent_conversation(self, conversation_id, user_message_id, assistant_message_id):
+def run_agent_conversation(
+    self,
+    conversation_id,
+    user_message_id,
+    assistant_message_id,
+    resume_tool_call_id="",
+    resume_tool_result="",
+):
     conversation = Conversation.objects.get(id=conversation_id)
     user_message = Message.objects.get(
         id=user_message_id,
@@ -106,6 +163,8 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
             conversation,
             user_message,
             assistant_message.id,
+            resume_tool_call_id=resume_tool_call_id,
+            resume_tool_result=resume_tool_result,
         )
 
         for attempt in range(1, MAX_LLM_RETRIES + 1):
@@ -129,6 +188,15 @@ def run_agent_conversation(self, conversation_id, user_message_id, assistant_mes
                     },
                 )
                 time.sleep(min(2**attempt, 10))
+
+        if finalize_awaiting_clarification(
+            conversation=conversation,
+            assistant_message=assistant_message,
+            handler=handler,
+            agent=agent,
+            config=config,
+        ):
+            return
 
         conversation.refresh_from_db()
         if conversation.status != Conversation.Status.PROCESSING:

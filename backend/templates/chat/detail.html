@@ -38,6 +38,8 @@
                                 {% include "components/file_card.html" with file=file active=False %}
                               {% endfor %}
                             </div>
+                          {% elif block.type == "clarification" %}
+                            {% include "chat/partials/clarification_panel.html" with clarification=block %}
                           {% endif %}
                         {% endfor %}
                       </div>
@@ -90,10 +92,10 @@
               class="ay-composer__input"
               placeholder="Ask about artists, albums, sales…"
               autocomplete="off"
-              {% if conversation.status == "processing" %}disabled{% endif %}
+              {% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %}disabled{% endif %}
             />
             <div class="ay-composer__actions">
-              <span id="chat-send-wrap"{% if conversation.status == "processing" %} hidden{% endif %}>
+              <span id="chat-send-wrap"{% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %} hidden{% endif %}>
                 {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
               </span>
               <span id="chat-stop-wrap"{% if conversation.status != "processing" %} hidden{% endif %}>
@@ -134,6 +136,7 @@
   const streamUrl = "{% url 'chat:stream' conversation_id=conversation.id %}";
   const stopUrl = "{% url 'chat:stop' conversation_id=conversation.id %}";
   const retryUrl = "{% url 'chat:retry' conversation_id=conversation.id %}";
+  const clarificationWizardUrl = "{% url 'chat:clarification_wizard' conversation_id=conversation.id %}";
   let lastAppliedSeq = -1;
   let eventSource = null;
   let streamContainer = null;
@@ -254,14 +257,16 @@
 
   function setConversationStatus(status) {
     const processing = status === "processing";
-    inputEl.disabled = processing;
-    if (sendWrapEl) sendWrapEl.hidden = processing;
+    const awaitingClarification = status === "awaiting_clarification";
+    const inputLocked = processing || awaitingClarification;
+    inputEl.disabled = inputLocked;
+    if (sendWrapEl) sendWrapEl.hidden = inputLocked;
     if (stopWrapEl) stopWrapEl.hidden = !processing;
-    if (sendEl) sendEl.disabled = processing;
+    if (sendEl) sendEl.disabled = inputLocked;
     if (stopEl && !processing) stopEl.disabled = false;
     if (!statusEl) return;
     statusEl.textContent = status;
-    const tone = status === "processing" ? "warning" : status === "failed" ? "danger" : "success";
+    const tone = processing ? "warning" : status === "failed" ? "danger" : awaitingClarification ? "warning" : "success";
     statusEl.className = "ay-badge ay-badge--" + tone;
   }
 
@@ -491,6 +496,7 @@
       existing.classList.remove("ay-msg-agent--cancelled");
       const cancelled = existing.querySelector(".ay-msg-agent__cancelled");
       if (cancelled) cancelled.remove();
+      hideThinking();
       mountAgentAvatar(existing.querySelector(".ay-agent-avatar"), true);
       isStreaming = true;
       return streamContainer;
@@ -896,6 +902,46 @@
     }
   }
 
+  function syncClarificationNav(root) {
+    if (!root) return;
+    const form = root.querySelector(".ay-clarification__form");
+    if (!form) return;
+    const optional = root.dataset.questionOptional === "true";
+    let valid = optional;
+    if (!valid) {
+      const textarea = form.querySelector(".ay-clarification__textarea");
+      if (textarea) {
+        valid = textarea.value.trim().length > 0;
+      } else {
+        valid = form.querySelectorAll(".ay-clarification__options input:checked").length > 0;
+      }
+    }
+    const nextBtn = form.querySelector(".ay-clarification__nav .ay-btn--primary");
+    if (nextBtn) {
+      nextBtn.disabled = !valid;
+    }
+  }
+
+  function mountClarificationWizard(bubble, event) {
+    if (!bubble || !event.tool_call_id || !window.htmx) return;
+    const contentEl = bubble.querySelector(".ay-msg-agent__content") || bubble;
+    const params = new URLSearchParams({
+      assistant_message_id: String(event.message_id || getProcessingMessageId() || ""),
+      tool_call_id: event.tool_call_id,
+      step: "0",
+    });
+    window.htmx.ajax("GET", clarificationWizardUrl + "?" + params.toString(), {
+      target: contentEl,
+      swap: "beforeend",
+    }).then(function () {
+      const wizard = contentEl.querySelector(".ay-clarification:last-of-type");
+      if (wizard) {
+        syncClarificationNav(wizard);
+        wizard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    });
+  }
+
   function applyEvent(event) {
     if (event.seq <= lastAppliedSeq) return;
     lastAppliedSeq = event.seq;
@@ -964,6 +1010,9 @@
       appendTableBlock(bubble, event);
     } else if (event.type === "chart" && bubble) {
       appendChartBlock(bubble, event);
+    } else if (event.type === "clarification" && bubble) {
+      finalizeCurrentTextBlock();
+      mountClarificationWizard(bubble, event);
     } else if ((event.type === "file_created" || event.type === "file_updated") && bubble) {
       finalizeCurrentTextBlock();
       if (window.AyronArtifact) {
@@ -986,6 +1035,9 @@
         } else if (doneMessageId) {
           markBubbleCancelled(ensureCancelledBubble(doneMessageId));
         }
+      } else if (event.awaiting_clarification) {
+        hideThinking();
+        setConversationStatus("awaiting_clarification");
       } else {
         const doneMessageId = event.message_id || getProcessingMessageId();
         const doneBubble = streamContainer || (
@@ -999,10 +1051,14 @@
           if (trace) appendDoneTraceItem(trace);
         }
       }
-      activeMessageId = null;
+      if (!event.awaiting_clarification) {
+        activeMessageId = null;
+      }
       finalizeStreamBubble();
-      hideThinking();
-      setConversationStatus("active");
+      if (!event.awaiting_clarification) {
+        hideThinking();
+        setConversationStatus("active");
+      }
       closeStream();
     }
 
@@ -1019,7 +1075,13 @@
   function finishIdleState(status) {
     finalizeStreamBubble();
     hideThinking();
-    setConversationStatus(status === "failed" ? "failed" : "active");
+    if (status === "failed") {
+      setConversationStatus("failed");
+    } else if (status === "awaiting_clarification") {
+      setConversationStatus("awaiting_clarification");
+    } else {
+      setConversationStatus("active");
+    }
     activeMessageId = null;
     closeStream();
   }
@@ -1044,7 +1106,7 @@
   function openStream() {
     closeStream();
     eventSource = new EventSource(streamUrl + "?after=" + lastAppliedSeq);
-    ["token", "plan", "tool_start", "tool_end", "table", "chart", "file_created", "file_updated", "error", "done"].forEach(function (type) {
+    ["token", "plan", "tool_start", "tool_end", "table", "chart", "clarification", "file_created", "file_updated", "error", "done"].forEach(function (type) {
       eventSource.addEventListener(type, function (e) {
         try {
           applyEvent(JSON.parse(e.data));
@@ -1223,6 +1285,51 @@
   window.addEventListener("resize", function () {
     scheduleFloatingUserPill();
   }, { passive: true });
+
+  document.body.addEventListener("ayronResumeStream", function (e) {
+    const detail = e.detail || {};
+    const messageId = detail.assistant_message_id;
+    if (messageId) {
+      activeMessageId = messageId;
+    }
+    if (typeof detail.last_sequence === "number") {
+      lastAppliedSeq = detail.last_sequence;
+    }
+    hideThinking();
+    finalizeStreamBubble();
+    if (messageId) {
+      ensureStreamBubble(messageId);
+    } else {
+      showThinking();
+    }
+    setConversationStatus("processing");
+    closeStream();
+    openStream();
+    scrollToBottom(true);
+  });
+
+  document.body.addEventListener("change", function (e) {
+    const root = e.target.closest(".ay-clarification");
+    if (root && e.target.closest(".ay-clarification__options")) {
+      syncClarificationNav(root);
+    }
+  });
+
+  document.body.addEventListener("input", function (e) {
+    if (!e.target.classList.contains("ay-clarification__textarea")) return;
+    const root = e.target.closest(".ay-clarification");
+    if (root) syncClarificationNav(root);
+  });
+
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    const target = e.detail.target;
+    const root = target.classList && target.classList.contains("ay-clarification")
+      ? target
+      : (target.querySelector ? target.querySelector(".ay-clarification") : null);
+    if (root) syncClarificationNav(root);
+  });
+
+  chatThreadEl.querySelectorAll(".ay-clarification").forEach(syncClarificationNav);
 
   scrollToBottom(true);
   updateFloatingUserPill();

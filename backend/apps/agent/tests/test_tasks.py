@@ -11,6 +11,7 @@ from apps.agent.streaming import StreamEventHandler
 from apps.agent.tasks import (
     LLM_RETRY_MESSAGE,
     build_stream_input,
+    finalize_awaiting_clarification,
     format_agent_error,
     run_agent_conversation,
 )
@@ -98,6 +99,26 @@ class TestBuildStreamInput:
             )
         assert config == {"configurable": {"thread_id": str(conversation.id)}}
         assert input_state["messages"] == [{"role": "user", "content": "Top 5 artists"}]
+
+    def test_resume_with_hitl_command(self, conversation_with_messages):
+        from langgraph.types import Command
+
+        conversation, user_message, assistant_message = conversation_with_messages
+        input_state, config = build_stream_input(
+            conversation,
+            user_message,
+            assistant_message.id,
+            resume_tool_result="Respuestas del usuario:\n- Periodo: Este año",
+        )
+        assert isinstance(input_state, Command)
+        assert input_state.resume == {
+            "decisions": [
+                {
+                    "type": "respond",
+                    "message": "Respuestas del usuario:\n- Periodo: Este año",
+                }
+            ]
+        }
 
 
 @pytest.mark.django_db

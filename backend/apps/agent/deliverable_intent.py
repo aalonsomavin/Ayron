@@ -114,6 +114,9 @@ def format_deliverable_prompt_block(intent: DeliverableIntent) -> str:
 
 El usuario pidió un archivo compartible (informe, dashboard o reporte HTML).
 
+0. Si hay ambigüedades relevantes para el entregable y no puedes inferir defaults \
+razonables, invoca `ask_clarification` con las preguntas que consideres necesarias \
+(1–6) y detente hasta recibir respuestas. No preguntes en texto del chat.
 1. Planifica con `write_todos` antes de consultar datos. El último paso debe ser \
 **Publicar artifact** (`validate_html_artifact` + `publish_html_artifact`).
 2. Consulta datos con SQL si hace falta; `show_data_table` y `show_chart` son pasos \
@@ -131,6 +134,9 @@ intermedios, no sustituyen el archivo.
 
 El usuario pidió un documento Word descargable.
 
+0. Si hay ambigüedades relevantes para el entregable y no puedes inferir defaults \
+razonables, invoca `ask_clarification` con las preguntas que consideres necesarias \
+(1–6) y detente hasta recibir respuestas. No preguntes en texto del chat.
 1. Planifica con `write_todos` antes de consultar datos. El último paso debe ser \
 **Generar archivo con create_document**.
 2. Consulta datos con SQL si hace falta; tablas y gráficos del chat son pasos \
@@ -146,6 +152,9 @@ intermedios, no sustituyen el documento.
 
 El usuario pidió una hoja de cálculo o exportación tabular descargable.
 
+0. Si hay ambigüedades relevantes para el entregable y no puedes inferir defaults \
+razonables, invoca `ask_clarification` con las preguntas que consideres necesarias \
+(1–6) y detente hasta recibir respuestas. No preguntes en texto del chat.
 1. Planifica con `write_todos` antes de consultar datos. El último paso debe ser \
 **Generar archivo con create_spreadsheet**.
 2. Consulta datos con SQL si hace falta; tablas del chat son pasos intermedios, \
@@ -161,6 +170,9 @@ no sustituyen el archivo Excel.
 
 El usuario pidió modificar un informe, dashboard, documento o hoja de cálculo ya generado.
 
+0. Si hay ambigüedades relevantes para la modificación y no puedes inferir defaults \
+razonables, invoca `ask_clarification` con las preguntas que consideres necesarias \
+(1–6) y detente hasta recibir respuestas. No preguntes en texto del chat.
 1. Planifica con `write_todos`. El último paso debe ser **Publicar artifact** con \
 `hydrate_html_artifact` → editar en workspace → `validate_html_artifact` → \
 `publish_html_artifact(file_id=...)` para HTML, `update_document` para Word, o \

@@ -6,6 +6,8 @@ from apps.agent.deliverable_intent import (
     detect_deliverable_intent,
     format_deliverable_prompt_block,
 )
+from langchain.agents.middleware import InterruptOnConfig
+
 from apps.agent.middleware.deliverable_guard import DeliverableGuardMiddleware
 from apps.agent.middleware.tool_errors import ToolFailureFeedbackMiddleware
 
@@ -182,6 +184,17 @@ de la base; no inventes cifras.
 - No des por terminada la tarea hasta que `publish_html_artifact`, `create_document`, \
   `create_spreadsheet`, `update_document` o `update_spreadsheet` devuelvan `"ok": true`.
 - Tras crear o actualizar el archivo, no repitas su contenido en el chat.
+
+## Consultas de aclaración
+
+- Si la petición tiene ambigüedades que cambiarían cómo ejecutas la tarea (alcance, \
+  filtros, audiencia, formato, exclusiones, prioridades, etc.) y no puedes inferir \
+  defaults razonables, invoca `ask_clarification` **antes** de `write_todos` o cualquier \
+  consulta SQL. Formula las preguntas que consideres necesarias (1–6), adaptadas al pedido.
+- **Nunca** hagas preguntas de aclaración en texto del chat; usa solo `ask_clarification`.
+- No la uses para preguntas analíticas simples que puedas resolver consultando datos.
+- Si puedes avanzar con supuestos razonables sin arriesgar el entregable, no aclares.
+- Tras invocar `ask_clarification`, **detente**: no escribas más texto ni llames otras tools.
 """
 
 
@@ -198,6 +211,13 @@ def build_system_prompt(conversation: Conversation, user_message: str = "") -> s
     return prompt
 
 
+CLARIFICATION_INTERRUPT_ON = {
+    "ask_clarification": InterruptOnConfig(
+        allowed_decisions=["respond"],
+    ),
+}
+
+
 def create_agent(conversation: Conversation, user_message: str = ""):
     backend = build_agent_backend()
     set_agent_backend(backend)
@@ -212,5 +232,6 @@ def create_agent(conversation: Conversation, user_message: str = ""):
             DeliverableGuardMiddleware(),
             ToolFailureFeedbackMiddleware(),
         ],
+        interrupt_on=CLARIFICATION_INTERRUPT_ON,
         checkpointer=get_checkpointer(),
     )

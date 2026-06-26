@@ -8,6 +8,7 @@ class Conversation(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         PROCESSING = "processing", "Processing"
+        AWAITING_CLARIFICATION = "awaiting_clarification", "Awaiting Clarification"
         FAILED = "failed", "Failed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -18,7 +19,7 @@ class Conversation(models.Model):
     )
     title = models.CharField(max_length=255, blank=True)
     status = models.CharField(
-        max_length=20,
+        max_length=24,
         choices=Status.choices,
         default=Status.ACTIVE,
     )
@@ -65,6 +66,7 @@ class AgentEvent(models.Model):
         FILE_CREATED = "file_created", "File Created"
         FILE_UPDATED = "file_updated", "File Updated"
         ERROR = "error", "Error"
+        CLARIFICATION = "clarification", "Clarification"
         DONE = "done", "Done"
 
     conversation = models.ForeignKey(

@@ -1,3 +1,4 @@
+from apps.agent.tools.clarification import ask_clarification
 from apps.agent.tools.chart import show_chart
 from apps.agent.tools.document import (
     create_document,
@@ -24,6 +25,7 @@ AGENT_TOOLS = [
     run_sql_query,
     show_data_table,
     show_chart,
+    ask_clarification,
     create_document,
     create_spreadsheet,
     hydrate_html_artifact,
@@ -57,6 +59,7 @@ __all__ = [
     "publish_html_artifact",
     "run_sql_query",
     "show_chart",
+    "ask_clarification",
     "show_data_table",
     "update_document",
     "update_spreadsheet",

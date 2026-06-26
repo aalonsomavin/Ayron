@@ -16,8 +16,24 @@ from apps.agent.tools.chart import prepare_chart_for_render
 from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
-from apps.chat.tool_trace import tool_trace_for_message
+from apps.chat.clarification import (
+    apply_step_navigation,
+    bad_request,
+    build_wizard_context,
+    enqueue_clarification_resume,
+    get_clarification_event,
+    load_wizard_state,
+    parse_wizard_request,
+    pending_clarification_assistant_message,
+    validate_final_answers,
+)
+from apps.agent.tools.clarification import (
+    format_clarification_tool_result,
+    merge_step_answer,
+    parse_step_answer_from_post,
+)
 from apps.files.services import hydrate_file_payload_for_ui
+from apps.chat.tool_trace import tool_trace_for_message
 from config.celery import app as celery_app
 
 
@@ -169,6 +185,24 @@ def _content_blocks_for_message(message: Message, *, user=None) -> list[dict]:
                 }
             )
             can_merge_token = False
+        elif event.event_type == AgentEvent.EventType.CLARIFICATION:
+            payload = dict(event.payload)
+            tool_call_id = payload.get("tool_call_id", "")
+            answers = payload.get("answers") or {}
+            blocks.append(
+                {
+                    "type": "clarification",
+                    **build_wizard_context(
+                        conversation=message.conversation,
+                        payload=payload,
+                        assistant_message_id=message.id,
+                        tool_call_id=tool_call_id,
+                        step=0,
+                        answers=answers,
+                    ),
+                }
+            )
+            can_merge_token = False
         elif event.event_type in (
             AgentEvent.EventType.FILE_CREATED,
             AgentEvent.EventType.FILE_UPDATED,
@@ -283,6 +317,41 @@ def _aggregate_message_content(message: Message) -> str:
     return "".join(parts)
 
 
+def _finalize_clarification_cancel(conversation: Conversation) -> bool:
+    conversation.refresh_from_db()
+    if conversation.status != Conversation.Status.AWAITING_CLARIFICATION:
+        return False
+
+    assistant_message = pending_clarification_assistant_message(conversation)
+    if assistant_message is None:
+        conversation.status = Conversation.Status.ACTIVE
+        conversation.save(update_fields=["status", "updated_at"])
+        return True
+
+    user_message = _user_message_for_assistant(assistant_message)
+    if user_message is not None:
+        rollback_thread_to_turn(
+            conversation,
+            user_message,
+            include_user_message=True,
+        )
+
+    content = _aggregate_message_content(assistant_message)
+    if content:
+        assistant_message.content = content
+        assistant_message.save(update_fields=["content"])
+
+    persist_event(
+        conversation=conversation,
+        event_type=AgentEvent.EventType.DONE,
+        payload={"cancelled": True},
+        message=assistant_message,
+    )
+    conversation.status = Conversation.Status.ACTIVE
+    conversation.save(update_fields=["status", "updated_at"])
+    return True
+
+
 def _finalize_cancelled_conversation(conversation: Conversation) -> bool:
     conversation.refresh_from_db()
     if conversation.status != Conversation.Status.PROCESSING:
@@ -387,6 +456,9 @@ def send_message(request, conversation_id):
     if conversation.status == Conversation.Status.PROCESSING:
         return HttpResponseBadRequest("Conversation is already processing a message.")
 
+    if conversation.status == Conversation.Status.AWAITING_CLARIFICATION:
+        return HttpResponseBadRequest("Complete or skip the clarification request first.")
+
     content = request.POST.get("content", "").strip()
     if not content:
         return HttpResponseBadRequest("Message content is required.")
@@ -407,6 +479,10 @@ def send_message(request, conversation_id):
 @require_POST
 def stop_conversation(request, conversation_id):
     conversation = _get_conversation(request, conversation_id)
+
+    if conversation.status == Conversation.Status.AWAITING_CLARIFICATION:
+        _finalize_clarification_cancel(conversation)
+        return HttpResponse(status=204)
 
     if conversation.status != Conversation.Status.PROCESSING:
         return HttpResponseBadRequest("Conversation is not processing a message.")
@@ -556,6 +632,169 @@ def event_stream(request, conversation_id):
     response["Cache-Control"] = "no-cache"
     response["X-Accel-Buffering"] = "no"
     return response
+
+
+def _render_clarification_partial(request, context: dict):
+    wrapped = {"clarification": context}
+    if context.get("submitted"):
+        template = "chat/partials/clarification_dismissed.html"
+    else:
+        template = "chat/partials/clarification_wizard.html"
+    return render(request, template, wrapped)
+
+
+def _clarification_oob_response(request, context: dict, *, trigger: dict | None = None):
+    response = _render_clarification_partial(request, context)
+    if context.get("submitted"):
+        response["HX-Reswap"] = "delete"
+    if trigger:
+        response["HX-Trigger"] = json.dumps(trigger)
+    return response
+
+
+@require_GET
+def clarification_wizard(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    try:
+        assistant_message_id, tool_call_id, step, answers, _answers_json = parse_wizard_request(
+            request
+        )
+    except ValueError as exc:
+        return bad_request(str(exc))
+
+    event = get_clarification_event(conversation, assistant_message_id, tool_call_id)
+    if event is None:
+        return bad_request("Clarification request not found")
+
+    payload = dict(event.payload)
+    if payload.get("submitted"):
+        context = build_wizard_context(
+            conversation=conversation,
+            payload=payload,
+            assistant_message_id=assistant_message_id,
+            tool_call_id=tool_call_id,
+            step=0,
+            answers=payload.get("answers") or {},
+        )
+        return _render_clarification_partial(request, context)
+
+    if conversation.status != Conversation.Status.AWAITING_CLARIFICATION:
+        return bad_request("Conversation is not awaiting clarification")
+
+    context = build_wizard_context(
+        conversation=conversation,
+        payload=payload,
+        assistant_message_id=assistant_message_id,
+        tool_call_id=tool_call_id,
+        step=step,
+        answers=answers,
+    )
+    return _render_clarification_partial(request, context)
+
+
+@require_POST
+def clarification_step(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    try:
+        assistant_message_id, tool_call_id, step, answers, _answers_json = parse_wizard_request(
+            request
+        )
+        _event, payload = load_wizard_state(conversation, assistant_message_id, tool_call_id)
+        direction = (request.POST.get("direction") or "next").strip().lower()
+        if direction not in {"next", "back"}:
+            return bad_request("Invalid direction")
+        step, answers = apply_step_navigation(
+            payload=payload,
+            step=step,
+            answers=answers,
+            post_data=request.POST,
+            direction=direction,
+        )
+    except ValueError as exc:
+        return bad_request(str(exc))
+
+    context = build_wizard_context(
+        conversation=conversation,
+        payload=payload,
+        assistant_message_id=assistant_message_id,
+        tool_call_id=tool_call_id,
+        step=step,
+        answers=answers,
+    )
+    return _render_clarification_partial(request, context)
+
+
+@require_POST
+def clarification_submit(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    try:
+        assistant_message_id, tool_call_id, step, answers, _answers_json = parse_wizard_request(
+            request
+        )
+        event, payload = load_wizard_state(conversation, assistant_message_id, tool_call_id)
+        skipped = request.POST.get("skipped") == "1"
+        assistant_message = Message.objects.get(
+            id=assistant_message_id,
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+        )
+
+        if skipped:
+            if not payload.get("allow_skip", True):
+                return bad_request("Skip is not allowed")
+            final_answers = None
+        else:
+            questions = payload.get("questions", [])
+            if questions:
+                last_question = questions[min(step, len(questions) - 1)]
+                step_answer = parse_step_answer_from_post(last_question, request.POST)
+                answers = merge_step_answer(answers, last_question["id"], step_answer)
+            final_answers = validate_final_answers(payload, answers)
+
+        tool_result = format_clarification_tool_result(
+            payload,
+            final_answers,
+            skipped=skipped,
+        )
+
+        updated_payload = {
+            **payload,
+            "submitted": True,
+            "skipped": skipped,
+            "answers": final_answers,
+        }
+        event.payload = updated_payload
+        event.save(update_fields=["payload"])
+
+        enqueue_clarification_resume(
+            conversation,
+            assistant_message,
+            tool_call_id=tool_call_id,
+            tool_result=tool_result,
+        )
+
+        context = build_wizard_context(
+            conversation=conversation,
+            payload=updated_payload,
+            assistant_message_id=assistant_message_id,
+            tool_call_id=tool_call_id,
+            step=0,
+            answers=final_answers or {},
+        )
+        return _clarification_oob_response(
+            request,
+            context,
+            trigger={
+                "ayronResumeStream": {
+                    "assistant_message_id": assistant_message_id,
+                    "last_sequence": _conversation_last_sequence(conversation),
+                }
+            },
+        )
+    except ValueError as exc:
+        return bad_request(str(exc))
+    except Message.DoesNotExist:
+        return bad_request("Assistant message not found")
 
 
 @require_POST

@@ -1133,3 +1133,197 @@ class TestConversationSidebarActions:
         assert saved[0].file_id == file_obj.id
         file_obj.refresh_from_db()
         assert file_obj.conversation_id is None
+
+
+@pytest.fixture
+def clarification_payload():
+    return {
+        "tool_call_id": "call-clarify-1",
+        "questions": [
+            {
+                "id": "periodo",
+                "title": "Periodo a analizar",
+                "hint": "",
+                "kind": "choice",
+                "selection": "single",
+                "optional": False,
+                "options": [
+                    {"id": "last_30d", "label": "Últimos 30 días"},
+                    {"id": "year", "label": "Este año"},
+                ],
+            },
+            {
+                "id": "notas",
+                "title": "Notas adicionales",
+                "hint": "",
+                "kind": "text",
+                "selection": "single",
+                "optional": True,
+                "options": [],
+            },
+        ],
+        "allow_skip": True,
+        "submit_label": "Analizar con esto",
+        "submitted": False,
+        "skipped": False,
+        "answers": None,
+    }
+
+
+@pytest.mark.django_db
+class TestClarificationViews:
+    def test_send_rejects_while_awaiting_clarification(self, client, user, conversation):
+        conversation.status = Conversation.Status.AWAITING_CLARIFICATION
+        conversation.save()
+        client.force_login(user)
+        url = reverse("chat:send", kwargs={"conversation_id": conversation.id})
+        response = client.post(url, {"content": "Otra pregunta"})
+        assert response.status_code == 400
+
+    def test_wizard_renders_first_step(self, client, user, conversation, clarification_payload):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Precisemos algunas cosas.",
+        )
+        conversation.status = Conversation.Status.AWAITING_CLARIFICATION
+        conversation.save()
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.CLARIFICATION,
+            payload=clarification_payload,
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:clarification_wizard", kwargs={"conversation_id": conversation.id})
+        response = client.get(
+            url,
+            {
+                "assistant_message_id": assistant_message.id,
+                "tool_call_id": clarification_payload["tool_call_id"],
+                "step": "0",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        assert b"Paso 1 de 2" in response.content
+        assert b"Periodo a analizar" in response.content
+        assert b"clarification-call-clarify-1" in response.content
+
+    def test_step_next_renders_second_step(self, client, user, conversation, clarification_payload):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        conversation.status = Conversation.Status.AWAITING_CLARIFICATION
+        conversation.save()
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.CLARIFICATION,
+            payload=clarification_payload,
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:clarification_step", kwargs={"conversation_id": conversation.id})
+        response = client.post(
+            url,
+            {
+                "assistant_message_id": assistant_message.id,
+                "tool_call_id": clarification_payload["tool_call_id"],
+                "step": "0",
+                "direction": "next",
+                "answers_json": "{}",
+                "answer_periodo": "year",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        assert b"Paso 2 de 2" in response.content
+        assert b"Notas adicionales" in response.content
+
+    def test_submit_skip_resumes_agent(self, client, user, conversation, clarification_payload):
+        user_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Analiza ventas",
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        conversation.status = Conversation.Status.AWAITING_CLARIFICATION
+        conversation.save()
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.CLARIFICATION,
+            payload=clarification_payload,
+            sequence_number=0,
+        )
+
+        client.force_login(user)
+        url = reverse("chat:clarification_submit", kwargs={"conversation_id": conversation.id})
+
+        with patch("apps.chat.clarification.run_agent_conversation") as mock_task:
+            mock_task.delay.return_value = MagicMock(id="task-resume")
+            response = client.post(
+                url,
+                {
+                    "assistant_message_id": assistant_message.id,
+                    "tool_call_id": clarification_payload["tool_call_id"],
+                    "step": "0",
+                    "answers_json": "{}",
+                    "skipped": "1",
+                },
+                HTTP_HX_REQUEST="true",
+            )
+
+        assert response.status_code == 200
+        assert b"Analizando" not in response.content
+        assert response.headers.get("HX-Reswap") == "delete"
+        assert "ayronResumeStream" in response.headers.get("HX-Trigger", "")
+
+        conversation.refresh_from_db()
+        assert conversation.status == Conversation.Status.PROCESSING
+        assert conversation.celery_task_id == "task-resume"
+
+        event = AgentEvent.objects.get(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.CLARIFICATION,
+        )
+        assert event.payload["submitted"] is True
+        assert event.payload["skipped"] is True
+
+        mock_task.delay.assert_called_once()
+        args = mock_task.delay.call_args.args
+        assert args[0] == str(conversation.id)
+        assert args[1] == user_message.id
+        assert args[2] == assistant_message.id
+
+    def test_content_blocks_include_clarification(self, user, conversation, clarification_payload):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="Intro",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.CLARIFICATION,
+            payload=clarification_payload,
+            sequence_number=0,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message, user=user)
+        clarification_blocks = [block for block in blocks if block["type"] == "clarification"]
+        assert len(clarification_blocks) == 1
+        assert clarification_blocks[0]["question"]["id"] == "periodo"
+        assert clarification_blocks[0]["total_steps"] == 2

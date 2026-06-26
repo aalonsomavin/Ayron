@@ -88,4 +88,5 @@ class TestPlatformSkills:
         assert len(kwargs["middleware"]) == 2
         assert kwargs["middleware"][0].__class__.__name__ == "DeliverableGuardMiddleware"
         assert kwargs["middleware"][1].__class__.__name__ == "ToolFailureFeedbackMiddleware"
+        assert kwargs["interrupt_on"]["ask_clarification"]["allowed_decisions"] == ["respond"]
         assert kwargs["checkpointer"] is not None
