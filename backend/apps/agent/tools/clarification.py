@@ -37,6 +37,8 @@ MAX_HINT_LEN = 200
 MAX_SUBMIT_LABEL_LEN = 60
 MAX_OPTION_LABEL_LEN = 80
 MAX_TEXT_ANSWER_LEN = 500
+OTHER_OPTION_ID = "other"
+OTHER_OPTION_LABEL = "Otro:"
 QUESTION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 OPTION_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 
@@ -64,6 +66,14 @@ def _normalize_option(raw: dict, index: int) -> dict:
     if len(label) > MAX_OPTION_LABEL_LEN:
         raise ValueError(f"Option {index + 1} label exceeds {MAX_OPTION_LABEL_LEN} characters")
     return {"id": option_id, "label": label}
+
+
+def _inject_other_option(options: list[dict]) -> list[dict]:
+    filtered = [option for option in options if option["id"] != OTHER_OPTION_ID]
+    return [
+        *filtered,
+        {"id": OTHER_OPTION_ID, "label": OTHER_OPTION_LABEL},
+    ]
 
 
 def _normalize_question(raw: dict, index: int) -> dict:
@@ -107,6 +117,7 @@ def _normalize_question(raw: dict, index: int) -> dict:
         option_ids = [item["id"] for item in options]
         if len(set(option_ids)) != len(option_ids):
             raise ValueError(f"Question {index + 1} option ids must be unique")
+        options = _inject_other_option(options)
 
     return {
         "id": question_id,
@@ -174,7 +185,15 @@ def _answer_labels(question: dict, answer: dict) -> list[str]:
     if not isinstance(selected, list):
         return []
     labels_by_id = {option["id"]: option["label"] for option in question["options"]}
-    return [labels_by_id[item] for item in selected if item in labels_by_id]
+    other_text = str((answer or {}).get("text", "")).strip()
+    labels = []
+    for item in selected:
+        if item == OTHER_OPTION_ID:
+            if other_text:
+                labels.append(other_text)
+        elif item in labels_by_id:
+            labels.append(labels_by_id[item])
+    return labels
 
 
 def format_clarification_summary(payload: dict, answers: dict | None, skipped: bool) -> str:
@@ -248,7 +267,14 @@ def validate_step_answer(question: dict, answer: dict | None) -> dict:
     elif not selected and not question.get("optional"):
         raise ValueError("Selecciona al menos una opción para continuar")
 
-    return {"selected": selected}
+    text = str((answer or {}).get("text", "")).strip()
+    if OTHER_OPTION_ID in selected:
+        if not text:
+            raise ValueError("Especifica tu respuesta en Otro")
+        if len(text) > MAX_TEXT_ANSWER_LEN:
+            raise ValueError(f"La respuesta no puede superar {MAX_TEXT_ANSWER_LEN} caracteres")
+
+    return {"selected": selected, "text": text if OTHER_OPTION_ID in selected else ""}
 
 
 def merge_step_answer(answers: dict, question_id: str, step_answer: dict) -> dict:
@@ -272,12 +298,16 @@ def parse_step_answer_from_post(question: dict, post_data) -> dict:
     if question["kind"] == "text":
         return {"text": str(post_data.get(f"answer_{qid}", "")).strip()}
 
+    other_text = str(post_data.get(f"answer_{qid}_other_text", "")).strip()
     if question["selection"] == "single":
         value = str(post_data.get(f"answer_{qid}", "")).strip()
-        return {"selected": [value] if value else []}
+        return {"selected": [value] if value else [], "text": other_text}
 
     values = post_data.getlist(f"answer_{qid}")
-    return {"selected": [str(item).strip() for item in values if str(item).strip()]}
+    return {
+        "selected": [str(item).strip() for item in values if str(item).strip()],
+        "text": other_text,
+    }
 
 
 @tool
@@ -298,6 +328,8 @@ def ask_clarification(
     Pass 1-6 questions. Each question needs a stable lowercase id, title, and either:
     - kind=choice with selection single|multiple and at least 2 options (id + label), or
     - kind=text for free-text input (set optional=true if the note is not required).
+
+    Choice questions automatically include an "Otro:" option for free-text input; do not add it.
 
     After calling this tool, stop — do not write more text or call other tools.
     """

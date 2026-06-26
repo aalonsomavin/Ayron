@@ -1150,6 +1150,7 @@ def clarification_payload():
                 "options": [
                     {"id": "last_30d", "label": "Últimos 30 días"},
                     {"id": "year", "label": "Este año"},
+                    {"id": "other", "label": "Otro:"},
                 ],
             },
             {
@@ -1211,6 +1212,7 @@ class TestClarificationViews:
         assert response.status_code == 200
         assert b"Paso 1 de 2" in response.content
         assert b"Periodo a analizar" in response.content
+        assert b"Otro:" in response.content
         assert b"clarification-call-clarify-1" in response.content
 
     def test_step_next_renders_second_step(self, client, user, conversation, clarification_payload):

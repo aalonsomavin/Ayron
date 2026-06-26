@@ -90,13 +90,16 @@
               name="content"
               id="chat-input"
               class="ay-composer__input"
-              placeholder="Ask about artists, albums, sales…"
               autocomplete="off"
               {% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %}disabled{% endif %}
             />
             <div class="ay-composer__actions">
-              <span id="chat-send-wrap"{% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %} hidden{% endif %}>
-                {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
+              <span id="chat-send-wrap"{% if conversation.status == "processing" %} hidden{% endif %}>
+                {% if conversation.status == "awaiting_clarification" %}
+                  {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" disabled="disabled" %}
+                {% else %}
+                  {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
+                {% endif %}
               </span>
               <span id="chat-stop-wrap"{% if conversation.status != "processing" %} hidden{% endif %}>
                 {% include "components/button.html" with id="chat-stop" variant="primary" size="sm" type="button" label="Detener" left_icon="stop" %}
@@ -259,11 +262,16 @@
     const processing = status === "processing";
     const awaitingClarification = status === "awaiting_clarification";
     const inputLocked = processing || awaitingClarification;
-    inputEl.disabled = inputLocked;
-    if (sendWrapEl) sendWrapEl.hidden = inputLocked;
-    if (stopWrapEl) stopWrapEl.hidden = !processing;
-    if (sendEl) sendEl.disabled = inputLocked;
-    if (stopEl && !processing) stopEl.disabled = false;
+    const input = document.getElementById("chat-input");
+    const sendWrap = document.getElementById("chat-send-wrap");
+    const send = document.getElementById("chat-send");
+    const stopWrap = document.getElementById("chat-stop-wrap");
+    const stop = document.getElementById("chat-stop");
+    if (input) input.disabled = inputLocked;
+    if (sendWrap) sendWrap.hidden = processing;
+    if (stopWrap) stopWrap.hidden = !processing;
+    if (send) send.disabled = inputLocked;
+    if (stop && !processing) stop.disabled = false;
     if (!statusEl) return;
     statusEl.textContent = status;
     const tone = processing ? "warning" : status === "failed" ? "danger" : awaitingClarification ? "warning" : "success";
@@ -902,6 +910,16 @@
     }
   }
 
+  function ensureClarificationOtherSelected(otherInput) {
+    if (!otherInput || !otherInput.value.trim()) return;
+    const option = otherInput.closest(".ay-clarification__option--other");
+    if (!option) return;
+    const choiceInput = option.querySelector('.ay-clarification__input[value="other"]');
+    if (choiceInput && !choiceInput.checked) {
+      choiceInput.checked = true;
+    }
+  }
+
   function syncClarificationNav(root) {
     if (!root) return;
     const form = root.querySelector(".ay-clarification__form");
@@ -913,7 +931,17 @@
       if (textarea) {
         valid = textarea.value.trim().length > 0;
       } else {
-        valid = form.querySelectorAll(".ay-clarification__options input:checked").length > 0;
+        const checked = form.querySelectorAll(".ay-clarification__options .ay-clarification__input:checked");
+        valid = checked.length > 0;
+        if (valid) {
+          const otherSelected = Array.from(checked).some(function (input) {
+            return input.value === "other";
+          });
+          if (otherSelected) {
+            const otherInput = form.querySelector(".ay-clarification__other-input");
+            valid = otherInput && otherInput.value.trim().length > 0;
+          }
+        }
       }
     }
     const nextBtn = form.querySelector(".ay-clarification__nav .ay-btn--primary");
@@ -936,6 +964,7 @@
     }).then(function () {
       const wizard = contentEl.querySelector(".ay-clarification:last-of-type");
       if (wizard) {
+        setConversationStatus("awaiting_clarification");
         syncClarificationNav(wizard);
         wizard.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
@@ -1152,7 +1181,15 @@
           }
         } else {
           lastAppliedSeq = data.last_sequence;
-          setConversationStatus(data.status === "failed" ? "failed" : "active");
+          if (data.status === "failed") {
+            setConversationStatus("failed");
+          } else if (data.status === "awaiting_clarification") {
+            setConversationStatus("awaiting_clarification");
+          } else if (data.status === "processing") {
+            setConversationStatus("processing");
+          } else {
+            setConversationStatus("active");
+          }
         }
         scrollToBottom(true);
       });
@@ -1304,8 +1341,26 @@
     }
     setConversationStatus("processing");
     closeStream();
-    openStream();
-    scrollToBottom(true);
+    fetch(eventsUrl + "?after=" + encodeURIComponent(String(lastAppliedSeq)))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        data.events.forEach(function (event) {
+          applyEvent(event);
+        });
+        lastAppliedSeq = Math.max(lastAppliedSeq, data.last_sequence);
+        if (data.status !== "processing") {
+          finishIdleState(data.status);
+        } else {
+          setConversationStatus("processing");
+          openStream();
+        }
+        scrollToBottom(true);
+      })
+      .catch(function () {
+        setConversationStatus("processing");
+        openStream();
+        scrollToBottom(true);
+      });
   });
 
   document.body.addEventListener("change", function (e) {
@@ -1316,17 +1371,32 @@
   });
 
   document.body.addEventListener("input", function (e) {
-    if (!e.target.classList.contains("ay-clarification__textarea")) return;
+    if (
+      !e.target.classList.contains("ay-clarification__textarea") &&
+      !e.target.classList.contains("ay-clarification__other-input")
+    ) return;
+    if (e.target.classList.contains("ay-clarification__other-input")) {
+      ensureClarificationOtherSelected(e.target);
+    }
     const root = e.target.closest(".ay-clarification");
     if (root) syncClarificationNav(root);
   });
 
   document.body.addEventListener("htmx:afterSwap", function (e) {
+    const xhr = e.detail.xhr;
+    if (xhr) {
+      const trigger = xhr.getResponseHeader("HX-Trigger") || "";
+      if (trigger.indexOf("ayronResumeStream") !== -1) return;
+    }
     const target = e.detail.target;
+    if (!target || !document.body.contains(target)) return;
     const root = target.classList && target.classList.contains("ay-clarification")
       ? target
       : (target.querySelector ? target.querySelector(".ay-clarification") : null);
-    if (root) syncClarificationNav(root);
+    if (root && document.body.contains(root) && root.querySelector(".ay-clarification__form")) {
+      setConversationStatus("awaiting_clarification");
+      syncClarificationNav(root);
+    }
   });
 
   chatThreadEl.querySelectorAll(".ay-clarification").forEach(syncClarificationNav);

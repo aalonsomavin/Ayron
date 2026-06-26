@@ -48,8 +48,50 @@
           {% else %}
             <div class="ay-clarification__options">
               {% for option in clarification.question.options %}
-                {% if clarification.question.selection == "single" %}
-                  <label class="ay-clarification__option{% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %} is-selected{% endif %}">
+                {% if option.id == "other" %}
+                  {% if clarification.question.selection == "single" %}
+                    <label class="ay-clarification__option ay-clarification__option--other">
+                      <input
+                        type="radio"
+                        class="ay-clarification__input"
+                        name="answer_{{ clarification.question.id }}"
+                        value="{{ option.id }}"
+                        {% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %}checked{% endif %}
+                      >
+                      <span class="ay-clarification__option-indicator"></span>
+                      <span class="ay-clarification__option-label">{{ option.label }}</span>
+                      <input
+                        type="text"
+                        class="ay-clarification__other-input"
+                        name="answer_{{ clarification.question.id }}_other_text"
+                        value="{{ clarification.current_answer.text|default:'' }}"
+                        placeholder="Especifica…"
+                        autocomplete="off"
+                      >
+                    </label>
+                  {% else %}
+                    <label class="ay-clarification__option ay-clarification__option--other">
+                      <input
+                        type="checkbox"
+                        class="ay-clarification__input"
+                        name="answer_{{ clarification.question.id }}"
+                        value="{{ option.id }}"
+                        {% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %}checked{% endif %}
+                      >
+                      <span class="ay-clarification__option-indicator ay-clarification__option-indicator--check"></span>
+                      <span class="ay-clarification__option-label">{{ option.label }}</span>
+                      <input
+                        type="text"
+                        class="ay-clarification__other-input"
+                        name="answer_{{ clarification.question.id }}_other_text"
+                        value="{{ clarification.current_answer.text|default:'' }}"
+                        placeholder="Especifica…"
+                        autocomplete="off"
+                      >
+                    </label>
+                  {% endif %}
+                {% elif clarification.question.selection == "single" %}
+                  <label class="ay-clarification__option">
                     <input
                       type="radio"
                       class="ay-clarification__input"
@@ -61,7 +103,7 @@
                     <span class="ay-clarification__option-label">{{ option.label }}</span>
                   </label>
                 {% else %}
-                  <label class="ay-clarification__option{% if clarification.current_answer.selected and option.id in clarification.current_answer.selected %} is-selected{% endif %}">
+                  <label class="ay-clarification__option">
                     <input
                       type="checkbox"
                       class="ay-clarification__input"
@@ -124,7 +166,6 @@
   class="ay-composer__input"
   type="text"
   name="content"
-  placeholder="Ask about artists, albums, sales…"
   autocomplete="off"
   disabled
 >
