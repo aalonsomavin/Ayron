@@ -119,7 +119,7 @@
               type="file"
               id="chat-file-input"
               class="ay-composer__file-input"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept="{{ upload_accept }}"
               hidden
             />
             <div class="ay-composer__footer">
@@ -127,8 +127,8 @@
                 type="button"
                 id="chat-attach"
                 class="ay-composer__attach"
-                aria-label="Adjuntar archivo Excel"
-                title="Adjuntar .xlsx"
+                aria-label="{{ upload_label }}"
+                title="{{ upload_label }}"
                 {% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %}disabled{% endif %}
               >
                 {% include "components/icon.html" with name="plus" size=18 %}

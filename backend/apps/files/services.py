@@ -348,7 +348,7 @@ def save_generated_file(
 
 
 def save_uploaded_file(
-    conversation: Conversation,
+    conversation: Conversation | None,
     user,
     original_name: str,
     file_bytes: bytes,

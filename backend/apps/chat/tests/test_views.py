@@ -114,12 +114,13 @@ class TestUploadFile:
         assert payload["file_id"]
         assert payload["ext"] == "XLSX"
 
-    def test_upload_rejects_non_xlsx(self, client, user, conversation):
+    def test_upload_rejects_unsupported_format(self, client, user, conversation):
         client.force_login(user)
         url = reverse("chat:upload", kwargs={"conversation_id": conversation.id})
         upload = SimpleUploadedFile("notes.txt", b"hello", content_type="text/plain")
         response = client.post(url, {"file": upload})
         assert response.status_code == 400
+        assert "Unsupported file format" in response.json()["error"]
 
 
 @pytest.mark.django_db
@@ -516,6 +517,11 @@ class TestConversationDetail:
         assert "Hola, ¿en qué te ayudo?" in content
 
     def test_detail_renders_table_events(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Show me the table",
+        )
         assistant_message = Message.objects.create(
             conversation=conversation,
             role=Message.Role.ASSISTANT,
@@ -708,6 +714,11 @@ class TestConversationDetail:
         assert blocks[0]["content"] == "Hello world"
 
     def test_detail_renders_chart_events(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Show me the chart",
+        )
         assistant_message = Message.objects.create(
             conversation=conversation,
             role=Message.Role.ASSISTANT,
@@ -741,6 +752,11 @@ class TestConversationDetail:
         assert 'type="application/json"' in content
 
     def test_detail_renders_blocks_in_event_order(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Show data",
+        )
         assistant_message = Message.objects.create(
             conversation=conversation,
             role=Message.Role.ASSISTANT,
@@ -776,6 +792,11 @@ class TestConversationDetail:
         assert table_pos < text_pos
 
     def test_detail_renders_persisted_tool_trace(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="How many albums?",
+        )
         assistant_message = Message.objects.create(
             conversation=conversation,
             role=Message.Role.ASSISTANT,
@@ -1102,6 +1123,138 @@ class TestConversationStart:
         assert response.status_code == 400
         assert Conversation.objects.filter(user=user).count() == 0
 
+    def test_start_with_file_only_uses_filename_as_title(self, client, user):
+        client.force_login(user)
+        upload = SimpleUploadedFile(
+            "ventas.xlsx",
+            build_sample_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        upload_response = client.post(reverse("chat:upload_staging"), {"file": upload})
+        assert upload_response.status_code == 200
+        file_id = upload_response.json()["file_id"]
+
+        with patch("apps.chat.views.run_agent_conversation") as mock_task:
+            mock_task.delay.return_value = MagicMock(id="task-file-only")
+            response = client.post(
+                reverse("chat:start"),
+                {"file_ids": json.dumps([file_id])},
+            )
+
+        assert response.status_code == 302
+        conversation = Conversation.objects.get(user=user)
+        assert conversation.title == "ventas.xlsx"
+        assert conversation.messages.filter(role=Message.Role.USER).count() == 1
+        mock_task.delay.assert_called_once()
+
+    def test_start_with_staging_files_claims_orphan_files(self, client, user):
+        client.force_login(user)
+        upload = SimpleUploadedFile(
+            "ventas.xlsx",
+            build_sample_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        upload_response = client.post(reverse("chat:upload_staging"), {"file": upload})
+        assert upload_response.status_code == 200
+        file_id = upload_response.json()["file_id"]
+        assert Conversation.objects.filter(user=user).count() == 0
+
+        with patch("apps.chat.views.run_agent_conversation") as mock_task:
+            mock_task.delay.return_value = MagicMock(id="task-789")
+            response = client.post(
+                reverse("chat:start"),
+                {
+                    "content": "Analiza este Excel",
+                    "file_ids": json.dumps([file_id]),
+                },
+            )
+
+        assert response.status_code == 302
+        assert Conversation.objects.filter(user=user).count() == 1
+        conversation = Conversation.objects.get(user=user)
+        assert conversation.title == "Analiza este Excel"
+        assert conversation.messages.filter(role=Message.Role.USER).count() == 1
+        assert AgentEvent.objects.filter(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+        ).count() == 1
+        mock_task.delay.assert_called_once()
+
+
+@pytest.mark.django_db
+class TestStagingUpload:
+    def test_staging_upload_does_not_create_conversation(self, client, user):
+        client.force_login(user)
+        upload = SimpleUploadedFile(
+            "ventas.xlsx",
+            build_sample_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response = client.post(reverse("chat:upload_staging"), {"file": upload})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["ok"] is True
+        assert payload["file_id"]
+        assert Conversation.objects.filter(user=user).count() == 0
+
+    def test_discard_staging_file(self, client, user):
+        client.force_login(user)
+        upload = SimpleUploadedFile(
+            "ventas.xlsx",
+            build_sample_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        upload_response = client.post(reverse("chat:upload_staging"), {"file": upload})
+        file_id = upload_response.json()["file_id"]
+
+        response = client.post(reverse("chat:discard_staging", kwargs={"file_id": file_id}))
+        assert response.status_code == 200
+        from apps.files.models import File
+
+        assert not File.objects.filter(id=file_id).exists()
+
+    def test_discard_staging_file_other_user_404(self, client, user, other_user):
+        client.force_login(user)
+        upload = SimpleUploadedFile(
+            "ventas.xlsx",
+            build_sample_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        upload_response = client.post(reverse("chat:upload_staging"), {"file": upload})
+        file_id = upload_response.json()["file_id"]
+
+        client.force_login(other_user)
+        response = client.post(reverse("chat:discard_staging", kwargs={"file_id": file_id}))
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestEmptyConversationCleanup:
+    def test_sidebar_hides_empty_conversations(self, client, user):
+        empty = Conversation.objects.create(user=user)
+        with_messages = Conversation.objects.create(user=user, title="Active chat")
+        Message.objects.create(
+            conversation=with_messages,
+            role=Message.Role.USER,
+            content="Hi",
+        )
+        client.force_login(user)
+        response = client.get(reverse("chat:list"))
+        content = response.content.decode()
+        assert "Active chat" in content
+        assert str(empty.id) not in content
+
+    def test_empty_conversation_detail_redirects_to_list(self, client, user):
+        empty = Conversation.objects.create(user=user)
+        client.force_login(user)
+        response = client.get(reverse("chat:detail", kwargs={"conversation_id": empty.id}))
+        assert response.status_code == 302
+        assert response.url == reverse("chat:list")
+        assert not Conversation.objects.filter(id=empty.id).exists()
+
+
+@pytest.mark.django_db
+class TestConversationDraftLegacy:
     def test_draft_creates_empty_conversation(self, client, user):
         client.force_login(user)
         response = client.post(reverse("chat:draft"))
@@ -1110,46 +1263,6 @@ class TestConversationStart:
         conversation = Conversation.objects.get(id=payload["conversation_id"], user=user)
         assert conversation.status == Conversation.Status.ACTIVE
         assert conversation.messages.count() == 0
-
-    def test_start_uses_draft_conversation_with_files(self, client, user):
-        client.force_login(user)
-        draft_response = client.post(reverse("chat:draft"))
-        conversation_id = draft_response.json()["conversation_id"]
-        conversation = Conversation.objects.get(id=conversation_id)
-
-        upload = SimpleUploadedFile(
-            "ventas.xlsx",
-            build_sample_xlsx_bytes(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        upload_response = client.post(
-            reverse("chat:upload", kwargs={"conversation_id": conversation.id}),
-            {"file": upload},
-        )
-        assert upload_response.status_code == 200
-        file_id = upload_response.json()["file_id"]
-
-        with patch("apps.chat.views.run_agent_conversation") as mock_task:
-            mock_task.delay.return_value = MagicMock(id="task-789")
-            response = client.post(
-                reverse("chat:start"),
-                {
-                    "content": "Analiza este Excel",
-                    "conversation_id": str(conversation.id),
-                    "file_ids": json.dumps([file_id]),
-                },
-            )
-
-        assert response.status_code == 302
-        assert Conversation.objects.filter(user=user).count() == 1
-        conversation.refresh_from_db()
-        assert conversation.title == "Analiza este Excel"
-        assert conversation.messages.filter(role=Message.Role.USER).count() == 1
-        assert AgentEvent.objects.filter(
-            conversation=conversation,
-            event_type=AgentEvent.EventType.FILE_CREATED,
-        ).count() == 1
-        mock_task.delay.assert_called_once()
 
 
 @pytest.mark.django_db

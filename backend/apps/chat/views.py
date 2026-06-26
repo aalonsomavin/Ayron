@@ -3,7 +3,7 @@ import random
 from uuid import UUID
 
 from django.conf import settings
-from django.db.models import Max
+from django.db.models import Count, Max, Q
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -33,8 +33,8 @@ from apps.agent.tools.clarification import (
     merge_step_answer,
     parse_step_answer_from_post,
 )
-from apps.files.models import File, XLSX_MIME
-from apps.files.parsers import UnsupportedFormatError, parse_upload
+from apps.files.models import File
+from apps.files.parsers import UnsupportedFormatError, is_supported_upload, parse_upload, supported_upload_accept
 from apps.files.services import (
     hydrate_file_payload_for_ui,
     save_uploaded_file,
@@ -146,7 +146,30 @@ def _active_message_id(conversation: Conversation) -> int | None:
 
 
 def _sidebar_conversations(request):
-    return Conversation.objects.filter(user=request.user).order_by("-updated_at")[:50]
+    return (
+        Conversation.objects.filter(user=request.user)
+        .annotate(message_count=Count("messages"))
+        .filter(message_count__gt=0)
+        .order_by("-updated_at")[:50]
+    )
+
+
+def _composer_upload_context() -> dict:
+    return {
+        "upload_accept": supported_upload_accept(),
+        "upload_label": "Adjuntar archivo",
+    }
+
+
+def _default_content_from_files(file_ids: list[str], user) -> str:
+    file_obj = (
+        File.objects.filter(id__in=file_ids, uploaded_by=user)
+        .order_by("created_at")
+        .first()
+    )
+    if file_obj is not None:
+        return file_obj.original_name
+    return "Archivo adjunto"
 
 
 def _user_initials(user) -> str:
@@ -317,13 +340,16 @@ def _attach_files_to_user_message(
         return []
     attached: list[dict] = []
     for file_id in file_ids:
-        file_obj = File.objects.filter(
-            id=file_id,
-            conversation=conversation,
-            uploaded_by=user,
-        ).first()
+        file_obj = (
+            File.objects.filter(id=file_id, uploaded_by=user)
+            .filter(Q(conversation=conversation) | Q(conversation__isnull=True))
+            .first()
+        )
         if file_obj is None:
             raise ValueError(f"File not found: {file_id}")
+        if file_obj.conversation_id is None:
+            file_obj.conversation = conversation
+            file_obj.save(update_fields=["conversation", "updated_at"])
         payload = serialize_file_for_ui(file_obj, user=user)
         persist_event(
             conversation=conversation,
@@ -465,6 +491,7 @@ def conversation_list(request):
             "new_chat_active": True,
             "active_conversation_id": None,
             "hero_title": _hero_title(request.user),
+            **_composer_upload_context(),
         },
     )
 
@@ -483,20 +510,15 @@ def conversation_draft(request):
 @require_POST
 def conversation_start(request):
     content = request.POST.get("content", "").strip()
-    if not content:
-        return HttpResponseBadRequest("Message content is required.")
-
-    draft_id = request.POST.get("conversation_id", "").strip()
     file_ids = _parse_file_ids(request)
 
-    if draft_id:
-        conversation = _get_conversation(request, draft_id)
-        if conversation.messages.exists():
-            return HttpResponseBadRequest("Conversation already started.")
-        if conversation.status != Conversation.Status.ACTIVE:
-            return HttpResponseBadRequest("Conversation is not available.")
-    else:
-        conversation = Conversation.objects.create(user=request.user)
+    if not content and not file_ids:
+        return HttpResponseBadRequest("Message content is required.")
+
+    if not content and file_ids:
+        content = _default_content_from_files(file_ids, request.user)
+
+    conversation = Conversation.objects.create(user=request.user)
 
     _enqueue_user_message(
         conversation,
@@ -510,6 +532,9 @@ def conversation_start(request):
 @require_GET
 def conversation_detail(request, conversation_id):
     conversation = _get_conversation(request, conversation_id)
+    if not conversation.messages.exists():
+        conversation.delete()
+        return redirect("chat:list")
     chat_messages = _messages_with_content_blocks(conversation)
     active_id = _active_message_id(conversation)
     if active_id:
@@ -534,6 +559,7 @@ def conversation_detail(request, conversation_id):
             "tool_tags_json": json.dumps(TOOL_TAGS),
             "tool_icons_json": json.dumps(TOOL_ICONS),
             "user_initials": _user_initials(request.user),
+            **_composer_upload_context(),
         },
     )
 
@@ -574,15 +600,13 @@ def send_message(request, conversation_id):
     return redirect("chat:detail", conversation_id=conversation.id)
 
 
-@require_POST
-def upload_file(request, conversation_id):
-    conversation = _get_conversation(request, conversation_id)
+def _handle_file_upload(request, *, conversation=None):
+    if conversation is not None:
+        if conversation.status == Conversation.Status.PROCESSING:
+            return JsonResponse({"error": "Conversation is already processing a message."}, status=400)
 
-    if conversation.status == Conversation.Status.PROCESSING:
-        return JsonResponse({"error": "Conversation is already processing a message."}, status=400)
-
-    if conversation.status == Conversation.Status.AWAITING_CLARIFICATION:
-        return JsonResponse({"error": "Complete or skip the clarification request first."}, status=400)
+        if conversation.status == Conversation.Status.AWAITING_CLARIFICATION:
+            return JsonResponse({"error": "Complete or skip the clarification request first."}, status=400)
 
     uploaded = request.FILES.get("file")
     if uploaded is None:
@@ -591,11 +615,12 @@ def upload_file(request, conversation_id):
     if uploaded.size > settings.AYRON_MAX_UPLOAD_BYTES:
         return JsonResponse({"error": "File exceeds maximum upload size."}, status=400)
 
-    original_name = uploaded.name or "upload.xlsx"
-    if not original_name.lower().endswith(".xlsx"):
-        return JsonResponse({"error": "Only .xlsx files are supported."}, status=400)
+    original_name = uploaded.name or "upload"
+    mime_type = uploaded.content_type or ""
 
-    mime_type = uploaded.content_type or XLSX_MIME
+    if not is_supported_upload(mime_type, original_name):
+        return JsonResponse({"error": f"Unsupported file format: {original_name}"}, status=400)
+
     file_bytes = uploaded.read()
     if not file_bytes:
         return JsonResponse({"error": "File is empty."}, status=400)
@@ -616,6 +641,30 @@ def upload_file(request, conversation_id):
 
     payload = serialize_file_for_ui(file_obj, user=request.user)
     return JsonResponse({"ok": True, "file_id": str(file_obj.id), **payload})
+
+
+@require_POST
+def upload_staging_file(request):
+    return _handle_file_upload(request, conversation=None)
+
+
+@require_POST
+def discard_staging_file(request, file_id):
+    file_obj = File.objects.filter(
+        id=file_id,
+        uploaded_by=request.user,
+        conversation__isnull=True,
+    ).first()
+    if file_obj is None:
+        return JsonResponse({"error": "File not found."}, status=404)
+    file_obj.delete()
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def upload_file(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    return _handle_file_upload(request, conversation=conversation)
 
 
 @require_POST

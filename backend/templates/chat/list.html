@@ -29,7 +29,6 @@
             <form id="chat-composer" class="ay-chat-empty__composer" method="post" action="{% url 'chat:start' %}">
               {% csrf_token %}
               <input type="hidden" name="file_ids" id="chat-file-ids" value="">
-              <input type="hidden" name="conversation_id" id="chat-conversation-id" value="">
               <div class="ay-chat-empty__composer-box">
                 <div id="chat-pending-files" class="ay-composer__attachments" hidden></div>
                 <div class="ay-chat-empty__composer-main">
@@ -40,18 +39,17 @@
                     class="ay-chat-empty__input"
                     placeholder="¿En qué puedo ayudarte hoy?"
                     autocomplete="off"
-                    required
                   />
                 </div>
                 <input
                   type="file"
                   id="chat-file-input"
                   class="ay-composer__file-input"
-                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept="{{ upload_accept }}"
                   hidden
                 />
                 <div class="ay-chat-empty__composer-footer">
-                  <button type="button" id="chat-attach" class="ay-chat-empty__attach" aria-label="Adjuntar archivo Excel" title="Adjuntar .xlsx">
+                  <button type="button" id="chat-attach" class="ay-chat-empty__attach" aria-label="{{ upload_label }}" title="{{ upload_label }}">
                     {% include "components/icon.html" with name="plus" size=18 %}
                   </button>
                   <div class="ay-composer__footer-right">
@@ -115,14 +113,13 @@
     window.AyronAgentAvatar.mount(mark, { active: false, variant: "brand" });
   }
 
-  const draftUrl = "{% url 'chat:draft' %}";
-  const uploadUrlTemplate = "{% url 'chat:upload' conversation_id='00000000-0000-0000-0000-000000000000' %}";
+  const uploadUrl = "{% url 'chat:upload_staging' %}";
+  const discardUrlTemplate = "{% url 'chat:discard_staging' file_id='00000000-0000-0000-0000-000000000000' %}";
   const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
   const attachEl = document.getElementById("chat-attach");
   const fileInputEl = document.getElementById("chat-file-input");
   const composerEl = document.getElementById("chat-composer");
-  let draftConversationId = null;
   let pendingUploads = [];
 
   function csrfToken() {
@@ -137,11 +134,16 @@
     }
   }
 
-  function syncConversationIdInput() {
-    const input = document.getElementById("chat-conversation-id");
-    if (input) {
-      input.value = draftConversationId || "";
-    }
+  function discardStagingFile(fileId) {
+    if (!fileId) return Promise.resolve();
+    const url = discardUrlTemplate.replace("00000000-0000-0000-0000-000000000000", fileId);
+    return fetch(url, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken(),
+      },
+      credentials: "same-origin",
+    });
   }
 
   function renderPendingAttachments() {
@@ -150,6 +152,7 @@
     container.innerHTML = "";
     if (!pendingUploads.length) {
       container.hidden = true;
+      updateSendState();
       return;
     }
     container.hidden = false;
@@ -165,61 +168,40 @@
     container.querySelectorAll(".ay-composer__attachment-remove").forEach(function (btn) {
       btn.addEventListener("click", function () {
         const idx = Number(btn.getAttribute("data-index"));
-        pendingUploads.splice(idx, 1);
+        const removed = pendingUploads.splice(idx, 1)[0];
+        if (removed && removed.file_id) {
+          discardStagingFile(removed.file_id);
+        }
         syncFileIdsInput();
         renderPendingAttachments();
       });
     });
+    updateSendState();
   }
 
-  function ensureDraftConversation() {
-    if (draftConversationId) {
-      return Promise.resolve(draftConversationId);
-    }
-    return fetch(draftUrl, {
+  function uploadAttachment(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetch(uploadUrl, {
       method: "POST",
       headers: {
         "X-CSRFToken": csrfToken(),
       },
       credentials: "same-origin",
+      body: formData,
     }).then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok) {
-          throw new Error(payload.error || "No se pudo preparar el chat.");
+          throw new Error(payload.error || "No se pudo subir el archivo.");
         }
-        draftConversationId = payload.conversation_id;
-        syncConversationIdInput();
-        return draftConversationId;
-      });
-    });
-  }
-
-  function uploadAttachment(file) {
-    return ensureDraftConversation().then(function (conversationId) {
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadUrl = uploadUrlTemplate.replace("00000000-0000-0000-0000-000000000000", conversationId);
-      return fetch(uploadUrl, {
-        method: "POST",
-        headers: {
-          "X-CSRFToken": csrfToken(),
-        },
-        credentials: "same-origin",
-        body: formData,
-      }).then(function (response) {
-        return response.json().then(function (payload) {
-          if (!response.ok) {
-            throw new Error(payload.error || "No se pudo subir el archivo.");
-          }
-          return payload;
-        });
+        return payload;
       });
     });
   }
 
   function updateSendState() {
     if (!inputEl || !sendEl) return;
-    sendEl.disabled = !inputEl.value.trim();
+    sendEl.disabled = !inputEl.value.trim() && !pendingUploads.length;
   }
 
   if (inputEl) {
@@ -240,7 +222,6 @@
   if (composerEl) {
     composerEl.addEventListener("submit", function () {
       syncFileIdsInput();
-      syncConversationIdInput();
     });
   }
 
@@ -268,6 +249,16 @@
         });
     });
   }
+
+  window.addEventListener("pagehide", function () {
+    pendingUploads.forEach(function (file) {
+      if (!file.file_id) return;
+      const url = discardUrlTemplate.replace("00000000-0000-0000-0000-000000000000", file.file_id);
+      const body = new FormData();
+      body.append("csrfmiddlewaretoken", csrfToken());
+      navigator.sendBeacon(url, body);
+    });
+  });
 
   document.querySelectorAll("[data-suggestion]").forEach(function (chip) {
     chip.addEventListener("click", function () {

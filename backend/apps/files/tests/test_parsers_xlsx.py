@@ -3,7 +3,7 @@ from io import BytesIO
 import pytest
 from openpyxl import Workbook
 
-from apps.files.parsers import UnsupportedFormatError, parse_upload
+from apps.files.parsers import UnsupportedFormatError, parse_upload, supported_upload_accept
 from apps.files.parsers.xlsx import XlsxParser
 
 
@@ -71,3 +71,8 @@ class TestXlsxParser:
         parser = XlsxParser()
         assert parser.supports("", "report.xlsx") is True
         assert parser.supports("", "report.csv") is False
+
+    def test_supported_upload_accept_includes_xlsx(self):
+        accept = supported_upload_accept()
+        assert ".xlsx" in accept
+        assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in accept

@@ -74,6 +74,9 @@ def _parse_sheet(worksheet, warnings: list[str]) -> dict | None:
 
 
 class XlsxParser:
+    extensions = XLSX_EXTENSIONS
+    mime_types = frozenset({XLSX_MIME})
+
     def supports(self, mime_type: str, original_name: str) -> bool:
         if mime_type == XLSX_MIME:
             return True
