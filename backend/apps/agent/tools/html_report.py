@@ -24,6 +24,7 @@ from apps.agent.tools.html_insight import normalize_insight_markup
 from apps.agent.tools.html_sanitize import normalize_agent_html
 from apps.files.models import HTML_MIME
 from apps.files.services import (
+    context_update_error,
     escape_preview_text as esc,
     get_file_for_conversation,
     save_generated_file,
@@ -422,6 +423,9 @@ def run_publish_html_artifact(
         existing_file = get_file_for_conversation(normalized_file_id, conversation)
         if existing_file is None or existing_file.format_key != "html":
             return build_tool_error_response("HTML report not found in this conversation")
+        blocked = context_update_error(existing_file)
+        if blocked:
+            return build_tool_error_response(blocked)
 
     resolved_title = title.strip() if title else ""
     if not resolved_title:

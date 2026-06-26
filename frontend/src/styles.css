@@ -2246,6 +2246,12 @@
       box-shadow var(--ay-dur-fast) var(--ay-ease);
   }
 
+  .ay-chat-empty__composer-main {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
   .ay-chat-empty__composer-footer {
     display: flex;
     align-items: center;
@@ -2264,7 +2270,12 @@
     border-radius: var(--ay-radius-full);
     background: transparent;
     color: var(--ay-text-subtle);
-    cursor: default;
+    cursor: pointer;
+  }
+
+  .ay-chat-empty__attach:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   .ay-chat-empty__attach .ay-icon {
@@ -2381,8 +2392,16 @@
     justify-content: flex-end;
   }
 
-  .ay-msg-user__bubble {
+  .ay-msg-user__content {
     max-width: 78%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .ay-msg-user__bubble {
+    max-width: 100%;
     background: var(--ay-bg-muted);
     color: var(--ay-text);
     padding: 11px 15px;
@@ -2390,6 +2409,13 @@
     font-size: 14.5px;
     line-height: 1.5;
     white-space: pre-wrap;
+  }
+
+  .ay-msg-user__files {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
   }
 
   .ay-msg-agent {
@@ -3220,36 +3246,165 @@
 
   .ay-composer__box {
     display: flex;
-    align-items: flex-end;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    min-height: 88px;
+    padding: 14px 14px 10px;
     background: var(--ay-surface);
     border: 1px solid var(--ay-border-strong);
-    border-radius: var(--ay-radius-lg);
-    padding: 10px 10px 10px 14px;
-    box-shadow: var(--ay-shadow-sm);
+    border-radius: 20px;
+    box-shadow:
+      0 4px 24px rgba(16, 16, 20, 0.07),
+      0 1px 3px rgba(16, 16, 20, 0.05);
+    transition: border-color var(--ay-dur-fast) var(--ay-ease),
+      box-shadow var(--ay-dur-fast) var(--ay-ease);
   }
 
   .ay-composer__box:focus-within {
     border-color: var(--ay-accent);
-    box-shadow: var(--ay-shadow-focus);
+    box-shadow:
+      0 8px 32px rgba(16, 16, 20, 0.09),
+      var(--ay-shadow-focus);
+  }
+
+  .ay-composer__main {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ay-composer__attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ay-composer__attachment {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 4px 8px 4px 10px;
+    border-radius: var(--ay-radius-full);
+    background: var(--ay-bg-muted);
+    color: var(--ay-text);
+    font-size: 12.5px;
+  }
+
+  .ay-composer__attachment-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ay-composer__attachment-remove {
+    flex: none;
+    border: none;
+    background: transparent;
+    color: var(--ay-text-subtle);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
   }
 
   .ay-composer__input {
     flex: 1;
+    min-width: 0;
+    width: 100%;
     border: none;
     outline: none;
     background: transparent;
     font-family: var(--ay-font-sans);
     font-size: 15px;
     color: var(--ay-text);
-    min-height: 30px;
-    padding: 4px 0;
+    padding: 0;
+    min-height: 24px;
     resize: none;
+  }
+
+  .ay-composer__input::placeholder {
+    color: var(--ay-text-subtle);
   }
 
   .ay-composer__input:disabled {
     cursor: not-allowed;
     color: var(--ay-text-disabled);
+  }
+
+  .ay-composer__file-input {
+    display: none;
+  }
+
+  .ay-composer__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .ay-composer__footer-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .ay-composer__footer-right .ay-composer__actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+  }
+
+  .ay-composer__attach {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--ay-radius-full);
+    background: transparent;
+    color: var(--ay-text-subtle);
+    cursor: pointer;
+  }
+
+  .ay-composer__attach:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .ay-composer__attach .ay-icon {
+    color: var(--ay-text-subtle);
+  }
+
+  .ay-composer__model {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--ay-border-strong);
+    border-radius: var(--ay-radius-full);
+    background: var(--ay-surface);
+    color: var(--ay-text-muted);
+    font-family: var(--ay-font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: default;
+  }
+
+  .ay-composer__model .ay-icon {
+    color: var(--ay-text-subtle);
+  }
+
+  .ay-composer__model-label {
+    line-height: 1;
   }
 
   .ay-composer__actions {

@@ -10,7 +10,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.timesince import timesince
 
-from apps.chat.models import Conversation
+from apps.chat.models import AgentEvent, Conversation, Message
 from apps.files.models import DOCX_MIME, HTML_MIME, XLSX_MIME, File, SavedDashboard
 
 
@@ -114,6 +114,12 @@ def hydrate_file_payload_for_ui(payload: dict, *, conversation_id=None, user=Non
     return fresh
 
 
+CONTEXT_UPDATE_ERROR = (
+    "Este archivo es contexto del usuario; crea un entregable nuevo con "
+    "create_spreadsheet, create_document o publish_html_artifact."
+)
+
+
 def serialize_file_for_ui(file_obj: File, *, user=None) -> dict:
     format_key = file_obj.format_key
     payload = {
@@ -122,9 +128,11 @@ def serialize_file_for_ui(file_obj: File, *, user=None) -> dict:
         "ext": _file_ext(file_obj.content_json, file_obj.mime_type),
         "format": format_key,
         "kind": _file_kind(file_obj.content_json),
+        "role": _file_role(file_obj.content_json),
         "mime": file_obj.mime_type,
         "meta": _file_meta(file_obj.content_json),
         "version": file_obj.version,
+        "size_bytes": file_obj.size_bytes,
         "download_url": f"/files/{file_obj.id}/download/",
         "preview_url": f"/files/{file_obj.id}/preview/",
     }
@@ -136,7 +144,57 @@ def serialize_file_for_ui(file_obj: File, *, user=None) -> dict:
     return payload
 
 
+def _file_source(content_json: dict) -> str:
+    return content_json.get("source") or "generated"
+
+
+def _file_role(content_json: dict) -> str:
+    role = content_json.get("role")
+    if role in ("context", "deliverable"):
+        return role
+    if _file_source(content_json) == "upload":
+        return "context"
+    return "deliverable"
+
+
+def is_context_file(content_json: dict) -> bool:
+    return _file_role(content_json) == "context"
+
+
+def is_deliverable_file(content_json: dict) -> bool:
+    return _file_role(content_json) == "deliverable"
+
+
+def context_update_error(file_obj: File) -> str | None:
+    if is_context_file(file_obj.content_json):
+        return CONTEXT_UPDATE_ERROR
+    return None
+
+
+def _source_label(source: str) -> str:
+    if source == "upload":
+        return "subido"
+    return "generado"
+
+
+def _read_tool_for_format(format_key: str) -> str:
+    if format_key == "xlsx":
+        return "get_spreadsheet"
+    if format_key == "html":
+        return "hydrate_html_artifact"
+    return "get_document"
+
+
+FILE_INDEX_READ_INSTRUCTIONS = """\
+Para leer archivos existentes:
+- Excel (.xlsx): get_spreadsheet(file_id)
+- Word (.docx): get_document(file_id)
+- HTML: hydrate_html_artifact(file_id) o list_conversation_files
+No inventes datos; lee el archivo antes de analizarlo si el usuario lo adjuntó o lo referencia."""
+
+
 def serialize_file_for_agent(file_obj: File) -> dict:
+    source = _file_source(file_obj.content_json)
     return {
         "file_id": str(file_obj.id),
         "name": file_obj.original_name,
@@ -145,6 +203,8 @@ def serialize_file_for_agent(file_obj: File) -> dict:
         "updated_at": file_obj.updated_at.isoformat(),
         "summary": file_obj.content_json.get("title", ""),
         "status": file_obj.content_json.get("status", "published"),
+        "source": source,
+        "role": _file_role(file_obj.content_json),
     }
 
 
@@ -157,15 +217,101 @@ def format_agent_file_index_block(conversation: Conversation) -> str:
     entries = get_agent_file_index(conversation)
     if not entries:
         return ""
-    lines = ["## Archivos de esta conversación", ""]
-    for entry in entries:
-        format_label = entry.get("format", "docx").upper()
+    context_entries = [entry for entry in entries if entry.get("role") == "context"]
+    deliverable_entries = [entry for entry in entries if entry.get("role") != "context"]
+    lines: list[str] = []
+
+    if context_entries:
+        lines.extend(["## Archivos subidos por el usuario", ""])
+        for entry in context_entries:
+            format_label = entry.get("format", "docx").upper()
+            read_tool = _read_tool_for_format(entry.get("format", "docx"))
+            lines.append(
+                f"- file_id={entry['file_id']} · {entry['name']} · {format_label} · "
+                f"v{entry['version']} → {read_tool} (solo lectura)"
+            )
+        lines.append("")
+
+    if deliverable_entries:
+        lines.extend(["## Archivos generados por el agente", ""])
+        for entry in deliverable_entries:
+            format_label = entry.get("format", "docx").upper()
+            lines.append(
+                f"- file_id={entry['file_id']} · {entry['name']} · {format_label} · "
+                f"v{entry['version']} · {entry['summary'] or 'sin título'}"
+            )
+        lines.append("")
+
+    lines.extend([FILE_INDEX_READ_INSTRUCTIONS, ""])
+    return "\n".join(lines)
+
+
+def format_user_attachments_block(user_message: Message | None) -> str:
+    if user_message is None:
+        return ""
+    events = AgentEvent.objects.filter(
+        message=user_message,
+        event_type=AgentEvent.EventType.FILE_CREATED,
+    ).order_by("sequence_number")
+    if not events.exists():
+        return ""
+
+    lines = [
+        "## Contexto adjunto en este mensaje",
+        "",
+        "El usuario adjuntó estos archivos como contexto (solo lectura). "
+        "Léelos con la tool indicada; si debe haber un entregable, genera un artifact "
+        "nuevo con create_spreadsheet, create_document o publish_html_artifact:",
+        "",
+    ]
+    for event in events:
+        file_id = event.payload.get("file_id")
+        if not file_id:
+            continue
+        file_obj = File.objects.filter(
+            id=file_id,
+            conversation_id=user_message.conversation_id,
+        ).first()
+        if file_obj is None:
+            continue
+        format_label = file_obj.format_key.upper()
+        read_tool = _read_tool_for_format(file_obj.format_key)
         lines.append(
-            f"- file_id={entry['file_id']} · {entry['name']} · {format_label} · "
-            f"v{entry['version']} · {entry['summary'] or 'sin título'}"
+            f"- file_id={file_obj.id} · {file_obj.original_name} · {format_label} · "
+            f"contexto → {read_tool}"
         )
+    if len(lines) <= 4:
+        return ""
     lines.append("")
     return "\n".join(lines)
+
+
+def get_context_attachments_for_message(user_message: Message | None) -> list[dict]:
+    if user_message is None:
+        return []
+    events = AgentEvent.objects.filter(
+        message=user_message,
+        event_type=AgentEvent.EventType.FILE_CREATED,
+    ).order_by("sequence_number")
+    attachments: list[dict] = []
+    for event in events:
+        file_id = event.payload.get("file_id")
+        if not file_id:
+            continue
+        file_obj = File.objects.filter(
+            id=file_id,
+            conversation_id=user_message.conversation_id,
+        ).first()
+        if file_obj is None or not is_context_file(file_obj.content_json):
+            continue
+        attachments.append(
+            {
+                "file_id": str(file_obj.id),
+                "format": file_obj.format_key,
+                "role": "context",
+            }
+        )
+    return attachments
 
 
 def save_generated_file(
@@ -180,13 +326,48 @@ def save_generated_file(
     from apps.files.models import MIME_EXTENSIONS
 
     ext = MIME_EXTENSIONS.get(mime_type, ".bin")
+    stored_content = dict(content_json)
+    stored_content["role"] = "deliverable"
+    stored_content["source"] = "generated"
+    file_obj = File(
+        uploaded_by=user,
+        conversation=conversation,
+        original_name=original_name,
+        mime_type=mime_type,
+        content_json=stored_content,
+        preview_html=preview_html,
+        size_bytes=len(file_bytes),
+    )
+    file_obj.file.save(
+        f"{file_obj.id}{ext}",
+        ContentFile(file_bytes),
+        save=False,
+    )
+    file_obj.save()
+    return file_obj
+
+
+def save_uploaded_file(
+    conversation: Conversation,
+    user,
+    original_name: str,
+    file_bytes: bytes,
+    parsed,
+) -> File:
+    from apps.files.models import MIME_EXTENSIONS
+
+    content_json = dict(parsed.content_json)
+    content_json["source"] = "upload"
+    content_json["role"] = "context"
+    mime_type = parsed.mime_type
+    ext = MIME_EXTENSIONS.get(mime_type, ".bin")
     file_obj = File(
         uploaded_by=user,
         conversation=conversation,
         original_name=original_name,
         mime_type=mime_type,
         content_json=content_json,
-        preview_html=preview_html,
+        preview_html=parsed.preview_html,
         size_bytes=len(file_bytes),
     )
     file_obj.file.save(
@@ -226,6 +407,12 @@ def open_file_stream(file_obj: File) -> BytesIO:
 
         return BytesIO(build_docx(file_obj.content_json))
     if file_obj.format_key == "xlsx":
+        if is_context_file(file_obj.content_json) and file_obj.version == 1:
+            file_obj.file.open("rb")
+            try:
+                return BytesIO(file_obj.file.read())
+            finally:
+                file_obj.file.close()
         from apps.agent.tools.spreadsheet import build_xlsx
 
         return BytesIO(build_xlsx(file_obj.content_json))

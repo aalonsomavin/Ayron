@@ -41,6 +41,17 @@ No uses esta skill para:
 | `get_spreadsheet` | Leer el contenido estructurado antes de editar |
 | `list_conversation_files` | Listar archivos de la conversación con sus `file_id` |
 
+## Archivos subidos por el usuario
+
+Cuando el índice de archivos o el bloque de contexto del turno incluye un `.xlsx` con
+`role=context`, **lee primero** con `get_spreadsheet(file_id)` antes de analizar o responder.
+No inventes datos de la hoja. Los adjuntos del usuario son **solo lectura**: no uses
+`update_spreadsheet` sobre ellos.
+
+Si el usuario pide analizar, enriquecer o "modificar" un adjunto, genera un **entregable
+nuevo** con `create_spreadsheet` incorporando el análisis u observaciones. El adjunto
+original permanece sin cambios.
+
 ## Esquema de contenido
 
 Pasa `title`, `filename` opcional y `sheets`. Cada hoja tiene `name`, `headers`, `rows`

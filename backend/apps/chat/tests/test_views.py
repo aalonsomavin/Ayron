@@ -1,12 +1,17 @@
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from apps.agent.events import persist_event
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.chat.views import _content_blocks_for_message, _hero_title, serialize_agent_event
+from apps.files.parsers import parse_upload
+from apps.files.services import save_uploaded_file, serialize_file_for_ui
+from apps.files.tests.test_parsers_xlsx import build_sample_xlsx_bytes
 
 User = get_user_model()
 
@@ -90,6 +95,67 @@ class TestSendMessage:
         url = reverse("chat:send", kwargs={"conversation_id": conversation.id})
         response = client.post(url, {"content": "Another question"})
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestUploadFile:
+    def test_upload_xlsx(self, client, user, conversation):
+        client.force_login(user)
+        url = reverse("chat:upload", kwargs={"conversation_id": conversation.id})
+        upload = SimpleUploadedFile(
+            "ventas.xlsx",
+            build_sample_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response = client.post(url, {"file": upload})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["ok"] is True
+        assert payload["file_id"]
+        assert payload["ext"] == "XLSX"
+
+    def test_upload_rejects_non_xlsx(self, client, user, conversation):
+        client.force_login(user)
+        url = reverse("chat:upload", kwargs={"conversation_id": conversation.id})
+        upload = SimpleUploadedFile("notes.txt", b"hello", content_type="text/plain")
+        response = client.post(url, {"file": upload})
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestSendMessageWithFiles:
+    def test_send_with_file_ids_creates_user_file_events(self, client, user, conversation):
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=build_sample_xlsx_bytes(),
+            parsed=parsed,
+        )
+        client.force_login(user)
+        url = reverse("chat:send", kwargs={"conversation_id": conversation.id})
+
+        with patch("apps.chat.views.run_agent_conversation") as mock_task:
+            mock_task.delay.return_value = MagicMock(id="task-files")
+            response = client.post(
+                url,
+                {
+                    "content": "Analiza el Excel",
+                    "file_ids": json.dumps([str(file_obj.id)]),
+                },
+                HTTP_HX_REQUEST="true",
+            )
+
+        assert response.status_code == 200
+        user_message = conversation.messages.filter(role=Message.Role.USER).first()
+        events = AgentEvent.objects.filter(
+            message=user_message,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+        )
+        assert events.count() == 1
+        blocks = _content_blocks_for_message(user_message, user=user)
+        assert any(block["type"] == "files" for block in blocks)
 
 
 @pytest.mark.django_db
@@ -892,6 +958,36 @@ class TestConversationDetail:
         assert blocks[0]["type"] == "files"
         assert blocks[0]["files"][0]["name"] == "Informe.docx"
 
+    def test_content_blocks_exclude_context_from_assistant(self, user, conversation):
+        from apps.files.parsers import parse_upload
+        from apps.files.services import save_uploaded_file
+        from apps.files.tests.test_parsers_xlsx import build_sample_xlsx_bytes
+
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=build_sample_xlsx_bytes(),
+            parsed=parsed,
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+            payload=serialize_file_for_ui(file_obj, user=user),
+            sequence_number=0,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message, user=user)
+
+        assert blocks == []
+
     def test_content_blocks_hydrate_renamed_dashboard_name(self, user, conversation):
         from apps.files.models import HTML_MIME
         from apps.files.services import rename_dashboard_file, save_generated_file
@@ -1005,6 +1101,55 @@ class TestConversationStart:
         response = client.post(reverse("chat:start"), {"content": "   "})
         assert response.status_code == 400
         assert Conversation.objects.filter(user=user).count() == 0
+
+    def test_draft_creates_empty_conversation(self, client, user):
+        client.force_login(user)
+        response = client.post(reverse("chat:draft"))
+        assert response.status_code == 200
+        payload = response.json()
+        conversation = Conversation.objects.get(id=payload["conversation_id"], user=user)
+        assert conversation.status == Conversation.Status.ACTIVE
+        assert conversation.messages.count() == 0
+
+    def test_start_uses_draft_conversation_with_files(self, client, user):
+        client.force_login(user)
+        draft_response = client.post(reverse("chat:draft"))
+        conversation_id = draft_response.json()["conversation_id"]
+        conversation = Conversation.objects.get(id=conversation_id)
+
+        upload = SimpleUploadedFile(
+            "ventas.xlsx",
+            build_sample_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        upload_response = client.post(
+            reverse("chat:upload", kwargs={"conversation_id": conversation.id}),
+            {"file": upload},
+        )
+        assert upload_response.status_code == 200
+        file_id = upload_response.json()["file_id"]
+
+        with patch("apps.chat.views.run_agent_conversation") as mock_task:
+            mock_task.delay.return_value = MagicMock(id="task-789")
+            response = client.post(
+                reverse("chat:start"),
+                {
+                    "content": "Analiza este Excel",
+                    "conversation_id": str(conversation.id),
+                    "file_ids": json.dumps([file_id]),
+                },
+            )
+
+        assert response.status_code == 302
+        assert Conversation.objects.filter(user=user).count() == 1
+        conversation.refresh_from_db()
+        assert conversation.title == "Analiza este Excel"
+        assert conversation.messages.filter(role=Message.Role.USER).count() == 1
+        assert AgentEvent.objects.filter(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+        ).count() == 1
+        mock_task.delay.assert_called_once()
 
 
 @pytest.mark.django_db

@@ -1,0 +1,14 @@
+<dialog id="ay-attachment-dialog" class="ay-attachment-dialog">
+  <div class="ay-attachment-dialog__panel">
+    <div class="ay-attachment-dialog__header">
+      <span class="ay-attachment-dialog__name" id="ay-attachment-dialog-name"></span>
+      <button type="button" class="ay-attachment-dialog__close" data-attachment-dialog-close aria-label="Cerrar">
+        {% include "components/icon.html" with name="close" size=16 %}
+      </button>
+    </div>
+    <button type="button" class="ay-btn ay-attachment-dialog__download" data-attachment-dialog-download>
+      {% include "components/icon.html" with name="download" size=16 %}
+      <span>Descargar</span>
+    </button>
+  </div>
+</dialog>

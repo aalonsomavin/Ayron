@@ -21,6 +21,7 @@
   <link rel="icon" href="{% static 'img/favicon.png' %}" type="image/png">
   <script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/composer.css' %}">
   <link rel="stylesheet" href="{% static 'css/clarification.css' %}">
 </head>
 <body>
@@ -67,6 +68,7 @@
 
   {% include "components/toast_stack.html" %}
   {% include "components/confirm_dialog.html" %}
+  {% include "components/attachment_download_dialog.html" %}
 
   {% block content %}{% endblock %}
   <script src="{% static 'js/ayron-ui.js' %}"></script>

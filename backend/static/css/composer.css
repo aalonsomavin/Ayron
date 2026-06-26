@@ -1,0 +1,339 @@
+.ay-chat-empty__composer-main {
+  display: block;
+}
+
+.ay-chat-empty__composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ay-composer__footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ay-composer__footer-right .ay-composer__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.ay-msg-user__content {
+  max-width: 78%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.ay-msg-user__bubble {
+  max-width: 100%;
+}
+
+.ay-msg-user__files {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.ay-attachment-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(50%, 360px);
+  max-width: 100%;
+  flex: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 9px 11px;
+  border-radius: var(--ay-radius-md);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: normal;
+  color: inherit;
+  border: 1px solid var(--ay-border);
+  background: var(--ay-bg-muted);
+  box-shadow: none;
+  white-space: normal;
+  transition: border-color var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-attachment-card:hover {
+  border-color: var(--ay-border-strong);
+}
+
+.ay-attachment-card:focus-visible {
+  outline: 2px solid var(--ay-accent);
+  outline-offset: 2px;
+}
+
+.ay-attachment-card__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ay-radius-sm);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ay-attachment-card__icon--doc {
+  background: var(--ay-blue-50);
+  color: var(--ay-blue-700);
+}
+
+.ay-attachment-card__icon--sheet {
+  background: var(--ay-success-50);
+  color: var(--ay-success-700);
+}
+
+.ay-attachment-card__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.ay-attachment-card__name {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ay-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ay-attachment-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ay-text-subtle);
+  margin-top: 1px;
+}
+
+.ay-attachment-card__ext {
+  font-family: var(--ay-font-mono);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.ay-composer .ay-composer__box {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-height: 88px;
+  padding: 14px 14px 10px;
+  background: var(--ay-surface);
+  border: 1px solid var(--ay-border-strong);
+  border-radius: 20px;
+  box-shadow:
+      0 4px 24px rgba(16, 16, 20, 0.07),
+      0 1px 3px rgba(16, 16, 20, 0.05);
+  transition: border-color var(--ay-dur-fast) var(--ay-ease),
+      box-shadow var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-composer .ay-composer__box:focus-within {
+  border-color: var(--ay-accent);
+  box-shadow:
+      0 8px 32px rgba(16, 16, 20, 0.09),
+      var(--ay-shadow-focus);
+}
+
+.ay-composer__main {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.ay-composer__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ay-composer__attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px 4px 10px;
+  border-radius: var(--ay-radius-full);
+  background: var(--ay-bg-muted);
+  color: var(--ay-text);
+  font-size: 12.5px;
+}
+
+.ay-composer__attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ay-composer__attachment-remove {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--ay-text-subtle);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.ay-composer__input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--ay-font-sans);
+  font-size: 15px;
+  color: var(--ay-text);
+  padding: 0;
+  min-height: 24px;
+  resize: none;
+}
+
+.ay-composer__input::-moz-placeholder {
+  color: var(--ay-text-subtle);
+}
+
+.ay-composer__input::placeholder {
+  color: var(--ay-text-subtle);
+}
+
+.ay-composer__file-input {
+  display: none;
+}
+
+.ay-composer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.ay-composer__attach {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--ay-radius-full);
+  background: transparent;
+  color: var(--ay-text-subtle);
+  cursor: pointer;
+}
+
+.ay-composer__attach:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ay-composer__attach .ay-icon {
+  color: var(--ay-text-subtle);
+}
+
+.ay-composer__model {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--ay-border-strong);
+  border-radius: var(--ay-radius-full);
+  background: var(--ay-surface);
+  color: var(--ay-text-muted);
+  font-family: var(--ay-font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: default;
+}
+
+.ay-composer__model .ay-icon {
+  color: var(--ay-text-subtle);
+}
+
+.ay-composer__model-label {
+  line-height: 1;
+}
+
+.ay-attachment-dialog {
+  border: none;
+  padding: 0;
+  background: transparent;
+  max-width: calc(100vw - 32px);
+}
+
+.ay-attachment-dialog::backdrop {
+  background: rgba(16, 16, 20, 0.42);
+}
+
+.ay-attachment-dialog__panel {
+  width: min(420px, calc(100vw - 32px));
+  background: var(--ay-surface);
+  border: 1px solid var(--ay-border);
+  border-radius: 14px;
+  box-shadow: var(--ay-shadow-lg);
+  padding: 18px 20px 20px;
+}
+
+.ay-attachment-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.ay-attachment-dialog__name {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ay-text);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.ay-attachment-dialog__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--ay-radius-sm);
+  background: transparent;
+  color: var(--ay-text-subtle);
+  cursor: pointer;
+}
+
+.ay-attachment-dialog__close:hover {
+  background: var(--ay-bg-muted);
+  color: var(--ay-text);
+}
+
+.ay-attachment-dialog__download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}

@@ -19,8 +19,12 @@ from apps.agent.skills import (
     get_platform_skill_sources,
 )
 from apps.agent.tools import AGENT_TOOLS
-from apps.chat.models import Conversation
-from apps.files.services import format_agent_file_index_block
+from apps.chat.models import Conversation, Message
+from apps.files.services import (
+    format_agent_file_index_block,
+    format_user_attachments_block,
+    get_context_attachments_for_message,
+)
 
 MEXAR_SYSTEM_PROMPT = """\
 Eres un asistente de datos para Mexar Pharma: distribución y licenciamiento \
@@ -198,12 +202,23 @@ de la base; no inventes cifras.
 """
 
 
-def build_system_prompt(conversation: Conversation, user_message: str = "") -> str:
+def build_system_prompt(
+    conversation: Conversation,
+    user_message: str | Message = "",
+) -> str:
     prompt = MEXAR_SYSTEM_PROMPT
     file_index = format_agent_file_index_block(conversation)
     if file_index:
         prompt = f"{prompt}\n{file_index}"
-    intent = detect_deliverable_intent(user_message)
+    user_message_obj = user_message if isinstance(user_message, Message) else None
+    user_message_text = user_message.content if user_message_obj else str(user_message or "")
+    attachments_block = format_user_attachments_block(user_message_obj)
+    if attachments_block:
+        prompt = f"{prompt}\n{attachments_block}"
+    intent = detect_deliverable_intent(
+        user_message_text,
+        context_attachments=get_context_attachments_for_message(user_message_obj),
+    )
     if intent != DeliverableIntent.NONE:
         block = format_deliverable_prompt_block(intent)
         if block:
@@ -218,7 +233,7 @@ CLARIFICATION_INTERRUPT_ON = {
 }
 
 
-def create_agent(conversation: Conversation, user_message: str = ""):
+def create_agent(conversation: Conversation, user_message: str | Message = ""):
     backend = build_agent_backend()
     set_agent_backend(backend)
     return create_deep_agent(

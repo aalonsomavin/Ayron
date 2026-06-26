@@ -3,16 +3,20 @@ from django.contrib.auth import get_user_model
 
 from apps.chat.models import Conversation
 from apps.files.models import File
+from apps.files.parsers import parse_upload
 from apps.files.services import (
     format_agent_file_index_block,
+    format_user_attachments_block,
     get_agent_file_index,
     hydrate_file_payload_for_ui,
     is_dashboard_saved,
     list_saved_dashboards,
     normalize_file_payload_for_ui,
+    open_file_stream,
     rename_dashboard_file,
     save_dashboard,
     save_generated_file,
+    save_uploaded_file,
     serialize_file_for_ui,
     serialize_saved_dashboard,
     set_dashboard_pinned,
@@ -20,6 +24,7 @@ from apps.files.services import (
     update_generated_file,
     _normalize_html_filename,
 )
+from apps.files.tests.test_parsers_xlsx import build_sample_xlsx_bytes
 
 User = get_user_model()
 
@@ -54,6 +59,8 @@ class TestFileServices:
         assert file_obj.conversation == conversation
         assert file_obj.uploaded_by == user
         assert file_obj.version == 1
+        assert file_obj.content_json["role"] == "deliverable"
+        assert file_obj.content_json["source"] == "generated"
         assert file_obj.file.name.endswith(".docx")
 
     def test_update_generated_file_increments_version(self, user, conversation):
@@ -116,8 +123,106 @@ class TestFileServices:
             preview_html="",
         )
         block = format_agent_file_index_block(conversation)
-        assert "Archivos de esta conversación" in block
+        assert "Archivos generados por el agente" in block
         assert "file_id=" in block
+        assert "get_spreadsheet" in block
+
+    def test_save_uploaded_file(self, user, conversation):
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        file_bytes = build_sample_xlsx_bytes()
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=file_bytes,
+            parsed=parsed,
+        )
+        assert file_obj.content_json["source"] == "upload"
+        assert file_obj.content_json["role"] == "context"
+        assert file_obj.format_key == "xlsx"
+        assert file_obj.file.name.endswith(".xlsx")
+        data = serialize_file_for_ui(file_obj, user=user)
+        assert data["role"] == "context"
+
+    def test_format_agent_file_index_block_split_sections(self, user, conversation):
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=build_sample_xlsx_bytes(),
+            parsed=parsed,
+        )
+        save_generated_file(
+            conversation=conversation,
+            user=user,
+            original_name="Informe.docx",
+            content_json={
+                "title": "Informe",
+                "subtitle": "",
+                "sections": [{"heading": "S", "paragraphs": [], "bullets": [], "table": None}],
+            },
+            file_bytes=b"x",
+            preview_html="",
+        )
+        block = format_agent_file_index_block(conversation)
+        assert "Archivos subidos por el usuario" in block
+        assert "Archivos generados por el agente" in block
+        assert "solo lectura" in block
+
+    def test_open_file_stream_serves_original_upload_bytes(self, user, conversation):
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        file_bytes = build_sample_xlsx_bytes()
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=file_bytes,
+            parsed=parsed,
+        )
+        stream = open_file_stream(file_obj)
+        assert stream.getvalue() == file_bytes
+
+    def test_format_user_attachments_block(self, user, conversation):
+        from apps.agent.events import persist_event
+        from apps.chat.models import AgentEvent, Message
+
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=build_sample_xlsx_bytes(),
+            parsed=parsed,
+        )
+        user_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Analiza este archivo",
+        )
+        persist_event(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+            payload=serialize_file_for_ui(file_obj, user=user),
+            message=user_message,
+        )
+        block = format_user_attachments_block(user_message)
+        assert "Contexto adjunto en este mensaje" in block
+        assert str(file_obj.id) in block
+        assert "get_spreadsheet" in block
+
+    def test_uploaded_file_index_shows_subido(self, user, conversation):
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=build_sample_xlsx_bytes(),
+            parsed=parsed,
+        )
+        block = format_agent_file_index_block(conversation)
+        assert "Archivos subidos por el usuario" in block
+        assert "solo lectura" in block
 
     def test_serialize_file_for_ui(self, user, conversation):
         content = {
@@ -136,6 +241,7 @@ class TestFileServices:
         data = serialize_file_for_ui(file_obj)
         assert data["ext"] == "DOCX"
         assert data["kind"] == "doc"
+        assert data["role"] == "deliverable"
         assert data["download_url"] == f"/files/{file_obj.id}/download/"
 
     def test_serialize_html_report_includes_pdf_url(self, user, conversation):

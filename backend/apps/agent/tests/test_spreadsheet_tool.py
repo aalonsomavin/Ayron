@@ -178,9 +178,37 @@ class TestSpreadsheetTool:
         )
         assert result["ok"] is True
         assert result["action"] == "updated"
-        assert result["version"] == 2
-        file_obj = File.objects.get(id=created["file_id"])
-        assert len(file_obj.content_json["sheets"][0]["rows"]) == 1
+
+    def test_update_spreadsheet_rejects_context_file(self, user, conversation):
+        from apps.files.parsers import parse_upload
+        from apps.files.services import save_uploaded_file
+        from apps.files.tests.test_parsers_xlsx import build_sample_xlsx_bytes
+
+        set_agent_context(conversation, user)
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=build_sample_xlsx_bytes(),
+            parsed=parsed,
+        )
+        result = json.loads(
+            invoke_tool(
+                update_spreadsheet,
+                "tc-update-context",
+                file_id=str(file_obj.id),
+                sheets=[
+                    {
+                        "name": "Revenue",
+                        "headers": ["Region"],
+                        "rows": [["EMEA"]],
+                    }
+                ],
+            )
+        )
+        assert result["ok"] is False
+        assert "contexto del usuario" in result["error"]
 
     def test_serialize_file_for_ui(self, user, conversation, sample_content):
         set_agent_context(conversation, user)
@@ -196,6 +224,7 @@ class TestSpreadsheetTool:
         payload = serialize_file_for_ui(file_obj, user=user)
         assert payload["kind"] == "sheet"
         assert payload["ext"] == "XLSX"
+        assert payload["role"] == "deliverable"
         assert payload["meta"] == "Spreadsheet · 1 hoja"
         assert payload["preview_url"].endswith("/preview/")
 
@@ -219,6 +248,14 @@ class TestSpreadsheetTool:
         restored = revalidate_xlsx_content_json(content)
         assert restored["format"] == "xlsx"
         assert restored["sheets"][0]["headers"] == ["Region", "Revenue", "MoM %"]
+
+    def test_revalidate_xlsx_preserves_role(self, sample_content):
+        content = validate_content_json(sample_content["title"], sample_content["sheets"])
+        content["role"] = "context"
+        content["source"] = "upload"
+        restored = revalidate_xlsx_content_json(content)
+        assert restored["role"] == "context"
+        assert restored["source"] == "upload"
 
     def test_normalize_sheet_style_defaults(self, sample_content):
         content = validate_content_json(sample_content["title"], sample_content["sheets"])

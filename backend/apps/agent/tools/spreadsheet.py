@@ -25,6 +25,7 @@ from apps.agent.tools.table_style_tokens import (
 from apps.files.models import XLSX_MIME
 from apps.files.services import escape_preview_text as esc
 from apps.files.services import (
+    context_update_error,
     get_file_for_conversation,
     save_generated_file,
     serialize_file_for_agent,
@@ -415,6 +416,9 @@ def update_spreadsheet(
         return build_tool_error_response("Spreadsheet not found in this conversation")
     if file_obj.format_key != "xlsx":
         return build_tool_error_response("File is not a spreadsheet")
+    blocked = context_update_error(file_obj)
+    if blocked:
+        return build_tool_error_response(blocked)
 
     try:
         content_json = _merge_content_json(file_obj.content_json, title, sheets)

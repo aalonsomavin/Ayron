@@ -93,8 +93,10 @@
       name: el.dataset.fileName,
       ext: el.dataset.fileExt || "DOCX",
       kind: el.dataset.fileKind || "",
+      role: el.dataset.fileRole || "",
       meta: el.dataset.fileMeta || "",
       version: parseInt(el.dataset.fileVersion || "1", 10),
+      size_bytes: parseInt(el.dataset.fileSize || "0", 10) || 0,
       download_url: el.dataset.downloadUrl,
       download_pdf_url: el.dataset.downloadPdfUrl || "",
       preview_url: el.dataset.previewUrl,
@@ -108,6 +110,7 @@
       name: event.name,
       ext: event.ext || "DOCX",
       kind: event.kind || "",
+      role: event.role || "deliverable",
       meta: event.meta || "",
       version: event.version || 1,
       download_url: event.download_url,
@@ -141,6 +144,7 @@
     btn.dataset.fileName = file.name;
     btn.dataset.fileExt = file.ext || "DOCX";
     btn.dataset.fileKind = kind;
+    btn.dataset.fileRole = file.role || "deliverable";
     btn.dataset.fileMeta = file.meta || "";
     btn.dataset.fileVersion = String(file.version || 1);
     btn.dataset.downloadUrl = file.download_url;
@@ -334,11 +338,15 @@
     csrfToken: null,
     _skipNameBlurSave: false,
     _nameSaveInFlight: false,
+    _attachmentFile: null,
+    _attachmentDialog: null,
+    _attachmentDialogName: null,
 
     init: function (options) {
       this.panelEl = options.panelEl;
       this.mainEl = options.mainEl;
       this.csrfToken = options.csrfToken || null;
+      this.initAttachmentDialog();
       if (!this.panelEl) return;
 
       this.panelEl.removeAttribute("hidden");
@@ -361,12 +369,53 @@
       });
 
       document.addEventListener("click", function (e) {
+        const attachmentCard = e.target.closest(".ay-attachment-card");
+        if (attachmentCard) {
+          if (window.AyronSidebar) window.AyronSidebar.close();
+          self.openAttachmentDownload(filePayloadFromEl(attachmentCard));
+          return;
+        }
         const card = e.target.closest(".ay-file-card");
         if (!card) return;
         if (window.AyronSidebar) window.AyronSidebar.close();
         self.open(filePayloadFromEl(card));
         self.setActiveCard(card);
       });
+    },
+
+    initAttachmentDialog: function () {
+      const dialog = document.getElementById("ay-attachment-dialog");
+      if (!dialog || dialog.dataset.bound === "true") return;
+      dialog.dataset.bound = "true";
+      const self = this;
+      this._attachmentDialog = dialog;
+      this._attachmentDialogName = document.getElementById("ay-attachment-dialog-name");
+      const closeBtn = dialog.querySelector("[data-attachment-dialog-close]");
+      const downloadBtn = dialog.querySelector("[data-attachment-dialog-download]");
+
+      function closeDialog() {
+        dialog.close();
+        self._attachmentFile = null;
+      }
+
+      closeBtn.addEventListener("click", closeDialog);
+      dialog.addEventListener("click", function (e) {
+        if (e.target === dialog) closeDialog();
+      });
+      downloadBtn.addEventListener("click", function () {
+        if (!self._attachmentFile || !self._attachmentFile.download_url) return;
+        window.location.href = self._attachmentFile.download_url;
+      });
+    },
+
+    openAttachmentDownload: function (file) {
+      if (!this._attachmentDialog) this.initAttachmentDialog();
+      if (!this._attachmentDialog) return;
+      this._attachmentFile = file;
+      if (this._attachmentDialogName) {
+        this._attachmentDialogName.textContent = file.name || "Archivo";
+      }
+      this._attachmentDialog.showModal();
     },
 
     initNameInput: function () {
@@ -668,6 +717,9 @@
 
     handleEvent: function (bubble, event) {
       const file = filePayloadFromEvent(event);
+      if (file.role === "context") {
+        return;
+      }
       const contentEl = bubble.querySelector(".ay-msg-agent__content");
       if (!contentEl) return;
 

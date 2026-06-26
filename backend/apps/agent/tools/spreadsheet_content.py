@@ -59,7 +59,11 @@ def validate_xlsx_content_json(title: str, sheets: list) -> dict:
 
 
 def revalidate_xlsx_content_json(content_json: dict) -> dict:
-    return validate_xlsx_content_json(
+    validated = validate_xlsx_content_json(
         content_json.get("title", ""),
         content_json.get("sheets", []),
     )
+    for key in ("source", "role", "parse_warnings"):
+        if key in content_json:
+            validated[key] = content_json[key]
+    return validated

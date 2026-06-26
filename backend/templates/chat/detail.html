@@ -16,7 +16,22 @@
         {% for turn in chat_turns %}
           <div class="ay-chat__turn{% if forloop.last %} ay-chat__turn--active{% endif %}">
             <div class="ay-msg-user" data-message-id="{{ turn.user.id }}">
-              <div class="ay-msg-user__bubble">{{ turn.user.content }}</div>
+              <div class="ay-msg-user__content">
+                {% if turn.user.content %}
+                  <div class="ay-msg-user__bubble">{{ turn.user.content }}</div>
+                {% endif %}
+                {% if turn.user.content_blocks %}
+                  {% for block in turn.user.content_blocks %}
+                    {% if block.type == "files" %}
+                      <div class="ay-msg-user__files">
+                        {% for file in block.files %}
+                          {% include "components/attachment_card.html" with file=file %}
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              </div>
             </div>
             {% if turn.assistant %}
               {% if turn.assistant.content_blocks or turn.assistant.tool_trace or turn.assistant.cancelled %}
@@ -35,7 +50,9 @@
                           {% elif block.type == "files" %}
                             <div class="ay-msg-agent__files">
                               {% for file in block.files %}
-                                {% include "components/file_card.html" with file=file active=False %}
+                                {% if file.role != "context" %}
+                                  {% include "components/file_card.html" with file=file active=False %}
+                                {% endif %}
                               {% endfor %}
                             </div>
                           {% elif block.type == "clarification" %}
@@ -84,26 +101,53 @@
           hx-swap="none"
         >
           {% csrf_token %}
+          <input type="hidden" name="file_ids" id="chat-file-ids" value="">
           <div class="ay-composer__box">
+            <div id="chat-pending-files" class="ay-composer__attachments" hidden></div>
+            <div class="ay-composer__main">
+              <input
+                type="text"
+                name="content"
+                id="chat-input"
+                class="ay-composer__input"
+                placeholder="Escribe un mensaje"
+                autocomplete="off"
+                {% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %}disabled{% endif %}
+              />
+            </div>
             <input
-              type="text"
-              name="content"
-              id="chat-input"
-              class="ay-composer__input"
-              autocomplete="off"
-              {% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %}disabled{% endif %}
+              type="file"
+              id="chat-file-input"
+              class="ay-composer__file-input"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              hidden
             />
-            <div class="ay-composer__actions">
-              <span id="chat-send-wrap"{% if conversation.status == "processing" %} hidden{% endif %}>
-                {% if conversation.status == "awaiting_clarification" %}
-                  {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" disabled="disabled" %}
-                {% else %}
-                  {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
-                {% endif %}
-              </span>
-              <span id="chat-stop-wrap"{% if conversation.status != "processing" %} hidden{% endif %}>
-                {% include "components/button.html" with id="chat-stop" variant="primary" size="sm" type="button" label="Detener" left_icon="stop" %}
-              </span>
+            <div class="ay-composer__footer">
+              <button
+                type="button"
+                id="chat-attach"
+                class="ay-composer__attach"
+                aria-label="Adjuntar archivo Excel"
+                title="Adjuntar .xlsx"
+                {% if conversation.status == "processing" or conversation.status == "awaiting_clarification" %}disabled{% endif %}
+              >
+                {% include "components/icon.html" with name="plus" size=18 %}
+              </button>
+              <div class="ay-composer__footer-right">
+                {% include "components/composer_model_selector.html" %}
+                <div class="ay-composer__actions">
+                  <span id="chat-send-wrap"{% if conversation.status == "processing" %} hidden{% endif %}>
+                    {% if conversation.status == "awaiting_clarification" %}
+                      {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" disabled="disabled" %}
+                    {% else %}
+                      {% include "components/button.html" with id="chat-send" variant="primary" size="sm" type="submit" label="Enviar" left_icon="sparkles" %}
+                    {% endif %}
+                  </span>
+                  <span id="chat-stop-wrap"{% if conversation.status != "processing" %} hidden{% endif %}>
+                    {% include "components/button.html" with id="chat-stop" variant="primary" size="sm" type="button" label="Detener" left_icon="stop" %}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </form>
@@ -140,6 +184,8 @@
   const stopUrl = "{% url 'chat:stop' conversation_id=conversation.id %}";
   const retryUrl = "{% url 'chat:retry' conversation_id=conversation.id %}";
   const clarificationWizardUrl = "{% url 'chat:clarification_wizard' conversation_id=conversation.id %}";
+  const uploadUrl = "{% url 'chat:upload' conversation_id=conversation.id %}";
+  let pendingUploads = [];
   let lastAppliedSeq = -1;
   let eventSource = null;
   let streamContainer = null;
@@ -281,6 +327,118 @@
   function csrfToken() {
     const input = document.querySelector('#chat-composer input[name="csrfmiddlewaretoken"]');
     return input ? input.value : "";
+  }
+
+  function syncFileIdsInput() {
+    const input = document.getElementById("chat-file-ids");
+    if (input) {
+      input.value = JSON.stringify(pendingUploads.map(function (file) { return file.file_id; }));
+    }
+  }
+
+  function renderPendingAttachments() {
+    const container = document.getElementById("chat-pending-files");
+    if (!container) return;
+    container.innerHTML = "";
+    if (!pendingUploads.length) {
+      container.hidden = true;
+      return;
+    }
+    container.hidden = false;
+    pendingUploads.forEach(function (file, index) {
+      const chip = document.createElement("span");
+      chip.className = "ay-composer__attachment";
+      chip.innerHTML =
+        '<span class="ay-composer__attachment-name">' + (file.name || "Archivo") + '</span>' +
+        '<button type="button" class="ay-composer__attachment-remove" aria-label="Quitar archivo" data-index="' + index + '">' +
+        '&times;</button>';
+      container.appendChild(chip);
+    });
+    container.querySelectorAll(".ay-composer__attachment-remove").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const idx = Number(btn.getAttribute("data-index"));
+        pendingUploads.splice(idx, 1);
+        syncFileIdsInput();
+        renderPendingAttachments();
+      });
+    });
+  }
+
+  function attachmentIconSvg(kind) {
+    if (kind === "sheet") {
+      return (
+        '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect width="18" height="18" x="3" y="3" rx="2"/>' +
+        '<path d="M3 9h18"/><path d="M3 15h18"/>' +
+        '<path d="M9 3v18"/><path d="M15 3v18"/></svg>'
+      );
+    }
+    return (
+      '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>' +
+      '<path d="M14 2v4a2 2 0 0 0 2 2h4"/>' +
+      '<path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>'
+    );
+  }
+
+  function buildUserFilesHtml(files) {
+    if (!files || !files.length) return "";
+    let html = '<div class="ay-msg-user__files">';
+    files.forEach(function (file) {
+      const kind = file.kind || ((file.ext || "") === "XLSX" ? "sheet" : "doc");
+      const iconKind = kind === "sheet" ? "sheet" : "doc";
+      const metaSuffix = (file.meta || "")
+        .replace(/^Spreadsheet · /, "")
+        .replace(/^Document · /, "")
+        .replace(/^Report · /, "")
+        .replace(/^Dashboard · /, "");
+      html +=
+        '<button type="button" class="ay-attachment-card" data-file-id="' + (file.file_id || "") + '"' +
+        ' data-file-name="' + (file.name || "") + '"' +
+        ' data-file-ext="' + (file.ext || "XLSX") + '"' +
+        ' data-file-meta="' + (file.meta || "") + '"' +
+        ' data-file-kind="' + iconKind + '"' +
+        ' data-file-role="context"' +
+        ' data-file-version="' + (file.version || 1) + '"' +
+        ' data-file-size="' + (file.size_bytes || 0) + '"' +
+        ' data-download-url="' + (file.download_url || "") + '"' +
+        ' data-preview-url="' + (file.preview_url || "") + '">' +
+        '<span class="ay-attachment-card__icon ay-attachment-card__icon--' + iconKind + '">' +
+        attachmentIconSvg(iconKind) +
+        "</span>" +
+        '<span class="ay-attachment-card__body">' +
+        '<span class="ay-attachment-card__name">' + (file.name || "Archivo") + '</span>' +
+        (metaSuffix
+          ? '<span class="ay-attachment-card__meta"><span class="ay-attachment-card__ext">' +
+            (file.ext || "XLSX") +
+            '</span><span>· ' + metaSuffix + '</span></span>'
+          : "") +
+        "</span></button>";
+    });
+    html += "</div>";
+    return html;
+  }
+
+  function uploadAttachment(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken(),
+      },
+      credentials: "same-origin",
+      body: formData,
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) {
+          throw new Error(payload.error || "No se pudo subir el archivo.");
+        }
+        return payload;
+      });
+    });
   }
 
   function getProcessingMessageId() {
@@ -1263,6 +1421,10 @@
     });
   }
 
+  document.getElementById("chat-composer").addEventListener("htmx:configRequest", function () {
+    syncFileIdsInput();
+  });
+
   document.getElementById("chat-composer").addEventListener("htmx:afterRequest", function (e) {
     if (!e.detail.successful) return;
     const content = inputEl.value.trim();
@@ -1280,15 +1442,23 @@
       /* ignore non-json responses */
     }
 
+    const sentFiles = pendingUploads.slice();
     const row = document.createElement("div");
     row.className = "ay-msg-user";
-    row.innerHTML = '<div class="ay-msg-user__bubble"></div>';
+    row.innerHTML =
+      '<div class="ay-msg-user__content">' +
+      '<div class="ay-msg-user__bubble"></div>' +
+      buildUserFilesHtml(sentFiles) +
+      "</div>";
     row.querySelector(".ay-msg-user__bubble").textContent = content;
 
     beginNewTurn(row);
     scheduleFloatingUserPill();
 
     inputEl.value = "";
+    pendingUploads = [];
+    syncFileIdsInput();
+    renderPendingAttachments();
     finalizeStreamBubble();
     hideThinking();
     isStreaming = false;
@@ -1313,6 +1483,33 @@
 
   if (stopEl) {
     stopEl.addEventListener("click", stopAgentRun);
+  }
+
+  const attachEl = document.getElementById("chat-attach");
+  const fileInputEl = document.getElementById("chat-file-input");
+  if (attachEl && fileInputEl) {
+    attachEl.addEventListener("click", function () {
+      if (attachEl.disabled) return;
+      fileInputEl.click();
+    });
+    fileInputEl.addEventListener("change", function () {
+      const file = fileInputEl.files && fileInputEl.files[0];
+      fileInputEl.value = "";
+      if (!file) return;
+      attachEl.disabled = true;
+      uploadAttachment(file)
+        .then(function (payload) {
+          pendingUploads.push(payload);
+          syncFileIdsInput();
+          renderPendingAttachments();
+        })
+        .catch(function (err) {
+          window.alert(err.message || "No se pudo subir el archivo.");
+        })
+        .finally(function () {
+          attachEl.disabled = inputEl && inputEl.disabled;
+        });
+    });
   }
 
   if (messagesEl) {

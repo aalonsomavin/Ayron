@@ -14,6 +14,7 @@ from apps.agent.events import persist_event
 from apps.agent.runner import create_agent
 from apps.agent.streaming import StreamEventHandler
 from apps.chat.models import AgentEvent, Conversation, Message
+from apps.files.services import get_context_attachments_for_message
 
 logger = logging.getLogger(__name__)
 
@@ -152,13 +153,16 @@ def run_agent_conversation(
 
     agent = None
     try:
-        deliverable_intent = detect_deliverable_intent(user_message.content)
+        deliverable_intent = detect_deliverable_intent(
+            user_message.content,
+            context_attachments=get_context_attachments_for_message(user_message),
+        )
         set_agent_context(
             conversation,
             conversation.user,
             deliverable_intent=deliverable_intent,
         )
-        agent = create_agent(conversation, user_message=user_message.content)
+        agent = create_agent(conversation, user_message=user_message)
         input_state, config = build_stream_input(
             conversation,
             user_message,

@@ -7,6 +7,8 @@ from apps.agent.deliverable_intent import (
     required_tools_for_intent,
 )
 
+CONTEXT_XLSX = [{"file_id": "abc", "format": "xlsx", "role": "context"}]
+
 
 class TestDetectDeliverableIntent:
     @pytest.mark.parametrize(
@@ -21,7 +23,11 @@ class TestDetectDeliverableIntent:
             ("Necesito un spreadsheet con los números", DeliverableIntent.CREATE_XLSX),
             ("Necesito una carta formal para el cliente", DeliverableIntent.CREATE_DOCX),
             ("Actualiza el dashboard con los datos de junio", DeliverableIntent.UPDATE_FILE),
-            ("Modifica el informe anterior", DeliverableIntent.UPDATE_FILE),
+            ("Modifica el excel adjunto", DeliverableIntent.UPDATE_FILE),
+            (
+                "Haceme un analisis de los precios en este excel, modificalo con observaciones",
+                DeliverableIntent.UPDATE_FILE,
+            ),
             ("Transformalo en un dashboard interactivo", DeliverableIntent.UPDATE_FILE),
             ("Conviértelo en dashboard con tabs", DeliverableIntent.UPDATE_FILE),
             ("¿Cuáles son los 5 artistas top?", DeliverableIntent.NONE),
@@ -32,6 +38,29 @@ class TestDetectDeliverableIntent:
     )
     def test_detect_deliverable_intent(self, message, expected):
         assert detect_deliverable_intent(message) == expected
+
+    @pytest.mark.parametrize(
+        ("message", "expected"),
+        [
+            ("Modifica el excel adjunto", DeliverableIntent.CREATE_XLSX),
+            (
+                "Haceme un analisis de los precios en este excel, modificalo con observaciones",
+                DeliverableIntent.CREATE_XLSX,
+            ),
+            ("Modificalo con observaciones", DeliverableIntent.CREATE_XLSX),
+        ],
+    )
+    def test_detect_deliverable_intent_with_context_attachment(self, message, expected):
+        assert detect_deliverable_intent(
+            message,
+            context_attachments=CONTEXT_XLSX,
+        ) == expected
+
+    def test_update_existing_deliverable_with_attachment_present(self):
+        assert detect_deliverable_intent(
+            "Actualiza el informe que generaste con los datos de junio",
+            context_attachments=CONTEXT_XLSX,
+        ) == DeliverableIntent.UPDATE_FILE
 
 
 class TestDeliverableHelpers:
@@ -60,6 +89,11 @@ class TestDeliverableHelpers:
         block = format_deliverable_prompt_block(DeliverableIntent.CREATE_XLSX)
         assert "create_spreadsheet" in block
         assert "xlsx-spreadsheets" in block
+        assert "no uses `update_spreadsheet` sobre el adjunto" in block
+
+    def test_format_prompt_block_update_file_rejects_context(self):
+        block = format_deliverable_prompt_block(DeliverableIntent.UPDATE_FILE)
+        assert "role=context" in block
 
     def test_format_prompt_block_none_is_empty(self):
         assert format_deliverable_prompt_block(DeliverableIntent.NONE) == ""

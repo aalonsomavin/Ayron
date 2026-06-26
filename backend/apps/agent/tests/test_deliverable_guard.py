@@ -67,6 +67,35 @@ class TestDeliverableSatisfied:
         ]
         assert deliverable_satisfied(messages, DeliverableIntent.UPDATE_FILE) is True
 
+    def test_update_satisfied_with_update_spreadsheet(self):
+        messages = [
+            ToolMessage(
+                content=json.dumps({"ok": True, "file_id": "abc", "action": "updated"}),
+                tool_call_id="call_1",
+                name="update_spreadsheet",
+            )
+        ]
+        assert deliverable_satisfied(messages, DeliverableIntent.UPDATE_FILE) is True
+
+    def test_update_satisfied_after_nudge_when_spreadsheet_updated(self):
+        messages = [
+            HumanMessage(content="Modifica el excel adjunto"),
+            ToolMessage(
+                content=json.dumps({"ok": True, "file_id": "abc"}),
+                tool_call_id="call_1",
+                name="update_spreadsheet",
+            ),
+            AIMessage(content="Listo, agregué la columna."),
+            HumanMessage(
+                content=(
+                    "Aún no actualizaste el entregable. El usuario pidió modificar un archivo existente. "
+                    "Para Excel: get_spreadsheet y update_spreadsheet."
+                )
+            ),
+            AIMessage(content="El archivo ya fue actualizado."),
+        ]
+        assert deliverable_satisfied(messages, DeliverableIntent.UPDATE_FILE) is True
+
 
 class TestDeliverableGuardMiddleware:
     def test_nudges_when_deliverable_missing(self):

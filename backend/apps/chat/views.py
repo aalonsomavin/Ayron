@@ -2,6 +2,7 @@ import json
 import random
 from uuid import UUID
 
+from django.conf import settings
 from django.db.models import Max
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -32,7 +33,13 @@ from apps.agent.tools.clarification import (
     merge_step_answer,
     parse_step_answer_from_post,
 )
-from apps.files.services import hydrate_file_payload_for_ui
+from apps.files.models import File, XLSX_MIME
+from apps.files.parsers import UnsupportedFormatError, parse_upload
+from apps.files.services import (
+    hydrate_file_payload_for_ui,
+    save_uploaded_file,
+    serialize_file_for_ui,
+)
 from apps.chat.tool_trace import tool_trace_for_message
 from config.celery import app as celery_app
 
@@ -212,6 +219,13 @@ def _content_blocks_for_message(message: Message, *, user=None) -> list[dict]:
                 conversation_id=message.conversation_id,
                 user=user,
             )
+            role = file_payload.get("role", "deliverable")
+            if message.role == Message.Role.ASSISTANT and role == "context":
+                can_merge_token = False
+                continue
+            if message.role == Message.Role.USER and role == "deliverable":
+                can_merge_token = False
+                continue
             if blocks and blocks[-1]["type"] == "files":
                 blocks[-1]["files"].append(file_payload)
             else:
@@ -255,6 +269,8 @@ def _messages_with_content_blocks(conversation: Conversation) -> list[Message]:
             message.content_blocks = _content_blocks_for_message(message, user=conversation.user)
             message.tool_trace = tool_trace_for_message(message)
             message.cancelled = _message_was_cancelled(message)
+        elif message.role == Message.Role.USER:
+            message.content_blocks = _content_blocks_for_message(message, user=conversation.user)
     return messages
 
 
@@ -276,12 +292,63 @@ def _chat_turns(messages: list[Message]) -> list[dict]:
     return turns
 
 
-def _enqueue_user_message(conversation: Conversation, content: str) -> tuple[Message, Message]:
+def _parse_file_ids(request) -> list[str]:
+    raw = request.POST.get("file_ids", "").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(parsed, list):
+            return []
+        return [str(item).strip() for item in parsed if str(item).strip()]
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _attach_files_to_user_message(
+    conversation: Conversation,
+    user,
+    user_message: Message,
+    file_ids: list[str],
+) -> list[dict]:
+    if not file_ids:
+        return []
+    attached: list[dict] = []
+    for file_id in file_ids:
+        file_obj = File.objects.filter(
+            id=file_id,
+            conversation=conversation,
+            uploaded_by=user,
+        ).first()
+        if file_obj is None:
+            raise ValueError(f"File not found: {file_id}")
+        payload = serialize_file_for_ui(file_obj, user=user)
+        persist_event(
+            conversation=conversation,
+            event_type=AgentEvent.EventType.FILE_CREATED,
+            payload=payload,
+            message=user_message,
+        )
+        attached.append(payload)
+    return attached
+
+
+def _enqueue_user_message(
+    conversation: Conversation,
+    content: str,
+    *,
+    user,
+    file_ids: list[str] | None = None,
+) -> tuple[Message, Message]:
     user_message = Message.objects.create(
         conversation=conversation,
         role=Message.Role.USER,
         content=content,
     )
+    if file_ids:
+        _attach_files_to_user_message(conversation, user, user_message, file_ids)
     assistant_message = Message.objects.create(
         conversation=conversation,
         role=Message.Role.ASSISTANT,
@@ -408,13 +475,35 @@ def conversation_new(request):
 
 
 @require_POST
+def conversation_draft(request):
+    conversation = Conversation.objects.create(user=request.user)
+    return JsonResponse({"ok": True, "conversation_id": str(conversation.id)})
+
+
+@require_POST
 def conversation_start(request):
     content = request.POST.get("content", "").strip()
     if not content:
         return HttpResponseBadRequest("Message content is required.")
 
-    conversation = Conversation.objects.create(user=request.user)
-    _enqueue_user_message(conversation, content)
+    draft_id = request.POST.get("conversation_id", "").strip()
+    file_ids = _parse_file_ids(request)
+
+    if draft_id:
+        conversation = _get_conversation(request, draft_id)
+        if conversation.messages.exists():
+            return HttpResponseBadRequest("Conversation already started.")
+        if conversation.status != Conversation.Status.ACTIVE:
+            return HttpResponseBadRequest("Conversation is not available.")
+    else:
+        conversation = Conversation.objects.create(user=request.user)
+
+    _enqueue_user_message(
+        conversation,
+        content,
+        user=request.user,
+        file_ids=file_ids,
+    )
     return redirect("chat:detail", conversation_id=conversation.id)
 
 
@@ -463,7 +552,16 @@ def send_message(request, conversation_id):
     if not content:
         return HttpResponseBadRequest("Message content is required.")
 
-    user_message, assistant_message = _enqueue_user_message(conversation, content)
+    file_ids = _parse_file_ids(request)
+    try:
+        user_message, assistant_message = _enqueue_user_message(
+            conversation,
+            content,
+            user=request.user,
+            file_ids=file_ids,
+        )
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
 
     if request.headers.get("HX-Request"):
         return JsonResponse(
@@ -474,6 +572,50 @@ def send_message(request, conversation_id):
         )
 
     return redirect("chat:detail", conversation_id=conversation.id)
+
+
+@require_POST
+def upload_file(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+
+    if conversation.status == Conversation.Status.PROCESSING:
+        return JsonResponse({"error": "Conversation is already processing a message."}, status=400)
+
+    if conversation.status == Conversation.Status.AWAITING_CLARIFICATION:
+        return JsonResponse({"error": "Complete or skip the clarification request first."}, status=400)
+
+    uploaded = request.FILES.get("file")
+    if uploaded is None:
+        return JsonResponse({"error": "File is required."}, status=400)
+
+    if uploaded.size > settings.AYRON_MAX_UPLOAD_BYTES:
+        return JsonResponse({"error": "File exceeds maximum upload size."}, status=400)
+
+    original_name = uploaded.name or "upload.xlsx"
+    if not original_name.lower().endswith(".xlsx"):
+        return JsonResponse({"error": "Only .xlsx files are supported."}, status=400)
+
+    mime_type = uploaded.content_type or XLSX_MIME
+    file_bytes = uploaded.read()
+    if not file_bytes:
+        return JsonResponse({"error": "File is empty."}, status=400)
+
+    try:
+        parsed = parse_upload(file_bytes, original_name, mime_type)
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=request.user,
+            original_name=original_name,
+            file_bytes=file_bytes,
+            parsed=parsed,
+        )
+    except UnsupportedFormatError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    payload = serialize_file_for_ui(file_obj, user=request.user)
+    return JsonResponse({"ok": True, "file_id": str(file_obj.id), **payload})
 
 
 @require_POST

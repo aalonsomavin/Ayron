@@ -272,8 +272,12 @@ def validate_docx_content_json(
 
 
 def revalidate_docx_content_json(content_json: dict) -> dict:
-    return validate_docx_content_json(
+    validated = validate_docx_content_json(
         content_json.get("title", ""),
         content_json.get("subtitle", ""),
         content_json.get("sections", []),
     )
+    for key in ("source", "role", "parse_warnings"):
+        if key in content_json:
+            validated[key] = content_json[key]
+    return validated

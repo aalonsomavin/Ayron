@@ -28,23 +28,38 @@
 
             <form id="chat-composer" class="ay-chat-empty__composer" method="post" action="{% url 'chat:start' %}">
               {% csrf_token %}
+              <input type="hidden" name="file_ids" id="chat-file-ids" value="">
+              <input type="hidden" name="conversation_id" id="chat-conversation-id" value="">
               <div class="ay-chat-empty__composer-box">
+                <div id="chat-pending-files" class="ay-composer__attachments" hidden></div>
+                <div class="ay-chat-empty__composer-main">
+                  <input
+                    type="text"
+                    name="content"
+                    id="chat-input"
+                    class="ay-chat-empty__input"
+                    placeholder="¿En qué puedo ayudarte hoy?"
+                    autocomplete="off"
+                    required
+                  />
+                </div>
                 <input
-                  type="text"
-                  name="content"
-                  id="chat-input"
-                  class="ay-chat-empty__input"
-                  placeholder="Escribe una consulta…"
-                  autocomplete="off"
-                  required
+                  type="file"
+                  id="chat-file-input"
+                  class="ay-composer__file-input"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  hidden
                 />
                 <div class="ay-chat-empty__composer-footer">
-                  <button type="button" class="ay-chat-empty__attach" aria-label="Agregar fotos o archivos" title="Próximamente">
+                  <button type="button" id="chat-attach" class="ay-chat-empty__attach" aria-label="Adjuntar archivo Excel" title="Adjuntar .xlsx">
                     {% include "components/icon.html" with name="plus" size=18 %}
                   </button>
-                  <button type="submit" id="chat-send" class="ay-chat-empty__send" aria-label="Enviar" disabled>
-                    {% include "components/icon.html" with name="sparkles" size=16 %}
-                  </button>
+                  <div class="ay-composer__footer-right">
+                    {% include "components/composer_model_selector.html" %}
+                    <button type="submit" id="chat-send" class="ay-chat-empty__send" aria-label="Enviar" disabled>
+                      {% include "components/icon.html" with name="sparkles" size=16 %}
+                    </button>
+                  </div>
                 </div>
               </div>
             </form>
@@ -100,8 +115,107 @@
     window.AyronAgentAvatar.mount(mark, { active: false, variant: "brand" });
   }
 
+  const draftUrl = "{% url 'chat:draft' %}";
+  const uploadUrlTemplate = "{% url 'chat:upload' conversation_id='00000000-0000-0000-0000-000000000000' %}";
   const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
+  const attachEl = document.getElementById("chat-attach");
+  const fileInputEl = document.getElementById("chat-file-input");
+  const composerEl = document.getElementById("chat-composer");
+  let draftConversationId = null;
+  let pendingUploads = [];
+
+  function csrfToken() {
+    const input = document.querySelector('#chat-composer input[name="csrfmiddlewaretoken"]');
+    return input ? input.value : "";
+  }
+
+  function syncFileIdsInput() {
+    const input = document.getElementById("chat-file-ids");
+    if (input) {
+      input.value = JSON.stringify(pendingUploads.map(function (file) { return file.file_id; }));
+    }
+  }
+
+  function syncConversationIdInput() {
+    const input = document.getElementById("chat-conversation-id");
+    if (input) {
+      input.value = draftConversationId || "";
+    }
+  }
+
+  function renderPendingAttachments() {
+    const container = document.getElementById("chat-pending-files");
+    if (!container) return;
+    container.innerHTML = "";
+    if (!pendingUploads.length) {
+      container.hidden = true;
+      return;
+    }
+    container.hidden = false;
+    pendingUploads.forEach(function (file, index) {
+      const chip = document.createElement("span");
+      chip.className = "ay-composer__attachment";
+      chip.innerHTML =
+        '<span class="ay-composer__attachment-name">' + (file.name || "Archivo") + '</span>' +
+        '<button type="button" class="ay-composer__attachment-remove" aria-label="Quitar archivo" data-index="' + index + '">' +
+        '&times;</button>';
+      container.appendChild(chip);
+    });
+    container.querySelectorAll(".ay-composer__attachment-remove").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const idx = Number(btn.getAttribute("data-index"));
+        pendingUploads.splice(idx, 1);
+        syncFileIdsInput();
+        renderPendingAttachments();
+      });
+    });
+  }
+
+  function ensureDraftConversation() {
+    if (draftConversationId) {
+      return Promise.resolve(draftConversationId);
+    }
+    return fetch(draftUrl, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken(),
+      },
+      credentials: "same-origin",
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) {
+          throw new Error(payload.error || "No se pudo preparar el chat.");
+        }
+        draftConversationId = payload.conversation_id;
+        syncConversationIdInput();
+        return draftConversationId;
+      });
+    });
+  }
+
+  function uploadAttachment(file) {
+    return ensureDraftConversation().then(function (conversationId) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadUrl = uploadUrlTemplate.replace("00000000-0000-0000-0000-000000000000", conversationId);
+      return fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrfToken(),
+        },
+        credentials: "same-origin",
+        body: formData,
+      }).then(function (response) {
+        return response.json().then(function (payload) {
+          if (!response.ok) {
+            throw new Error(payload.error || "No se pudo subir el archivo.");
+          }
+          return payload;
+        });
+      });
+    });
+  }
 
   function updateSendState() {
     if (!inputEl || !sendEl) return;
@@ -121,6 +235,38 @@
       cleanUrl.searchParams.delete("draft");
       window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search);
     }
+  }
+
+  if (composerEl) {
+    composerEl.addEventListener("submit", function () {
+      syncFileIdsInput();
+      syncConversationIdInput();
+    });
+  }
+
+  if (attachEl && fileInputEl) {
+    attachEl.addEventListener("click", function () {
+      if (attachEl.disabled) return;
+      fileInputEl.click();
+    });
+    fileInputEl.addEventListener("change", function () {
+      const file = fileInputEl.files && fileInputEl.files[0];
+      fileInputEl.value = "";
+      if (!file) return;
+      attachEl.disabled = true;
+      uploadAttachment(file)
+        .then(function (payload) {
+          pendingUploads.push(payload);
+          syncFileIdsInput();
+          renderPendingAttachments();
+        })
+        .catch(function (err) {
+          window.alert(err.message || "No se pudo subir el archivo.");
+        })
+        .finally(function () {
+          attachEl.disabled = false;
+        });
+    });
   }
 
   document.querySelectorAll("[data-suggestion]").forEach(function (chip) {

@@ -141,7 +141,7 @@ def rollback_thread_to_turn(
     if agent is None:
         from apps.agent.runner import create_agent
 
-        agent = create_agent(conversation, user_message=user_message.content)
+        agent = create_agent(conversation, user_message=user_message)
 
     config = agent_config(thread_id)
     state = agent.get_state(config)

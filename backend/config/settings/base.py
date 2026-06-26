@@ -125,6 +125,8 @@ OPENAI_API_KEY = env("OPENAI_API_KEY")
 DEFAULT_LLM_MODEL = env("DEFAULT_LLM_MODEL")
 DEMO_DB_URL = env("DEMO_DB_URL")
 
+AYRON_MAX_UPLOAD_BYTES = env.int("AYRON_MAX_UPLOAD_BYTES", default=10 * 1024 * 1024)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

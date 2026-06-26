@@ -35,6 +35,7 @@ from apps.agent.tools.report_content import (
     validate_docx_content_json,
 )
 from apps.files.services import (
+    context_update_error,
     get_file_for_conversation,
     save_generated_file,
     serialize_file_for_agent,
@@ -340,9 +341,10 @@ def create_document(
 
 @tool
 def list_conversation_files() -> str:
-    """List Word documents generated in the current conversation.
+    """List all files in the current conversation (uploaded and generated).
 
-    Returns file_id, name, version, and summary for each document.
+    Returns file_id, name, format, source, version, and summary for each file.
+    Use get_spreadsheet for Excel, get_document for Word, hydrate_html_artifact for HTML.
     """
     conversation = get_agent_conversation()
     if conversation is None:
@@ -398,6 +400,9 @@ def update_document(
     file_obj = get_file_for_conversation(file_id, conversation)
     if file_obj is None:
         return build_tool_error_response("Document not found in this conversation")
+    blocked = context_update_error(file_obj)
+    if blocked:
+        return build_tool_error_response(blocked)
 
     try:
         content_json = _merge_content_json(file_obj.content_json, title, subtitle, sections)

@@ -20,10 +20,19 @@ from apps.agent.deliverable_intent import (
 MAX_DELIVERABLE_NUDGES = 2
 
 
+def _is_deliverable_nudge_message(message) -> bool:
+    if not isinstance(message, HumanMessage):
+        return False
+    content = message.content if isinstance(message.content, str) else ""
+    return content.startswith("Aún no generaste el entregable") or content.startswith(
+        "Aún no actualizaste el entregable"
+    )
+
+
 def _messages_since_last_user(messages: Sequence) -> list:
     last_user_idx = -1
     for index, message in enumerate(messages):
-        if isinstance(message, HumanMessage):
+        if isinstance(message, HumanMessage) and not _is_deliverable_nudge_message(message):
             last_user_idx = index
     if last_user_idx < 0:
         return list(messages)
@@ -72,7 +81,7 @@ def deliverable_satisfied(messages: Sequence, intent: DeliverableIntent) -> bool
             if not parsed or parsed.get("ok") is not True:
                 continue
             tool_name = message.name or ""
-            if tool_name in {"publish_html_artifact", "update_document"}:
+            if tool_name in {"publish_html_artifact", "update_document", "update_spreadsheet"}:
                 return True
         return False
 
