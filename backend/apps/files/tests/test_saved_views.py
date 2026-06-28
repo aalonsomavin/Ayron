@@ -67,6 +67,23 @@ class TestSavedDashboardViews:
         assert b"Anal\xc3\xadticas" in response.content
         assert b"Ventas" in response.content
         assert b"ay-saved-card__spark" in response.content
+        assert b"data-confirm-delete" in response.content
+        assert b"Eliminar dashboard" in response.content
+        assert f'data-delete-target="#saved-card-{dashboard_file.id}"'.encode() in response.content
+        assert b"hx-confirm" not in response.content
+
+    def test_file_unsave_htmx_deletes_card(self, client, user, dashboard_file):
+        save_dashboard(user, dashboard_file)
+        client.force_login(user)
+        card_target = f"saved-card-{dashboard_file.id}"
+        response = client.post(
+            reverse("files:unsave", kwargs={"file_id": dashboard_file.id}),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET=card_target,
+        )
+        assert response.status_code == 200
+        assert response.content == b""
+        assert not is_dashboard_saved(user, dashboard_file.id)
 
     def test_saved_list_search_htmx(self, client, user, dashboard_file):
         save_dashboard(user, dashboard_file)

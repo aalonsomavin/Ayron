@@ -23,6 +23,9 @@ from apps.files.services import (
     unsave_dashboard,
     update_generated_file,
     _normalize_html_filename,
+    _relative_date_label,
+    _timesince_fragment_es,
+    _user_display_name,
 )
 from apps.files.tests.test_parsers_xlsx import build_sample_xlsx_bytes
 
@@ -591,3 +594,28 @@ class TestSavedDashboardServices:
         assert len(data["series"]) == 10
         assert data["sparkline_line"].startswith("M")
         assert data["sparkline_area"].endswith("Z")
+
+
+class TestSavedDashboardDisplay:
+    def test_user_display_name_capitalizes_username(self, user):
+        user.username = "alejandro"
+        assert _user_display_name(user) == "Alejandro"
+
+    def test_timesince_fragment_es_translates_days(self):
+        assert _timesince_fragment_es("2 days") == "2 días"
+        assert _timesince_fragment_es("1 day") == "1 día"
+        assert _timesince_fragment_es("2\xa0days") == "2 días"
+
+    def test_relative_date_label_uses_spanish_units(self, user, conversation):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        file_obj = _dashboard_file(user, conversation)
+        saved = save_dashboard(user, file_obj)
+        saved.file.updated_at = timezone.now() - timedelta(days=2)
+        saved.file.save(update_fields=["updated_at"])
+        data = serialize_saved_dashboard(saved)
+        assert data["author"] == "Alejandro"
+        assert "días" in data["date_label"]
+        assert "days" not in data["date_label"]

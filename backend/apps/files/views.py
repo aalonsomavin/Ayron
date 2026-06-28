@@ -99,6 +99,19 @@ def _htmx_refresh_saved_list(request):
     return None
 
 
+def _htmx_delete_saved_card_response(request, file_id):
+    if not _is_htmx(request):
+        return None
+    import json
+
+    target = (request.headers.get("HX-Target") or "").lstrip("#")
+    if target == f"saved-card-{file_id}":
+        response = HttpResponse(status=200)
+        response["HX-Trigger"] = json.dumps({"ayronToast": {"message": "Dashboard eliminado"}})
+        return response
+    return None
+
+
 def _preview_for_file(file_obj: File) -> str:
     if file_obj.format_key == "html":
         return html_preview_html_for_file(file_obj.content_json, file_obj.preview_html)
@@ -228,6 +241,9 @@ def file_unsave(request, file_id):
         raise Http404("Dashboard not found")
 
     unsave_dashboard(request.user, file_id)
+    card_deleted = _htmx_delete_saved_card_response(request, file_id)
+    if card_deleted:
+        return card_deleted
     refreshed = _htmx_refresh_saved_list(request)
     if refreshed:
         return refreshed

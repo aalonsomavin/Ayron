@@ -3744,11 +3744,17 @@
     z-index: 2;
   }
 
+  .ay-saved-card:has(.ay-saved-card__menu-wrap[open]) {
+    position: relative;
+    z-index: 20;
+  }
+
   .ay-saved-card__thumb {
     position: relative;
+    z-index: 1;
     height: 108px;
     border-radius: 14px 14px 0 0;
-    overflow: hidden;
+    overflow: visible;
     background: #f7f9ff;
     border-bottom: 1px solid #eef0f4;
     flex: none;
@@ -3758,6 +3764,8 @@
     display: block;
     width: 100%;
     height: 108px;
+    border-radius: 14px 14px 0 0;
+    overflow: hidden;
   }
 
   .ay-saved-card__rename-toggle {
@@ -3774,8 +3782,14 @@
     display: none;
   }
 
+  .ay-saved-card__rename-toggle:checked ~ .ay-saved-card__hit {
+    pointer-events: none;
+  }
+
   .ay-saved-card__rename-toggle:checked ~ .ay-saved-card__rename {
     display: block;
+    position: relative;
+    z-index: 2;
   }
 
   .ay-saved-card__pin-form,
@@ -3937,6 +3951,8 @@
   }
 
   .ay-saved-card__body {
+    position: relative;
+    z-index: 0;
     padding: 13px 15px 15px;
     min-width: 0;
   }

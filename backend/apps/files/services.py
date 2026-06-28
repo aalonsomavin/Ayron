@@ -495,9 +495,10 @@ def rename_dashboard_file(file_obj: File, name: str) -> File:
 
 def _user_display_name(user) -> str:
     full_name = user.get_full_name().strip()
-    if full_name:
-        return full_name
-    return user.get_username()
+    name = full_name if full_name else user.get_username()
+    if not name:
+        return name
+    return name[0].upper() + name[1:]
 
 
 def _user_initials(user) -> str:
@@ -510,6 +511,37 @@ def _user_initials(user) -> str:
     return "?"
 
 
+def _timesince_fragment_es(fragment: str) -> str:
+    normalized = fragment.replace("\xa0", " ").strip()
+    parts = normalized.split(" ", 1)
+    if len(parts) != 2:
+        return fragment.replace("\xa0", " ")
+    num_str, unit = parts
+    try:
+        num = int(num_str)
+    except ValueError:
+        return fragment
+    units = {
+        "minute": ("minuto", "minutos"),
+        "minutes": ("minuto", "minutos"),
+        "hour": ("hora", "horas"),
+        "hours": ("hora", "horas"),
+        "day": ("día", "días"),
+        "days": ("día", "días"),
+        "week": ("semana", "semanas"),
+        "weeks": ("semana", "semanas"),
+        "month": ("mes", "meses"),
+        "months": ("mes", "meses"),
+        "year": ("año", "años"),
+        "years": ("año", "años"),
+    }
+    pair = units.get(unit)
+    if not pair:
+        return normalized
+    singular, plural = pair
+    return f"{num} {singular if num == 1 else plural}"
+
+
 def _relative_date_label(dt) -> str:
     now = timezone.now()
     if dt.date() == now.date():
@@ -518,7 +550,7 @@ def _relative_date_label(dt) -> str:
     first = delta.split(",")[0].strip()
     if first.startswith("0 "):
         return "Actualizado hace un momento"
-    return f"Actualizado hace {first}"
+    return f"Actualizado hace {_timesince_fragment_es(first)}"
 
 
 def _spark_series_for_file(file_id) -> list[int]:

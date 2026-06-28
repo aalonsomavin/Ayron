@@ -2,8 +2,9 @@
   id="saved-card-{{ item.file_id }}"
   class="ay-saved-card{% if item.pinned %} ay-saved-card--pinned{% endif %}"
   data-pinned="{{ item.pinned|yesno:'true,false' }}"
+  data-saved-card-id="{{ item.file_id }}"
 >
-  <input type="checkbox" id="rename-{{ item.file_id }}" class="ay-saved-card__rename-toggle">
+  <input type="checkbox" id="rename-{{ item.file_id }}" class="ay-saved-card__rename-toggle" autocomplete="off">
   <a
     href="{% url 'dashboards:detail' item.file_id %}"
     class="ay-saved-card__hit"
@@ -59,21 +60,18 @@
             Renombrar
           </label>
           <div class="ay-saved-card__menu-divider"></div>
-          <form
-            class="ay-saved-card__menu-form"
-            hx-post="{% url 'files:unsave' item.file_id %}"
-            hx-target="#dashboards-view"
-            hx-select="#dashboards-view"
-            hx-swap="outerHTML"
-            hx-include="#saved-search"
-            hx-confirm="¿Eliminar este dashboard de Analíticas?"
+          <button
+            type="button"
+            class="ay-saved-card__menu-item ay-saved-card__menu-item--danger"
+            data-confirm-delete
+            data-delete-url="{% url 'files:unsave' item.file_id %}"
+            data-delete-target="#saved-card-{{ item.file_id }}"
+            data-confirm-title="Eliminar dashboard"
+            data-confirm-body="¿Estás seguro de que querés eliminar este dashboard de Analíticas?"
           >
-            {% csrf_token %}
-            <button type="submit" class="ay-saved-card__menu-item ay-saved-card__menu-item--danger">
-              {% include "components/icon.html" with name="trash" size=14 %}
-              Eliminar
-            </button>
-          </form>
+            {% include "components/icon.html" with name="trash" size=14 %}
+            Eliminar
+          </button>
         </div>
       </details>
     </div>
@@ -94,6 +92,7 @@
       hx-post="{% url 'files:rename' item.file_id %}"
       hx-target="#saved-card-{{ item.file_id }}"
       hx-swap="outerHTML"
+      autocomplete="off"
     >
       {% csrf_token %}
       <input type="text" name="name" class="ay-saved-card__rename-input" value="{{ item.name }}" aria-label="Nombre del dashboard" required>
