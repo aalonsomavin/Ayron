@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayron · Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ===========================================================
+     AYRON · LOGIN — standalone, sin dependencias (vanilla JS)
+     -----------------------------------------------------------
+     Para integrar en la app:
+       - Conecta el <form id="ay-form"> a tu auth real (submit handler abajo).
+       - Cambia el fondo math art con los atributos data-motif / data-palette
+         en <canvas id="ay-art">  (ver MOTIFS / PALETTES más abajo).
+     =========================================================== */
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  ::selection{background:#eef3ff}
+  input{font-family:inherit}
+  button{font-family:inherit}
+  canvas{display:block}
+  input::placeholder{color:#a7a7af}
+  @keyframes ay-spin{to{transform:rotate(360deg)}}
+
+  .ay-root{height:100vh;display:flex;background:#fff;font-family:'Geist',system-ui,sans-serif;color:#18181b;-webkit-font-smoothing:antialiased;overflow:hidden}
+
+  /* ---- LEFT · brand / math art ---- */
+  .ay-side{flex:1.15;min-width:0;position:relative;overflow:hidden;background:#f4f6f9;border-right:1px solid #e6e6e8}
+  #ay-art{position:absolute;inset:0;width:100%;height:100%}
+  .ay-wash1{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(244,246,249,0.7) 0%,rgba(244,246,249,0) 30%,rgba(244,246,249,0) 56%,rgba(244,246,249,0.94) 100%)}
+  .ay-wash2{position:absolute;inset:0;pointer-events:none;background:radial-gradient(58% 44% at 26% 50%,rgba(244,246,249,0.97) 0%,rgba(244,246,249,0.86) 38%,rgba(244,246,249,0.45) 62%,rgba(244,246,249,0) 80%)}
+  .ay-side-inner{position:relative;height:100%;display:flex;flex-direction:column;justify-content:center;padding:40px 44px}
+  .ay-eyebrow{position:absolute;top:40px;left:44px;display:flex;align-items:center;gap:9px;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#6e7686;text-transform:uppercase}
+  .ay-dot{width:7px;height:7px;border-radius:50%;background:#3b6ef6}
+  .ay-side h2{margin:0;font-size:32px;line-height:1.1;font-weight:600;letter-spacing:-0.025em;color:#18181b;text-wrap:balance}
+  .ay-side p{margin:14px 0 0;font-size:15px;line-height:1.6;color:#52525b;max-width:360px;text-wrap:pretty}
+  .ay-foot{position:absolute;bottom:40px;left:44px;display:inline-flex;align-items:center;gap:10px;font-family:'Geist Mono',monospace;font-size:11px;color:#8a8a92}
+  .ay-foot .tag{padding:4px 9px;border:1px solid #d8dde6;border-radius:999px;background:rgba(255,255,255,0.6)}
+
+  /* ---- RIGHT · form ---- */
+  .ay-main{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;background:#fff;padding:32px 24px;overflow-y:auto}
+  .ay-card{width:100%;max-width:344px}
+  .ay-logo-wrap{display:flex;justify-content:center;margin-bottom:24px}
+  .ay-logo-wrap img{height:30px;width:auto;display:block}
+  .ay-card h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-0.02em;text-align:center}
+  .ay-card .sub{margin:7px 0 28px;font-size:13.5px;color:#8a8a92;text-align:center;text-wrap:pretty}
+  .ay-label{display:block;font-size:12.5px;font-weight:500;color:#3f3f46;margin-bottom:7px}
+  .ay-field{display:flex;align-items:center;gap:9px;height:46px;padding:0 13px;border:1px solid #d6d6da;border-radius:10px;background:#fff;margin-bottom:16px;transition:border-color .15s,box-shadow .15s}
+  .ay-field.pw{padding:0 8px 0 13px;margin-bottom:14px}
+  .ay-field:focus-within{border-color:#3b6ef6;box-shadow:0 0 0 3px rgba(59,110,246,0.16)}
+  .ay-field svg.ic{flex:none}
+  .ay-field input{flex:1;border:none;outline:none;background:transparent;font-size:14.5px;color:#18181b;height:100%}
+  .ay-eye{width:32px;height:32px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:7px;background:transparent;color:#8a8a92;cursor:pointer;transition:background .12s,color .12s}
+  .ay-eye:hover{background:#f4f4f5;color:#52525b}
+  .ay-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;min-height:20px;gap:12px}
+  .ay-remember{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#52525b;cursor:pointer;user-select:none}
+  .ay-remember input{width:15px;height:15px;accent-color:#3b6ef6;cursor:pointer}
+  .ay-forgot{font-size:13px;color:#3b6ef6;text-decoration:none;font-weight:500;white-space:nowrap}
+  .ay-submit{width:100%;height:46px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:10px;background:#131316;color:#fff;font-size:14.5px;font-weight:500;cursor:pointer;transition:background .15s}
+  .ay-submit:hover{background:#000}
+  .ay-submit[disabled]{background:#3a3a40;cursor:default}
+  .ay-foot-text{text-align:center;font-size:13px;color:#8a8a92;margin:22px 0 0}
+  .ay-foot-text a{color:#18181b;font-weight:500;text-decoration:none}
+
+  @media (max-width:880px){ .ay-side{display:none} }
+</style>
+</head>
+<body>
+<div class="ay-root">
+
+  <!-- ===== LEFT · BRAND / MATH ART ===== -->
+  <div class="ay-side">
+    <canvas id="ay-art" data-motif="hilbert" data-palette="azul"></canvas>
+    <div class="ay-wash1"></div>
+    <div class="ay-wash2"></div>
+    <div class="ay-side-inner">
+      <div class="ay-eyebrow"><span class="ay-dot"></span>Ayron · Analytics</div>
+      <div style="max-width:420px">
+        <h2>Convierte tus datos en respuestas.</h2>
+        <p>Conecta tus fuentes y deja que Ayron explore, visualice y automatice por ti.</p>
+      </div>
+      <div class="ay-foot"><span class="tag" id="ay-motif-label">Curva de Hilbert</span><span id="ay-motif-sub">orden 6 · 4⁶ vértices</span></div>
+    </div>
+  </div>
+
+  <!-- ===== RIGHT · LOGIN FORM ===== -->
+  <div class="ay-main">
+    <div class="ay-card">
+      <div class="ay-logo-wrap"><img src="data:image/png;base64,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" alt="AyronOne"></div>
+      <h1>Inicia sesión</h1>
+      <p class="sub">Accede a tu espacio de análisis de datos.</p>
+
+      <form id="ay-form" novalidate>
+        <label class="ay-label" for="ay-user">Usuario</label>
+        <div class="ay-field">
+          <svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          <input id="ay-user" type="text" autocomplete="username" placeholder="tu_usuario">
+        </div>
+
+        <label class="ay-label" for="ay-pw">Contraseña</label>
+        <div class="ay-field pw">
+          <svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          <input id="ay-pw" type="password" autocomplete="current-password" placeholder="••••••••">
+          <button type="button" class="ay-eye" id="ay-eye" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña"></button>
+        </div>
+
+        <div class="ay-row">
+          <label class="ay-remember"><input type="checkbox">Recordarme</label>
+          <a href="#" class="ay-forgot" id="ay-forgot">¿Olvidaste tu contraseña?</a>
+        </div>
+
+        <button type="submit" class="ay-submit" id="ay-submit">Iniciar sesión</button>
+      </form>
+
+      <p class="ay-foot-text">¿No tienes cuenta? <a href="#" id="ay-create">Crear una</a></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =====================================================================
+     MATH ART ENGINE — 6 motivos × 2 paletas, estático, vanilla canvas
+     MOTIFS:  hilbert · truchet · maze · golden · contours · triangles
+     PALETTES: azul (azul de marca) · ayron (lima → verde azulado)
+     Controla con  data-motif / data-palette  en <canvas id="ay-art">.
+     ===================================================================== */
+
+  var LABELS = {
+    hilbert:  ["Curva de Hilbert", "orden 6 · 4⁶ vértices"],
+    truchet:  ["Mosaico de Truchet", "arcos · teselado"],
+    maze:     ["Laberinto", "backtracker recursivo"],
+    golden:   ["Espiral áurea", "φ ≈ 1.618"],
+    contours: ["Campo de contornos", "Σ sin(·)"],
+    triangles:["Malla triangular", "lattice isométrico"]
+  };
+
+  function rng(seed){
+    var a = (seed|0) || 1;
+    return function(){
+      a|=0; a=(a+0x6D2B79F5)|0;
+      var t=Math.imul(a^(a>>>15),1|a);
+      t=(t+Math.imul(t^(t>>>7),61|t))^t;
+      return ((t^(t>>>14))>>>0)/4294967296;
+    };
+  }
+  function grad(ctx,w,h,palette){
+    var g=ctx.createLinearGradient(0,0,w,h);
+    if(palette==="ayron"){ g.addColorStop(0,"#cfe96a"); g.addColorStop(0.5,"#46c193"); g.addColorStop(1,"#168b80"); }
+    else { g.addColorStop(0,"#9aa7c4"); g.addColorStop(0.55,"#5b7fe0"); g.addColorStop(1,"#3b6ef6"); }
+    return g;
+  }
+
+  function mHilbert(ctx,w,h,r,pal){
+    var order=6, side=1<<order, N=side*side;
+    var span=Math.max(w,h)*1.06, cell=span/(side-1);
+    var ox=(w-cell*(side-1))/2, oy=(h-cell*(side-1))/2;
+    function rot(s,x,y,rx,ry){ if(ry===0){ if(rx===1){ x=s-1-x; y=s-1-y; } var t=x; x=y; y=t; } return [x,y]; }
+    var pts=[];
+    for(var dd=0; dd<N; dd++){
+      var rx,ry,t=dd,x=0,y=0;
+      for(var s=1; s<side; s*=2){ rx=1&(t/2|0); ry=1&(t^rx); var rr=rot(s,x,y,rx,ry); x=rr[0]; y=rr[1]; x+=s*rx; y+=s*ry; t=Math.floor(t/4); }
+      pts.push([ox+x*cell, oy+y*cell]);
+    }
+    ctx.strokeStyle=grad(ctx,w,h,pal); ctx.globalAlpha=0.9; ctx.lineWidth=1.15; ctx.lineJoin="round"; ctx.lineCap="round";
+    ctx.beginPath();
+    for(var i=0;i<pts.length;i++){ var p=pts[i]; i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); }
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+
+  function mTruchet(ctx,w,h,rnd,pal){
+    var cell=Math.max(26,Math.min(w,h)/13);
+    var cols=Math.ceil(w/cell)+1, rows=Math.ceil(h/cell)+1, rad=cell/2;
+    ctx.strokeStyle=grad(ctx,w,h,pal); ctx.globalAlpha=0.85; ctx.lineWidth=1.4; ctx.lineCap="round";
+    for(var j=0;j<rows;j++) for(var i=0;i<cols;i++){
+      var x=i*cell, y=j*cell;
+      ctx.beginPath();
+      if(rnd()<0.5){
+        ctx.arc(x,y,rad,0,Math.PI/2);
+        ctx.moveTo(x+cell,y+cell); ctx.arc(x+cell,y+cell,rad,Math.PI,Math.PI*1.5);
+      } else {
+        ctx.arc(x+cell,y,rad,Math.PI/2,Math.PI);
+        ctx.moveTo(x,y+cell); ctx.arc(x,y+cell,rad,Math.PI*1.5,Math.PI*2);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  function mMaze(ctx,w,h,rnd,pal){
+    var cell=Math.max(22,Math.min(w,h)/16);
+    var cols=Math.max(2,Math.floor(w/cell)), rows=Math.max(2,Math.floor(h/cell));
+    var ox=(w-(cols-1)*cell)/2, oy=(h-(rows-1)*cell)/2;
+    function id(x,y){ return y*cols+x; }
+    var vis=new Uint8Array(cols*rows), edges=[];
+    var stack=[[0,0]]; vis[0]=1;
+    var dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    while(stack.length){
+      var c=stack[stack.length-1], cx=c[0], cy=c[1], nb=[];
+      for(var k=0;k<dirs.length;k++){ var d=dirs[k], nx=cx+d[0], ny=cy+d[1]; if(nx>=0&&nx<cols&&ny>=0&&ny<rows&&!vis[id(nx,ny)]) nb.push([nx,ny]); }
+      if(nb.length){ var n=nb[Math.floor(rnd()*nb.length)]; vis[id(n[0],n[1])]=1; edges.push([cx,cy,n[0],n[1]]); stack.push(n); }
+      else stack.pop();
+    }
+    ctx.strokeStyle=grad(ctx,w,h,pal); ctx.globalAlpha=0.85; ctx.lineWidth=1.7; ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.beginPath();
+    for(var e=0;e<edges.length;e++){ var e2=edges[e]; ctx.moveTo(ox+e2[0]*cell,oy+e2[1]*cell); ctx.lineTo(ox+e2[2]*cell,oy+e2[3]*cell); }
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+
+  function mGolden(ctx,w,h,r,pal){
+    var g=grad(ctx,w,h,pal), phi=1.618033, RW,RH;
+    if(w/h>=phi){ RW=w*1.08; RH=RW/phi; } else { RH=h*1.08; RW=RH*phi; }
+    var x=(w-RW)/2, y=(h-RH)/2, W=RW, H=RH;
+    var o=(W>=H)?0:1, squares=[], arcs=[], steps=0;
+    while(Math.min(W,H)>2 && steps<60){
+      var s=Math.min(W,H);
+      if(o===0){ squares.push([x,y,s,s]); arcs.push([x+s,y+s,s,Math.PI,Math.PI*1.5]); x+=s; W-=s; }
+      else if(o===1){ squares.push([x,y,s,s]); arcs.push([x,y+s,s,Math.PI*1.5,Math.PI*2]); y+=s; H-=s; }
+      else if(o===2){ squares.push([x+W-s,y,s,s]); arcs.push([x+W-s,y,s,0,Math.PI*0.5]); W-=s; }
+      else { squares.push([x,y+H-s,s,s]); arcs.push([x+s,y+H-s,s,Math.PI*0.5,Math.PI]); H-=s; }
+      o=(o+1)%4; steps++;
+    }
+    ctx.strokeStyle=g; ctx.globalAlpha=0.22; ctx.lineWidth=1; ctx.lineJoin="miter";
+    for(var i=0;i<squares.length;i++){ var sq=squares[i]; ctx.strokeRect(sq[0],sq[1],sq[2],sq[3]); }
+    ctx.globalAlpha=0.92; ctx.lineWidth=1.8; ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.beginPath();
+    for(var a=0;a<arcs.length;a++){ var ar=arcs[a]; ctx.arc(ar[0],ar[1],ar[2],ar[3],ar[4]); }
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+
+  function mContours(ctx,w,h,r,pal){
+    var gap=Math.max(11,Math.min(w,h)/22);
+    ctx.strokeStyle=grad(ctx,w,h,pal); ctx.globalAlpha=0.72; ctx.lineWidth=1.1; ctx.lineJoin="round";
+    for(var by=-gap; by<h+gap; by+=gap){
+      ctx.beginPath();
+      for(var x=0; x<=w; x+=4){
+        var yy=by+Math.sin(x*0.012+by*0.03)*gap*0.62+Math.sin(x*0.027+by*0.018)*gap*0.36;
+        x===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  function mTriangles(ctx,w,h,r,pal){
+    var s=Math.max(28,Math.min(w,h)/11), dy=s*0.866;
+    ctx.strokeStyle=grad(ctx,w,h,pal); ctx.globalAlpha=0.66; ctx.lineWidth=1; ctx.lineJoin="round";
+    ctx.beginPath();
+    var row=0;
+    for(var y=-dy; y<=h+dy; y+=dy, row++){
+      var xoff=(row%2)?s/2:0;
+      for(var x=-s; x<=w+s; x+=s){
+        var px=x+xoff;
+        ctx.moveTo(px,y); ctx.lineTo(px+s,y);
+        ctx.moveTo(px,y); ctx.lineTo(px-s/2,y+dy);
+        ctx.moveTo(px,y); ctx.lineTo(px+s/2,y+dy);
+      }
+    }
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+
+  var MOTIFS={ hilbert:mHilbert, truchet:mTruchet, maze:mMaze, golden:mGolden, contours:mContours, triangles:mTriangles };
+
+  function drawArt(canvas){
+    var motif=canvas.getAttribute("data-motif")||"hilbert";
+    var pal=canvas.getAttribute("data-palette")||"azul";
+    var seed=parseInt(canvas.getAttribute("data-seed"),10); if(isNaN(seed)) seed=7;
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    var rect=canvas.getBoundingClientRect();
+    var w=Math.max(1,rect.width), h=Math.max(1,rect.height);
+    canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr);
+    var ctx=canvas.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+    (MOTIFS[motif]||mHilbert)(ctx,w,h,rng(seed),pal);
+    var lbl=LABELS[motif]||LABELS.hilbert;
+    var le=document.getElementById("ay-motif-label"), se=document.getElementById("ay-motif-sub");
+    if(le) le.textContent=lbl[0];
+    if(se) se.textContent=lbl[1];
+  }
+
+  var art=document.getElementById("ay-art");
+  function redraw(){ if(art) drawArt(art); }
+  redraw();
+  window.addEventListener("resize", redraw);
+  if(window.ResizeObserver && art){ new ResizeObserver(redraw).observe(art); }
+
+  /* =====================================================================
+     FORM behaviour — password toggle + submit state
+     Conecta tu auth real dentro del submit handler (ver TODO).
+     ===================================================================== */
+  var EYE_OPEN='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+  var EYE_OFF='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"></path><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.39-1.61"></path><path d="m2 2 20 20"></path></svg>';
+  var SPINNER='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation:ay-spin .7s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
+
+  var pw=document.getElementById("ay-pw"), eye=document.getElementById("ay-eye");
+  eye.innerHTML=EYE_OPEN;
+  eye.addEventListener("click", function(){
+    var hidden = pw.type==="password";
+    pw.type = hidden ? "text" : "password";
+    eye.innerHTML = hidden ? EYE_OFF : EYE_OPEN;
+  });
+
+  var form=document.getElementById("ay-form"), submit=document.getElementById("ay-submit");
+  form.addEventListener("submit", function(ev){
+    ev.preventDefault();
+    if(submit.disabled) return;
+    submit.disabled=true;
+    submit.innerHTML=SPINNER+'Iniciando sesión…';
+
+    // ---- TODO: reemplaza por tu autenticación real ----
+    var user=document.getElementById("ay-user").value;
+    var pass=pw.value;
+    // fetch('/api/login', { method:'POST', body: JSON.stringify({user,pass}) })...
+    setTimeout(function(){
+      submit.disabled=false;
+      submit.innerHTML='Iniciar sesión';
+    }, 1300);
+  });
+
+  document.getElementById("ay-forgot").addEventListener("click", function(e){ e.preventDefault(); });
+  document.getElementById("ay-create").addEventListener("click", function(e){ e.preventDefault(); });
+})();
+</script>
+</body>
+</html>

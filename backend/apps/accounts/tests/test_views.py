@@ -9,6 +9,9 @@ User = get_user_model()
 def test_login_page_loads(client):
     response = client.get(reverse("accounts:login"))
     assert response.status_code == 200
+    content = response.content.decode()
+    assert "ay-login-root" in content
+    assert "Inicia sesión" in content
 
 
 @pytest.mark.django_db

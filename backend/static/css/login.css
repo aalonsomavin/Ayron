@@ -1,0 +1,348 @@
+.ay-login-page {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ay-login-page ::selection {
+  background: var(--ay-blue-50);
+}
+
+.ay-login-page input {
+  font-family: inherit;
+}
+
+.ay-login-page button {
+  font-family: inherit;
+}
+
+.ay-login-page canvas {
+  display: block;
+}
+
+.ay-login-root {
+  height: 100vh;
+  display: flex;
+  background: var(--ay-bg);
+  font-family: var(--ay-font-sans);
+  color: var(--ay-text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.ay-login-side {
+  flex: 1.15;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: #f4f6f9;
+  border-right: 1px solid var(--ay-neutral-200);
+}
+
+.ay-login-art-stack {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.ay-login-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  z-index: 0;
+  transition: opacity 1.1s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity;
+}
+
+.ay-login-art.is-active {
+  opacity: 1;
+  z-index: 1;
+}
+
+.ay-login-wash1 {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 246, 249, 0.7) 0%,
+    rgba(244, 246, 249, 0) 30%,
+    rgba(244, 246, 249, 0) 56%,
+    rgba(244, 246, 249, 0.94) 100%
+  );
+}
+
+.ay-login-wash2 {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    58% 44% at 26% 50%,
+    rgba(244, 246, 249, 0.97) 0%,
+    rgba(244, 246, 249, 0.86) 38%,
+    rgba(244, 246, 249, 0.45) 62%,
+    rgba(244, 246, 249, 0) 80%
+  );
+}
+
+.ay-login-side-inner {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 44px;
+}
+
+.ay-login-eyebrow {
+  position: absolute;
+  top: 40px;
+  left: 44px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--ay-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: #6e7686;
+  text-transform: uppercase;
+}
+
+.ay-login-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #46c193;
+}
+
+.ay-login-side h2 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--ay-text);
+  text-wrap: balance;
+}
+
+.ay-login-side-copy {
+  max-width: 420px;
+}
+
+.ay-login-side p {
+  margin: 14px 0 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ay-neutral-700);
+  max-width: 360px;
+  text-wrap: pretty;
+}
+
+.ay-login-motif-foot {
+  position: absolute;
+  bottom: 40px;
+  left: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--ay-font-mono);
+  font-size: 11px;
+  color: var(--ay-neutral-500);
+}
+
+.ay-login-motif-foot .tag {
+  padding: 4px 9px;
+  border: 1px solid #d8dde6;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.ay-login-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ay-bg);
+  padding: 32px 24px;
+  overflow-y: auto;
+}
+
+.ay-login-card {
+  width: 100%;
+  max-width: 344px;
+}
+
+.ay-login-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.ay-login-logo-wrap img {
+  height: 30px;
+  width: auto;
+  display: block;
+}
+
+.ay-login-card h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.ay-login-sub {
+  margin: 7px 0 28px;
+  font-size: 13.5px;
+  color: var(--ay-neutral-500);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.ay-login-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ay-neutral-800);
+  margin-bottom: 7px;
+}
+
+.ay-login-page .ay-input-wrap {
+  height: 46px;
+  padding: 0 13px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+}
+
+.ay-login-page .ay-input-wrap--pw {
+  padding: 0 8px 0 13px;
+  margin-bottom: 14px;
+}
+
+.ay-login-page .ay-input-wrap .ay-icon {
+  color: var(--ay-neutral-500);
+}
+
+.ay-login-page .ay-input {
+  font-size: 14.5px;
+}
+
+.ay-login-eye {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ay-neutral-500);
+  cursor: pointer;
+  transition: background var(--ay-dur-fast) var(--ay-ease), color var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-login-eye:hover {
+  background: var(--ay-neutral-100);
+  color: var(--ay-neutral-700);
+}
+
+.ay-login-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  min-height: 20px;
+  gap: 12px;
+}
+
+.ay-login-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ay-neutral-700);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ay-login-remember input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--ay-accent);
+  cursor: pointer;
+}
+
+.ay-login-forgot {
+  font-size: 13px;
+  color: var(--ay-accent);
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ay-login-submit {
+  width: 100%;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 10px;
+  background: var(--ay-primary);
+  color: var(--ay-primary-text);
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-login-submit:hover:not(:disabled) {
+  background: var(--ay-primary-hover);
+}
+
+.ay-login-submit:disabled {
+  background: #3a3a40;
+  cursor: default;
+}
+
+.ay-login-foot-text {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ay-neutral-500);
+  margin: 22px 0 0;
+}
+
+.ay-login-foot-text a {
+  color: var(--ay-text);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.ay-login-page .ay-alert {
+  margin-bottom: 16px;
+}
+
+@keyframes ay-login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ay-login-spinner {
+  animation: ay-login-spin 0.7s linear infinite;
+}
+
+@media (max-width: 880px) {
+  .ay-login-side {
+    display: none;
+  }
+}

@@ -1,28 +1,60 @@
-{% extends "base.html" %}
+{% extends "accounts/base_auth.html" %}
+{% load static %}
 
-{% block title %}Log in — Ayron{% endblock %}
+{% block title %}Inicia sesión — Ayron{% endblock %}
 
 {% block content %}
-<div style="display:flex;justify-content:center;align-items:center;min-height:calc(100vh - 120px);padding:24px;">
-  <div class="ay-card" style="width:100%;max-width:400px;">
-    <div class="ay-card__header">
-      <div>
-        <div class="ay-card__title" style="font-size:18px;">Log in</div>
-        <div class="ay-card__subtitle">Sign in to continue to Ayron</div>
+<div class="ay-login-root">
+  <aside class="ay-login-side">
+    <div class="ay-login-art-stack">
+      <canvas id="ay-login-art-a" class="ay-login-art is-active" data-palette="ayron"></canvas>
+      <canvas id="ay-login-art-b" class="ay-login-art" data-palette="ayron"></canvas>
+    </div>
+    <div class="ay-login-wash1"></div>
+    <div class="ay-login-wash2"></div>
+    <div class="ay-login-side-inner">
+      <div class="ay-login-eyebrow"><span class="ay-login-dot"></span>Ayron · Analytics</div>
+      <div class="ay-login-side-copy">
+        <h2>Convierte tus datos en respuestas.</h2>
+        <p>Conecta tus fuentes y deja que Ayron explore, visualice y automatice por ti.</p>
+      </div>
+      <div class="ay-login-motif-foot">
+        <span class="tag" id="ay-motif-label"></span>
+        <span id="ay-motif-sub"></span>
       </div>
     </div>
-    <div class="ay-card__body">
-      <form method="post" action="{% url 'accounts:login' %}" style="display:flex;flex-direction:column;gap:16px;">
+  </aside>
+
+  <main class="ay-login-main">
+    <div class="ay-login-card">
+      <div class="ay-login-logo-wrap">
+        <img src="{% static 'img/ayronone-logo.png' %}" alt="AyronOne" width="280" height="83">
+      </div>
+      <h1>Inicia sesión</h1>
+      <p class="ay-login-sub">Accede a tu espacio de análisis de datos.</p>
+
+      <form method="post" action="{% url 'accounts:login' %}" id="ay-login-form">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next }}">
-        <div>
-          <label for="id_username" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;">Username</label>
-          {% include "components/input.html" with id="id_username" name="username" placeholder="Enter username" autocomplete="username" autofocus="autofocus" required="required" %}
+
+        <label class="ay-login-label" for="id_username">Usuario</label>
+        {% include "components/input.html" with id="id_username" name="username" leading="user" placeholder="tu_usuario" autocomplete="username" autofocus="autofocus" required="required" %}
+
+        <label class="ay-login-label" for="id_password">Contraseña</label>
+        <div class="ay-input-wrap ay-input-wrap--pw">
+          {% include "components/icon.html" with name="lock" size=17 %}
+          <input
+            type="password"
+            class="ay-input"
+            id="id_password"
+            name="password"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            required
+          />
+          <button type="button" class="ay-login-eye" id="ay-eye" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña"></button>
         </div>
-        <div>
-          <label for="id_password" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;">Password</label>
-          {% include "components/input.html" with id="id_password" name="password" type="password" placeholder="Enter password" autocomplete="current-password" required="required" %}
-        </div>
+
         {% if form.non_field_errors %}
           <div class="ay-alert ay-alert--error">
             {% for error in form.non_field_errors %}
@@ -30,11 +62,22 @@
             {% endfor %}
           </div>
         {% endif %}
-        <div style="display:flex;justify-content:flex-end;padding-top:4px;">
-          {% include "components/button.html" with variant="primary" type="submit" label="Log in" %}
+
+        <div class="ay-login-row">
+          <label class="ay-login-remember"><input type="checkbox">Recordarme</label>
+          <a href="#" class="ay-login-forgot" id="ay-forgot">¿Olvidaste tu contraseña?</a>
         </div>
+
+        <button type="submit" class="ay-login-submit" id="ay-login-submit">Iniciar sesión</button>
       </form>
+
+      <p class="ay-login-foot-text">¿No tienes cuenta? <a href="#" id="ay-create">Crear una</a></p>
     </div>
-  </div>
+  </main>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/ayron-login-art.js' %}"></script>
+<script src="{% static 'js/ayron-login.js' %}"></script>
 {% endblock %}
