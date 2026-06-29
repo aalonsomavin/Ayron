@@ -2,15 +2,32 @@
   "use strict";
 
   var LABELS = {
-    hilbert: ["Curva de Hilbert", "orden 6 · 4⁶ vértices"],
-    truchet: ["Mosaico de Truchet", "arcos · teselado"],
-    maze: ["Laberinto", "backtracker recursivo"],
-    golden: ["Espiral áurea", "φ ≈ 1.618"],
-    contours: ["Campo de contornos", "Σ sin(·)"],
-    triangles: ["Malla triangular", "lattice isométrico"],
+    hilbert: "Curva de Hilbert",
+    truchet: "Mosaico de Truchet",
+    maze: "Laberinto",
+    golden: "Espiral áurea",
+    contours: "Campo de contornos",
+    triangles: "Malla triangular",
+    flow: "Campo de flujo",
+    packing: "Empaquetado de círculos",
+    spiro: "Espirógrafo",
+    pythagoras: "Árbol de Pitágoras",
+    quadtree: "Quadtree",
   };
 
-  var MOTIF_ORDER = ["hilbert", "truchet", "maze", "golden", "contours", "triangles"];
+  var MOTIF_ORDER = [
+    "hilbert",
+    "truchet",
+    "maze",
+    "golden",
+    "contours",
+    "triangles",
+    "flow",
+    "packing",
+    "spiro",
+    "pythagoras",
+    "quadtree",
+  ];
   var ROTATE_MS = 8000;
   var FADE_MS = 1100;
   var DESKTOP_MQ = window.matchMedia("(min-width: 881px)");
@@ -286,6 +303,180 @@
     ctx.globalAlpha = 1;
   }
 
+  function mFlow(ctx, w, h, rnd, pal) {
+    ctx.strokeStyle = grad(ctx, w, h, pal);
+    ctx.lineWidth = 1.0;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = 0.42;
+    function field(x, y) {
+      var nx = x / w;
+      var ny = y / h;
+      return (Math.sin(nx * 5.5 + Math.cos(ny * 4.0)) + Math.cos(ny * 5.0 - Math.sin(nx * 3.5))) * Math.PI;
+    }
+    var g = Math.max(w, h) / 30;
+    var step = Math.max(w, h) / 230;
+    for (var gy = g * 0.5; gy < h; gy += g) {
+      for (var gx = g * 0.5; gx < w; gx += g) {
+        var x = gx + (rnd() - 0.5) * g;
+        var y = gy + (rnd() - 0.5) * g;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (var s = 0; s < 60; s++) {
+          var a = field(x, y);
+          x += Math.cos(a) * step;
+          y += Math.sin(a) * step;
+          if (x < -20 || x > w + 20 || y < -20 || y > h + 20) break;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function mPacking(ctx, w, h, rnd, pal) {
+    ctx.strokeStyle = grad(ctx, w, h, pal);
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 1.2;
+    var circles = [];
+    var maxR = Math.min(w, h) / 7;
+    var minR = 3;
+    var tries = 2600;
+    for (var i = 0; i < tries; i++) {
+      var x = rnd() * w;
+      var y = rnd() * h;
+      var r = maxR;
+      var ok = true;
+      for (var j = 0; j < circles.length; j++) {
+        var c = circles[j];
+        var d = Math.hypot(x - c[0], y - c[1]) - c[2];
+        if (d < minR) {
+          ok = false;
+          break;
+        }
+        if (d < r) r = d;
+      }
+      r = Math.min(r, x, y, w - x, h - y);
+      if (ok && r >= minR) circles.push([x, y, r]);
+    }
+    ctx.beginPath();
+    for (var k = 0; k < circles.length; k++) {
+      var c2 = circles[k];
+      ctx.moveTo(c2[0] + c2[2], c2[1]);
+      ctx.arc(c2[0], c2[1], c2[2], 0, Math.PI * 2);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function mSpiro(ctx, w, h, r, pal) {
+    var R = 1;
+    var rr = 0.36;
+    var d = 0.55;
+    var turns = 50;
+    var N = 4000;
+    var pts = [];
+    var minx = 1e9;
+    var maxx = -1e9;
+    var miny = 1e9;
+    var maxy = -1e9;
+    for (var i = 0; i <= N; i++) {
+      var t = (i / N) * Math.PI * 2 * turns;
+      var x = (R - rr) * Math.cos(t) + d * Math.cos(((R - rr) / rr) * t);
+      var y = (R - rr) * Math.sin(t) - d * Math.sin(((R - rr) / rr) * t);
+      pts.push([x, y]);
+      if (x < minx) minx = x;
+      if (x > maxx) maxx = x;
+      if (y < miny) miny = y;
+      if (y > maxy) maxy = y;
+    }
+    var bw = maxx - minx;
+    var bh = maxy - miny;
+    var scale = (Math.min(w, h) * 0.92) / Math.max(bw, bh);
+    var cx = w / 2;
+    var cy = h / 2;
+    ctx.strokeStyle = grad(ctx, w, h, pal);
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 1;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (var p = 0; p < pts.length; p++) {
+      var P = pts[p];
+      var X = cx + (P[0] - (minx + maxx) / 2) * scale;
+      var Y = cy + (P[1] - (miny + maxy) / 2) * scale;
+      if (p) ctx.lineTo(X, Y);
+      else ctx.moveTo(X, Y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function mPythagoras(ctx, w, h, r, pal) {
+    ctx.strokeStyle = grad(ctx, w, h, pal);
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 1;
+    ctx.lineJoin = "round";
+    var base = Math.min(w, h) / 7;
+    var ang = Math.PI / 4;
+    var cosA = Math.cos(ang);
+    function rot(vx, vy, th) {
+      var c = Math.cos(th);
+      var s = Math.sin(th);
+      return [vx * c - vy * s, vx * s + vy * c];
+    }
+    ctx.beginPath();
+    function branch(px, py, rx, ry, depth) {
+      var size = Math.hypot(rx, ry);
+      if (depth > 10 || size < 2) return;
+      var upx = ry;
+      var upy = -rx;
+      var Bx = px + rx;
+      var By = py + ry;
+      var Cx = Bx + upx;
+      var Cy = By + upy;
+      var Dx = px + upx;
+      var Dy = py + upy;
+      ctx.moveTo(px, py);
+      ctx.lineTo(Bx, By);
+      ctx.lineTo(Cx, Cy);
+      ctx.lineTo(Dx, Dy);
+      ctx.lineTo(px, py);
+      var lr = rot(rx, ry, -ang);
+      var leftRx = lr[0] * cosA;
+      var leftRy = lr[1] * cosA;
+      branch(Dx, Dy, leftRx, leftRy, depth + 1);
+      var Tx = Dx + leftRx;
+      var Ty = Dy + leftRy;
+      branch(Tx, Ty, Cx - Tx, Cy - Ty, depth + 1);
+    }
+    branch(w / 2 - base / 2, h * 0.8, base, 0, 0);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function mQuadtree(ctx, w, h, rnd, pal) {
+    ctx.strokeStyle = grad(ctx, w, h, pal);
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 1;
+    var minSize = Math.min(w, h) / 24;
+    ctx.beginPath();
+    function sub(x, y, sw, sh, depth) {
+      ctx.rect(x, y, sw, sh);
+      if (sw < minSize * 2 || depth > 6) return;
+      if (depth > 0 && rnd() < 0.3) return;
+      var hw = sw / 2;
+      var hh = sh / 2;
+      sub(x, y, hw, hh, depth + 1);
+      sub(x + hw, y, hw, hh, depth + 1);
+      sub(x, y + hh, hw, hh, depth + 1);
+      sub(x + hw, y + hh, hw, hh, depth + 1);
+    }
+    sub(0, 0, w, h, 0);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   var MOTIFS = {
     hilbert: mHilbert,
     truchet: mTruchet,
@@ -293,14 +484,16 @@
     golden: mGolden,
     contours: mContours,
     triangles: mTriangles,
+    flow: mFlow,
+    packing: mPacking,
+    spiro: mSpiro,
+    pythagoras: mPythagoras,
+    quadtree: mQuadtree,
   };
 
   function updateLabels(motif) {
-    var lbl = LABELS[motif] || LABELS.hilbert;
     var le = document.getElementById("ay-motif-label");
-    var se = document.getElementById("ay-motif-sub");
-    if (le) le.textContent = lbl[0];
-    if (se) se.textContent = lbl[1];
+    if (le) le.textContent = LABELS[motif] || LABELS.hilbert;
   }
 
   function drawArt(canvas, motif) {

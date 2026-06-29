@@ -103,21 +103,11 @@
   position: absolute;
   top: 40px;
   left: 44px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-family: var(--ay-font-mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  color: #6e7686;
-  text-transform: uppercase;
-}
-
-.ay-login-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #46c193;
+  font-family: var(--ay-font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ay-text);
 }
 
 .ay-login-side h2 {
@@ -185,7 +175,7 @@
 }
 
 .ay-login-logo-wrap img {
-  height: 30px;
+  height: 44px;
   width: auto;
   display: block;
 }
