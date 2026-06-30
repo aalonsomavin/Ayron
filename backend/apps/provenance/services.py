@@ -157,6 +157,7 @@ def serialize_data_access_detail(data_access: DataAccess) -> dict:
 
     return {
         "tool_call_id": data_access.tool_call_id,
+        "source_ref": data_access.source_ref,
         "sql": request_data.get("sql") or "",
         "tables": response_summary.get("tables") or [],
         "columns": response_summary.get("columns") or [],

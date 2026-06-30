@@ -62,6 +62,7 @@ class TestFileViews:
         url = reverse("files:preview", kwargs={"file_id": file_obj.id})
         response = client.get(url)
         assert response.status_code == 200
+        assert response.headers.get("X-Frame-Options") == "SAMEORIGIN"
         assert b"ay-doc-preview" in response.content
         assert b"ay-doc-preview__doc-header" in response.content
 

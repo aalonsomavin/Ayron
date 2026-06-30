@@ -4,7 +4,10 @@ from typing import Annotated
 
 from langchain_core.tools import InjectedToolCallId, tool
 
+from apps.agent.context import get_agent_conversation, get_agent_message
 from apps.agent.tools.errors import build_tool_error_response
+from apps.provenance.claims import create_inline_claim, normalize_inline_source_refs
+from apps.provenance.models import DataClaim
 
 _TABLE_DISPLAY_REGISTRY: dict[str, dict] = {}
 
@@ -301,6 +304,8 @@ def show_data_table(
     rows: list[list[str | int | float | None]],
     caption: str = "",
     column_widths: list[str] | None = None,
+    source_refs: list[str] | None = None,
+    tool_call_ids: list[str] | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Display a formatted data table in the chat for the user.
@@ -314,11 +319,35 @@ def show_data_table(
 
     Column widths: narrow (IDs), auto (fit content), fill (main text column).
     Example: ["narrow", "fill", "narrow"].
+
+    Optional source_refs links this table to prior SQL queries for provenance.
+    Use the source_ref value returned by each successful run_sql_query (e.g. sql_1).
+    tool_call_ids is accepted for backward compatibility.
     """
     try:
         payload = validate_table_input(columns, rows, caption, column_widths)
     except ValueError as exc:
         return build_tool_error_response(str(exc))
+
+    resolved_source_refs = normalize_inline_source_refs(source_refs, tool_call_ids)
+    if resolved_source_refs:
+        conversation = get_agent_conversation()
+        message = get_agent_message()
+        if conversation is None:
+            return build_tool_error_response("No conversation context")
+        try:
+            claim = create_inline_claim(
+                conversation,
+                message,
+                DataClaim.Surface.CHAT_TABLE,
+                tool_call_id,
+                resolved_source_refs,
+                label=payload.get("caption") or "Tabla de datos",
+            )
+            payload["claim_id"] = str(claim.id)
+        except ValueError as exc:
+            return build_tool_error_response(str(exc))
+
     if tool_call_id:
         _TABLE_DISPLAY_REGISTRY[tool_call_id] = payload
     return build_agent_tool_response(payload)

@@ -1,5 +1,9 @@
 <title hx-swap-oob="true">{{ item.name }} — Ayron</title>
-<div id="dashboards-view" class="ay-dash-detail">
+<div
+  id="dashboards-view"
+  class="ay-dash-detail"
+  data-file-id="{{ item.file_id }}"
+>
   <header class="ay-dash-detail__header">
     <a
       href="{% url 'dashboards:saved_list' %}"
@@ -34,14 +38,18 @@
       {% endif %}
     </div>
   </header>
-  <div
-    class="ay-dash-detail__body"
-    hx-get="{% url 'dashboards:preview' item.file_id %}"
-    hx-trigger="load"
-    hx-swap="innerHTML"
-  >
-    <div class="ay-dash-detail__loading" role="status" aria-label="Cargando dashboard">
-      <span class="ay-spinner" aria-hidden="true"></span>
+  <div class="ay-dash-detail__stage" id="ay-dash-detail-stage">
+    <div
+      class="ay-dash-detail__preview-wrap"
+      id="ay-dash-preview-wrap"
+      hx-get="{% url 'dashboards:preview' item.file_id %}"
+      hx-trigger="load"
+      hx-swap="innerHTML"
+    >
+      <div class="ay-dash-detail__loading" role="status" aria-label="Cargando dashboard">
+        <span class="ay-spinner" aria-hidden="true"></span>
+      </div>
     </div>
+    {% include "components/provenance_panel.html" %}
   </div>
 </div>

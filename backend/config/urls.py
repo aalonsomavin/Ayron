@@ -9,6 +9,7 @@ urlpatterns = [
     path("chat/", include("apps.chat.urls")),
     path("files/", include("apps.files.urls")),
     path("dashboards/", include("apps.files.urls_pages")),
+    path("provenance/", include("apps.provenance.urls")),
     path("sources/", include("apps.sources.urls")),
     path("automations/", include("apps.automations.urls")),
     path("", include("apps.core.urls")),

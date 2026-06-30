@@ -89,12 +89,38 @@ En prosa, el equivalente es el **TL;DR** al inicio (ya va antes del cuerpo).
 <div class="ay-dash-col ay-dash-col--3">
   <div class="ay-dash-card">
     <div class="ay-dash-kpi-label">Ingresos</div>
-    <div class="ay-dash-kpi-value">$1.28M</div>
+    <div class="ay-dash-kpi-value" data-ay-claim="kpi-revenue">$1.28M</div>
     <div class="ay-dash-delta ay-dash-delta--up">…12.4%…<span class="ay-dash-delta__muted">vs mes anterior</span></div>
   </div>
 </div>
 ```
 Variantes: `.ay-dash-kpi-value--sm`, `.ay-dash-kpi-value--hero`, `.ay-dash-kpi-row` + `.ay-dash-kpi-icon`, `.ay-dash-delta--down`
+
+**Trazabilidad (claims)** — en KPIs alimentados por SQL, añade `data-ay-claim="{claim_key}"` en `.ay-dash-kpi-value` (o en el contenedor del gráfico). Usa claves estables en kebab-case (`kpi-total-revenue`, `chart-by-region`). Cada `run_sql_query` exitoso devuelve un `source_ref` corto (`sql_1`, `sql_2`, …). Copia esos refs al publicar con `provenance[]` en `publish_html_artifact`:
+
+```json
+{
+  "provenance": [
+    {
+      "claim_key": "kpi-total-revenue",
+      "label": "Ingresos totales",
+      "source_refs": ["sql_1"],
+      "definition": {
+        "metric": "SUM(total)",
+        "dataset_ref": "embedded:analytics-data",
+        "base_filters": "sin filtros de fecha"
+      },
+      "transformation": "SUM(total) · redondeo 2 dec"
+    }
+  ]
+}
+```
+
+Un KPI puede referenciar varios `source_refs` si combina datos de varias consultas. No uses IDs de otras tools (p. ej. el `tool_call_id` de `publish_html_artifact`).
+
+Cada `claim_key` del array debe existir en el HTML como `data-ay-claim`. El manifiesto se guarda solo en `File.content_json.provenance` — no incluyas `#ay-provenance-manifest` ni JSON de linaje en el DOM.
+
+En Analíticas, el usuario puede hacer clic en un KPI con `data-ay-claim` para abrir el panel de procedencia. Ayron inyecta el bridge automáticamente al publicar dashboards.
 
 **Metric strip** — `.ay-dash-card.ay-dash-strip` con `.ay-dash-strip__item` / `__divider`
 

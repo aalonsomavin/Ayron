@@ -109,6 +109,7 @@ ALLOWED_ATTRIBUTES = {
         "data-filter-id",
         "data-calc-output",
         "data-calc-input",
+        "data-ay-claim",
         "hidden",
     ],
     "div": [

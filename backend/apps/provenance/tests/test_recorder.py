@@ -73,9 +73,66 @@ class TestRecordDataAccess:
 
         data_access = DataAccess.objects.get(conversation=conv, tool_call_id="call_abc")
         assert data_access.access_kind == DataAccess.AccessKind.SQL
+        assert data_access.source_ref == "sql_1"
         assert data_access.request["sql"] == "SELECT 1"
         assert data_access.integration_id == integration.id
         assert data_access.message_id == message.id
+
+    def test_record_assigns_sequential_source_refs(self, conversation):
+        conv, message, user = conversation
+        integration = Integration.objects.create(
+            slug="seq-db",
+            name="Seq DB",
+            type=Integration.Type.POSTGRES,
+        )
+        set_agent_context(conv, user, message=message)
+
+        for index, tool_call_id in enumerate(["call_one", "call_two"], start=1):
+            record_data_access(
+                tool_name="run_sql_query",
+                tool_call_id=tool_call_id,
+                access_kind="sql",
+                request={"sql": f"SELECT {index}"},
+                response_summary={"row_count": index},
+                integration=integration,
+            )
+
+        refs = list(
+            DataAccess.objects.filter(conversation=conv)
+            .order_by("executed_at")
+            .values_list("source_ref", flat=True)
+        )
+        assert refs == ["sql_1", "sql_2"]
+
+    def test_record_keeps_source_ref_on_update(self, conversation):
+        conv, message, user = conversation
+        integration = Integration.objects.create(
+            slug="idem-db",
+            name="Idem DB",
+            type=Integration.Type.POSTGRES,
+        )
+        set_agent_context(conv, user, message=message)
+
+        record_data_access(
+            tool_name="run_sql_query",
+            tool_call_id="call_same",
+            access_kind="sql",
+            request={"sql": "SELECT 1"},
+            response_summary={"row_count": 1},
+            integration=integration,
+        )
+        record_data_access(
+            tool_name="run_sql_query",
+            tool_call_id="call_same",
+            access_kind="sql",
+            request={"sql": "SELECT 2"},
+            response_summary={"row_count": 2},
+            integration=integration,
+        )
+
+        data_access = DataAccess.objects.get(conversation=conv, tool_call_id="call_same")
+        assert data_access.source_ref == "sql_1"
+        assert data_access.response_summary["row_count"] == 2
 
     def test_record_without_context_is_noop(self, db):
         record_data_access(
@@ -140,6 +197,7 @@ class TestRunSqlQueryRecorder:
         )
 
         assert result["row_count"] == 1
+        assert result["source_ref"] == "sql_1"
         data_access = DataAccess.objects.get(conversation=conv, tool_call_id="call_record_1")
         assert "comercial_productos" in data_access.response_summary["tables"]
         assert data_access.integration.slug == "mexar-demo"

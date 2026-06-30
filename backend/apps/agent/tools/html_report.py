@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Annotated
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from langchain.tools import ToolRuntime
 from langchain_core.tools import InjectedToolCallId, tool
 
 from apps.agent.cancellation import check_agent_not_cancelled
-from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.context import get_agent_conversation, get_agent_message, get_agent_user
 from apps.agent.workspace import (
     read_workspace_file,
     relocate_workspace_artifact,
@@ -21,6 +22,7 @@ from apps.agent.workspace import (
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import footer_attribution_text
 from apps.agent.tools.html_insight import normalize_insight_markup
+from apps.agent.tools.html_provenance import inject_provenance_bridge
 from apps.agent.tools.html_sanitize import normalize_agent_html
 from apps.files.models import HTML_MIME
 from apps.files.services import (
@@ -31,6 +33,11 @@ from apps.files.services import (
     serialize_file_for_ui,
     update_generated_file,
     _normalize_html_filename,
+)
+from apps.provenance.claims import (
+    build_provenance_manifest,
+    sync_file_claims,
+    validate_provenance_payload,
 )
 
 _HTML_REPORT_DISPLAY_REGISTRY: dict[str, dict] = {}
@@ -172,23 +179,28 @@ def _preview_document_shell(body_html: str, *, title: str = "Preview") -> str:
     )
 
 
-def build_preview_html(content_json: dict) -> str:
+def build_preview_html(content_json: dict, *, file_id: str | None = None) -> str:
     if content_json.get("full_document"):
         html = content_json.get("html") or ""
         if html.strip():
+            if file_id and content_json.get("html_kind") == HTML_KIND_DASHBOARD:
+                return inject_provenance_bridge(html, file_id)
             return html
 
     body_html = content_json.get("body_html") or content_json.get("html") or ""
     body_html = normalize_insight_markup(body_html)
     title = content_json.get("title") or "Preview"
-    return _preview_document_shell(body_html, title=title)
+    html = _preview_document_shell(body_html, title=title)
+    if file_id and content_json.get("html_kind") == HTML_KIND_DASHBOARD:
+        return inject_provenance_bridge(html, file_id)
+    return html
 
 
-def build_preview_fragment(content_json: dict) -> str:
-    return build_preview_html(content_json)
+def build_preview_fragment(content_json: dict, *, file_id: str | None = None) -> str:
+    return build_preview_html(content_json, file_id=file_id)
 
 
-def build_export_html(content_json: dict) -> str:
+def build_export_html(content_json: dict, *, file_id: str | None = None) -> str:
     title = esc(content_json.get("title", "Reporte"))
     generated_on = esc(footer_attribution_text(date.today()))
 
@@ -205,6 +217,8 @@ def build_export_html(content_json: dict) -> str:
                 )
             else:
                 html = f"{html}{_footer_html()}"
+        if file_id and content_json.get("html_kind") == HTML_KIND_DASHBOARD:
+            return inject_provenance_bridge(html, file_id)
         return html
 
     body_html = content_json.get("body_html") or content_json.get("html") or ""
@@ -226,12 +240,15 @@ def build_export_html(content_json: dict) -> str:
         "</body>"
         "</html>"
     )
+    if file_id and content_json.get("html_kind") == HTML_KIND_DASHBOARD:
+        return inject_provenance_bridge(html, file_id)
+    return html
 
 
-def preview_html_for_file(content_json: dict | None, preview_html: str) -> str:
+def preview_html_for_file(content_json: dict | None, preview_html: str, *, file_id: str | None = None) -> str:
     if content_json and content_json.get("format") == "html":
         if content_json.get("body_html") or content_json.get("html"):
-            return build_preview_html(content_json)
+            return build_preview_html(content_json, file_id=file_id)
     return preview_html or ""
 
 
@@ -276,10 +293,11 @@ def _persist_html_file(
     original_name: str,
     file_obj=None,
 ):
-    export_html = build_export_html(content_json)
-    preview_html = build_preview_html(content_json)
+    file_id = str(file_obj.id) if file_obj is not None else None
+    export_html = build_export_html(content_json, file_id=file_id)
+    preview_html = build_preview_html(content_json, file_id=file_id)
     if file_obj is None:
-        return save_generated_file(
+        file_obj = save_generated_file(
             conversation=conversation,
             user=user,
             original_name=original_name,
@@ -288,13 +306,37 @@ def _persist_html_file(
             preview_html=preview_html,
             mime_type=HTML_MIME,
         )
+        if content_json.get("html_kind") == HTML_KIND_DASHBOARD:
+            export_html = build_export_html(content_json, file_id=str(file_obj.id))
+            preview_html = build_preview_html(content_json, file_id=str(file_obj.id))
+            file_obj.preview_html = preview_html
+            file_obj.file.save(
+                file_obj.file.name,
+                ContentFile(export_html.encode("utf-8")),
+                save=False,
+            )
+            file_obj.size_bytes = len(export_html.encode("utf-8"))
+            file_obj.save(update_fields=["preview_html", "size_bytes", "updated_at"])
+        return file_obj
     file_obj.original_name = original_name
-    return update_generated_file(
+    updated = update_generated_file(
         file_obj=file_obj,
         content_json=content_json,
         file_bytes=export_html.encode("utf-8"),
         preview_html=preview_html,
     )
+    if content_json.get("html_kind") == HTML_KIND_DASHBOARD:
+        export_html = build_export_html(content_json, file_id=str(updated.id))
+        preview_html = build_preview_html(content_json, file_id=str(updated.id))
+        updated.preview_html = preview_html
+        updated.file.save(
+            updated.file.name,
+            ContentFile(export_html.encode("utf-8")),
+            save=False,
+        )
+        updated.size_bytes = len(export_html.encode("utf-8"))
+        updated.save(update_fields=["preview_html", "size_bytes", "updated_at"])
+    return updated
 
 
 def _content_json_from_workspace_html(
@@ -390,14 +432,20 @@ def run_publish_html_artifact(
     filename: str = "",
     file_id: str = "",
     tool_call_id: str = "",
+    provenance: list[dict] | None = None,
 ) -> str:
     """Publish a validated workspace HTML file to the user.
 
     The file at `path` must exist under `/workspace/` (e.g. `/workspace/artifacts/_draft.html`
     for new reports, or `/workspace/artifacts/{file_id}.html` after hydrate).
 
-  For new artifacts, omit `file_id`. For updates, pass the existing `file_id`.
-  Call `validate_html_artifact` on `path` before publishing.
+    For new artifacts, omit `file_id`. For updates, pass the existing `file_id`.
+    Call `validate_html_artifact` on `path` before publishing.
+
+    Optional `provenance` declares data lineage for KPIs/charts. Each item needs
+    claim_key, label, source_refs (e.g. sql_1 from run_sql_query responses), and
+    definition. Every claim_key must appear in the HTML as data-ay-claim on the
+    corresponding element. tool_call_ids is accepted for backward compatibility.
     """
     check_agent_not_cancelled()
     conversation = get_agent_conversation()
@@ -449,6 +497,14 @@ def run_publish_html_artifact(
     except ValueError as exc:
         return build_tool_error_response(str(exc))
 
+    normalized_provenance = None
+    if provenance:
+        try:
+            body_html = content_json.get("body_html") or workspace_html
+            normalized_provenance = validate_provenance_payload(conversation, body_html, provenance)
+        except ValueError as exc:
+            return build_tool_error_response(str(exc))
+
     try:
         if existing_file:
             source_name = filename.strip() or existing_file.original_name
@@ -485,6 +541,22 @@ def run_publish_html_artifact(
     except Exception as exc:
         return build_tool_error_response(str(exc))
 
+    if normalized_provenance:
+        try:
+            claim_key_map = sync_file_claims(
+                conversation,
+                file_obj,
+                get_agent_message(),
+                normalized_provenance,
+                file_version=file_obj.version,
+            )
+            merged_content = dict(file_obj.content_json)
+            merged_content["provenance"] = build_provenance_manifest(claim_key_map)
+            file_obj.content_json = merged_content
+            file_obj.save(update_fields=["content_json", "updated_at"])
+        except ValueError as exc:
+            return build_tool_error_response(str(exc))
+
     _register_display(tool_call_id, file_obj, updated=updated)
     return _build_agent_tool_response(
         file_obj,
@@ -501,6 +573,7 @@ def publish_html_artifact(
     subtitle: str = "",
     filename: str = "",
     file_id: str = "",
+    provenance: list[dict] | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Publish a validated workspace HTML file to the user.
@@ -510,6 +583,11 @@ def publish_html_artifact(
 
     For new artifacts, omit `file_id`. For updates, pass the existing `file_id`.
     Call `validate_html_artifact` on `path` before publishing.
+
+    Optional `provenance` declares data lineage for KPIs. Each item needs claim_key,
+    label, source_refs (e.g. sql_1 from run_sql_query responses), and definition
+    (metric, dataset_ref, base_filters). Mark matching HTML elements with
+    data-ay-claim="{claim_key}". tool_call_ids is accepted for backward compatibility.
     """
     return run_publish_html_artifact(
         path,
@@ -519,4 +597,5 @@ def publish_html_artifact(
         filename=filename,
         file_id=file_id,
         tool_call_id=tool_call_id,
+        provenance=provenance,
     )

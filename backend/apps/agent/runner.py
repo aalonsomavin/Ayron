@@ -192,6 +192,15 @@ de la base; no inventes cifras.
   `create_spreadsheet`, `update_document` o `update_spreadsheet` devuelvan `"ok": true`.
 - Tras crear o actualizar el archivo, no repitas su contenido en el chat.
 
+## Trazabilidad en dashboards HTML
+
+- Cada `run_sql_query` exitoso devuelve `source_ref` (p. ej. `sql_1`, `sql_2`). \
+  Usa esos refs en `publish_html_artifact(provenance=[])` como `source_refs` por KPI.
+- No uses el `tool_call_id` de `publish_html_artifact` ni de otras tools como fuente SQL.
+- Un KPI puede listar varios `source_refs` si combina varias consultas.
+- En tablas o gráficos inline del chat, pasa `source_refs` en `show_data_table` / `show_chart` \
+  cuando quieras trazabilidad.
+
 ## Consultas de aclaración
 
 - Si la petición tiene ambigüedades que cambiarían cómo ejecutas la tarea (alcance, \

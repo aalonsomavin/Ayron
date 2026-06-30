@@ -114,6 +114,20 @@
   margin-top: 6px;
 }
 
+[data-ay-claim].ay-claim-interactive,
+.ay-claim-interactive[data-ay-claim] {
+  cursor: pointer;
+  border-radius: 6px;
+  outline-offset: 2px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-ay-claim].ay-claim-interactive:hover,
+.ay-claim-interactive[data-ay-claim]:hover {
+  background: rgba(59, 110, 246, 0.08);
+  box-shadow: 0 0 0 1px rgba(59, 110, 246, 0.18);
+}
+
 .ay-dash-kpi-value--sm {
   font-size: 22px;
   margin-top: 2px;

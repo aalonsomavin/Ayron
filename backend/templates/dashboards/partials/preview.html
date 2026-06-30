@@ -1,6 +1,7 @@
-<iframe
-  class="ay-dash-detail__iframe"
-  title="{{ title }}"
-  sandbox="allow-scripts"
-  srcdoc="{{ preview_html|escape }}"
-></iframe>
+<div class="ay-dash-detail__iframe-wrap">
+  <iframe
+    class="ay-dash-detail__iframe"
+    title="{{ title }}"
+    src="{{ preview_url }}"
+  ></iframe>
+</div>

@@ -9,6 +9,7 @@ from apps.agent.cancellation import check_agent_not_cancelled
 from apps.agent.db import MAX_ROWS, demo_db_connection
 from apps.agent.tools.errors import build_query_error_response
 from apps.integrations.data_access import DATA_ACCESS_TOOL_SPECS
+from apps.provenance.models import DataAccess
 from apps.provenance.query import serialize_preview_rows
 from apps.provenance.recorder import record_data_access
 from apps.provenance.sql_metadata import columns_from_rows, extract_sql_tables
@@ -87,13 +88,13 @@ def _record_sql_data_access(
     purpose: str,
     rows: list[dict],
     truncated: bool,
-) -> None:
+) -> DataAccess | None:
     spec = DATA_ACCESS_TOOL_SPECS.get(RUN_SQL_QUERY_TOOL, {})
     tables = extract_sql_tables(sql)
     columns = columns_from_rows(rows)
     preview_rows = serialize_preview_rows(rows)
     user_summary = purpose.strip()
-    record_data_access(
+    return record_data_access(
         tool_name=RUN_SQL_QUERY_TOOL,
         tool_call_id=tool_call_id,
         access_kind=spec.get("kind", "sql"),
@@ -226,8 +227,9 @@ def run_sql_query(
                     rows = rows[:MAX_ROWS]
     except psycopg.Error as exc:
         return build_query_error_response(str(exc).strip())
+    data_access = None
     if tool_call_id:
-        _record_sql_data_access(
+        data_access = _record_sql_data_access(
             tool_call_id=tool_call_id,
             sql=query,
             purpose=purpose,
@@ -240,4 +242,6 @@ def run_sql_query(
         "truncated": truncated,
         "max_rows": MAX_ROWS,
     }
+    if data_access and data_access.source_ref:
+        result["source_ref"] = data_access.source_ref
     return _rows_to_json(result)

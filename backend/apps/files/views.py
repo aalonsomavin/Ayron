@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 
 from apps.agent.tools.document import preview_html_for_file as docx_preview_html_for_file
@@ -114,7 +115,11 @@ def _htmx_delete_saved_card_response(request, file_id):
 
 def _preview_for_file(file_obj: File) -> str:
     if file_obj.format_key == "html":
-        return html_preview_html_for_file(file_obj.content_json, file_obj.preview_html)
+        return html_preview_html_for_file(
+            file_obj.content_json,
+            file_obj.preview_html,
+            file_id=str(file_obj.id),
+        )
     if file_obj.format_key == "xlsx":
         return xlsx_preview_html_for_file(file_obj.content_json, file_obj.preview_html)
     return docx_preview_html_for_file(file_obj.content_json, file_obj.preview_html)
@@ -176,6 +181,8 @@ def file_download_pdf(request, file_id):
     return response
 
 
+@login_required
+@xframe_options_sameorigin
 def file_preview(request, file_id):
     file_obj = _get_user_file(request, file_id)
     preview_html = _preview_for_file(file_obj)
@@ -291,13 +298,16 @@ def file_pin(request, file_id):
 @login_required
 def saved_dashboard_preview(request, file_id):
     item = _dashboard_detail_item(request, file_id)
-    preview_html = _preview_for_file(_get_user_file(request, file_id))
-    if not preview_html:
+    file_obj = _get_user_file(request, file_id)
+    if not _preview_for_file(file_obj):
         raise Http404("Preview not available")
     return render(
         request,
         "dashboards/partials/preview.html",
-        {"preview_html": preview_html, "title": item["name"]},
+        {
+            "preview_url": reverse("files:preview", kwargs={"file_id": file_id}),
+            "title": item["name"],
+        },
     )
 
 

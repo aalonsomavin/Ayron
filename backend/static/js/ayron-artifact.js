@@ -210,7 +210,7 @@
     body.style.overflow = "";
   }
 
-  function mountHtmlPreview(body, html, title, panelEl) {
+  function mountHtmlPreview(body, html, title, panelEl, previewUrl) {
     teardownHtmlPreview(body);
     body.classList.add("ay-artifact-panel__body--html-preview");
     body.style.position = "relative";
@@ -220,13 +220,17 @@
     const iframe = document.createElement("iframe");
     iframe.className = "ay-artifact-panel__iframe";
     iframe.title = title;
-    iframe.setAttribute("sandbox", "allow-scripts");
     iframe.style.position = "absolute";
     iframe.style.inset = "0";
     iframe.style.display = "block";
     iframe.style.border = "0";
     iframe.style.background = "#fff";
-    iframe.srcdoc = html;
+    if (previewUrl) {
+      iframe.src = previewUrl;
+    } else {
+      iframe.setAttribute("sandbox", "allow-scripts");
+      iframe.srcdoc = html;
+    }
     body.appendChild(iframe);
 
     function syncIframeSize() {
@@ -574,9 +578,15 @@
       if (window.AyronSidebar) window.AyronSidebar.close();
       this.openFile = file;
       this.expanded = Boolean(file.open_expanded);
+      const isHtml = file.ext === "HTML";
       this.mainEl.classList.add("ay-main--artifact-open");
       this.mainEl.classList.toggle("ay-main--artifact-expanded", this.expanded);
       this.panelEl.setAttribute("aria-hidden", "false");
+      if (isHtml && fileKind(file) === "dashboard") {
+        this.panelEl.dataset.fileId = file.file_id;
+      } else {
+        delete this.panelEl.dataset.fileId;
+      }
       applyPanelExpandVisibility(this.panelEl, file, this.expanded);
       applyPanelFileIcon(this.panelEl, fileKind(file));
       const panelKind = fileKind(file);
@@ -594,7 +604,6 @@
         }
       }
 
-      const isHtml = file.ext === "HTML";
       const isSheet = fileKind(file) === "sheet";
       const body = this.panelEl.querySelector(".ay-artifact-panel__body");
       body.innerHTML =
@@ -603,20 +612,11 @@
         "</div>";
 
       if (isHtml) {
-        fetch(file.preview_url, { credentials: "same-origin" })
-          .then(function (r) {
-            if (!r.ok) throw new Error("preview failed");
-            return r.text();
-          })
-          .then(function (html) {
-            if (!self.openFile || self.openFile.file_id !== file.file_id) return;
-            mountHtmlPreview(body, html, displayFileName(file), self.panelEl);
-          })
-          .catch(function () {
-            if (self.openFile && self.openFile.file_id === file.file_id) {
-              body.innerHTML = '<div class="ay-artifact-panel__error">Preview unavailable.</div>';
-            }
-          });
+        if (!self.openFile || self.openFile.file_id !== file.file_id) return;
+        mountHtmlPreview(body, "", displayFileName(file), self.panelEl, file.preview_url);
+        if (window.AyronProvenance && fileKind(file) === "dashboard") {
+          window.AyronProvenance.initArtifactPanel(self.panelEl);
+        }
         return;
       }
 
@@ -657,6 +657,7 @@
 
     close: function () {
       this.openFile = null;
+      delete this.panelEl.dataset.fileId;
       this.expanded = false;
       this.mainEl.classList.remove("ay-main--artifact-open", "ay-main--artifact-expanded");
       this.panelEl.setAttribute("aria-hidden", "true");

@@ -138,7 +138,8 @@ class TestSavedDashboardViews:
         response = client.get(url)
         assert response.status_code == 200
         assert b"ay-dash-detail__iframe" in response.content
-        assert b"srcdoc=" in response.content
+        assert b"/files/" in response.content
+        assert b"/preview/" in response.content
 
     def test_saved_dashboard_detail_htmx_returns_partial(self, client, user, dashboard_file):
         save_dashboard(user, dashboard_file)

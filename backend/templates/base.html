@@ -73,6 +73,7 @@
 
   {% block content %}{% endblock %}
   <script src="{% static 'js/ayron-ui.js' %}"></script>
+  <script src="{% static 'js/ayron-provenance.js' %}"></script>
   <script>
   document.body.addEventListener("htmx:configRequest", function (evt) {
     const token = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];

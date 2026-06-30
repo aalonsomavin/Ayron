@@ -6,7 +6,10 @@ from typing import Annotated, Literal
 from django.utils.html import json_script
 from langchain_core.tools import InjectedToolCallId, tool
 
+from apps.agent.context import get_agent_conversation, get_agent_message
 from apps.agent.tools.errors import build_tool_error_response
+from apps.provenance.claims import create_inline_claim, normalize_inline_source_refs
+from apps.provenance.models import DataClaim
 
 _CHART_DISPLAY_REGISTRY: dict[str, dict] = {}
 
@@ -222,6 +225,8 @@ def show_chart(
     caption: str = "",
     value_format: Literal["number", "currency", "percent"] = "number",
     currency_label: str = "",
+    source_refs: list[str] | None = None,
+    tool_call_ids: list[str] | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Display an inline chart in the chat for the user.
@@ -236,6 +241,10 @@ def show_chart(
     For pie charts, pass exactly one series.
     When value_format is currency, pass currency_label (e.g. "pesos mexicanos");
     values render with $ and the label names the currency on the axis.
+
+    Optional source_refs links this chart to prior SQL queries for provenance.
+    Use the source_ref value returned by each successful run_sql_query (e.g. sql_1).
+    tool_call_ids is accepted for backward compatibility.
     """
     try:
         payload = validate_chart_input(
@@ -249,6 +258,26 @@ def show_chart(
         )
     except ValueError as exc:
         return build_tool_error_response(str(exc))
+
+    resolved_source_refs = normalize_inline_source_refs(source_refs, tool_call_ids)
+    if resolved_source_refs:
+        conversation = get_agent_conversation()
+        message = get_agent_message()
+        if conversation is None:
+            return build_tool_error_response("No conversation context")
+        try:
+            claim = create_inline_claim(
+                conversation,
+                message,
+                DataClaim.Surface.CHAT_CHART,
+                tool_call_id,
+                resolved_source_refs,
+                label=payload.get("title") or payload.get("caption") or "Gráfico",
+            )
+            payload["claim_id"] = str(claim.id)
+        except ValueError as exc:
+            return build_tool_error_response(str(exc))
+
     if tool_call_id:
         _CHART_DISPLAY_REGISTRY[tool_call_id] = payload
     return build_agent_tool_response(payload)
