@@ -89,37 +89,11 @@ class TestProvenanceDataAccessView:
         assert "Origen de los datos" in content
         assert "Ayron consultó productos para revisar el catálogo comercial." in content
         assert "Ver consulta SQL" in content
-        assert "data-provenance-run" in content
+        assert "Conectada" not in content
+        assert "data-provenance-run" not in content
+        assert "Ver datos completos" not in content
         assert "PostgreSQL · Mexar Pharma — Producción" in content
         assert "ay-data-table" in content
-
-    def test_data_access_run_reruns_query(self, client, user, conversation, data_access, monkeypatch):
-        client.force_login(user)
-
-        def fake_execute(_sql):
-            return {
-                "rows": [{"sku": "A1", "nombre": "Asgen"}],
-                "row_count": 1,
-                "truncated": False,
-                "max_rows": 100,
-                "columns": ["sku", "nombre"],
-            }
-
-        monkeypatch.setattr("apps.chat.views.execute_stored_select", fake_execute)
-        url = reverse("chat:provenance_data_access_run", kwargs={"conversation_id": conversation.id})
-        response = client.get(url, {"tool_call_id": "call_detail_test"}, HTTP_ACCEPT="text/html")
-
-        content = response.content.decode()
-        assert response.status_code == 200
-        assert "ay-data-table" in content
-        assert "Resultado actual de la base" in content
-
-    def test_data_access_run_view_permissions(self, client, other_user, conversation, data_access):
-        client.force_login(other_user)
-        url = reverse("chat:provenance_data_access_run", kwargs={"conversation_id": conversation.id})
-        response = client.get(url, {"tool_call_id": "call_detail_test"})
-
-        assert response.status_code == 404
 
     def test_data_access_detail_view_permissions(self, client, other_user, conversation, data_access):
         client.force_login(other_user)

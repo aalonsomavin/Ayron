@@ -4,7 +4,7 @@
 {% block title %}{{ conversation.title|default:"Chat" }} — Ayron{% endblock %}
 
 {% block content %}
-<div class="ay-shell" id="ay-shell" data-provenance-data-access-url="{% url 'chat:provenance_data_access' conversation_id=conversation.id %}" data-provenance-run-url="{% url 'chat:provenance_data_access_run' conversation_id=conversation.id %}">
+<div class="ay-shell" id="ay-shell" data-provenance-data-access-url="{% url 'chat:provenance_data_access' conversation_id=conversation.id %}">
   {% include "chat/sidebar.html" with new_chat_active=False active_conversation_id=conversation.id %}
 
   <div class="ay-main" id="ay-main">
@@ -44,9 +44,9 @@
                           {% if block.type == "text" %}
                             <div class="ay-msg-agent__text ay-markdown">{{ block.content }}</div>
                           {% elif block.type == "table" %}
-                            {% include "components/data_table.html" with table=block.table %}
+                            {% include "components/data_table.html" with table=block.table claim_id=block.claim_id %}
                           {% elif block.type == "chart" %}
-                            {% include "components/inline_chart.html" with chart=block.chart chart_id=block.chart_id %}
+                            {% include "components/inline_chart.html" with chart=block.chart chart_id=block.chart_id claim_id=block.claim_id %}
                           {% elif block.type == "files" %}
                             <div class="ay-msg-agent__files">
                               {% for file in block.files %}
@@ -955,7 +955,14 @@
     scroll.appendChild(grid);
     card.appendChild(scroll);
 
-    if (table.caption) {
+    if (window.AyronProvenance) {
+      window.AyronProvenance.appendInlineProvenanceFooter(
+        card,
+        table.claim_id || "",
+        table.caption || "",
+        "ay-data-table__caption"
+      );
+    } else if (table.caption) {
       const caption = document.createElement("div");
       caption.className = "ay-data-table__caption";
       caption.textContent = table.caption;
@@ -1100,6 +1107,15 @@
       contentEl.appendChild(chartEl);
     }
     window.AyronChart.mount(chartEl);
+    if (window.AyronProvenance && event.claim_id) {
+      const card = chartEl.querySelector(".ay-chart__card");
+      window.AyronProvenance.appendInlineProvenanceFooter(
+        card,
+        event.claim_id,
+        event.caption || "",
+        "ay-chart__caption"
+      );
+    }
   }
 
   function appendTableBlock(bubble, table) {

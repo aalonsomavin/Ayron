@@ -41,10 +41,8 @@ from apps.files.services import (
     serialize_file_for_ui,
 )
 from apps.chat.tool_trace import tool_trace_for_message
-from apps.provenance.query import execute_stored_select
 from apps.provenance.services import (
     get_data_access_for_tool_call,
-    preview_table_from_rows,
     resolve_provenance_detail,
     serialize_data_access_detail,
 )
@@ -209,22 +207,27 @@ def _content_blocks_for_message(message: Message, *, user=None) -> list[dict]:
                 blocks.append({"type": "text", "content": chunk})
             can_merge_token = True
         elif event.event_type == AgentEvent.EventType.TABLE:
-            blocks.append(
-                {
-                    "type": "table",
-                    "table": prepare_table_for_render(event.payload),
-                }
-            )
+            table = prepare_table_for_render(event.payload)
+            block = {
+                "type": "table",
+                "table": table,
+            }
+            claim_id = event.payload.get("claim_id") or table.get("claim_id")
+            if claim_id:
+                block["claim_id"] = claim_id
+            blocks.append(block)
             can_merge_token = False
         elif event.event_type == AgentEvent.EventType.CHART:
             chart = prepare_chart_for_render(event.payload)
-            blocks.append(
-                {
-                    "type": "chart",
-                    "chart": chart,
-                    "chart_id": f"chart-{message.id}-{len(blocks)}",
-                }
-            )
+            block = {
+                "type": "chart",
+                "chart": chart,
+                "chart_id": f"chart-{message.id}-{len(blocks)}",
+            }
+            claim_id = event.payload.get("claim_id") or chart.get("claim_id")
+            if claim_id:
+                block["claim_id"] = claim_id
+            blocks.append(block)
             can_merge_token = False
         elif event.event_type == AgentEvent.EventType.CLARIFICATION:
             payload = dict(event.payload)
@@ -513,47 +516,6 @@ def provenance_data_access(request, conversation_id):
         request,
         "components/provenance_sql_detail.html",
         {"detail": detail},
-    )
-
-
-@require_GET
-def provenance_data_access_run(request, conversation_id):
-    conversation = _get_conversation(request, conversation_id)
-    tool_call_id = (request.GET.get("tool_call_id") or "").strip()
-    if not tool_call_id:
-        return HttpResponseBadRequest("tool_call_id is required.")
-
-    data_access = get_data_access_for_tool_call(conversation, tool_call_id)
-    if data_access is None:
-        raise Http404
-
-    sql = (data_access.request or {}).get("sql") or ""
-    if not sql:
-        raise Http404
-
-    try:
-        result = execute_stored_select(sql)
-    except ValueError:
-        return HttpResponseBadRequest("Stored SQL is invalid.")
-    except Exception:
-        return HttpResponseBadRequest("Could not execute stored SQL.")
-
-    table = preview_table_from_rows(result["rows"])
-    context = {
-        "table": table,
-        "row_count": result["row_count"],
-        "truncated": result["truncated"],
-        "max_rows": result["max_rows"],
-        "live": True,
-    }
-    accept = request.headers.get("Accept", "")
-    if "application/json" in accept and "text/html" not in accept:
-        return JsonResponse(context)
-
-    return render(
-        request,
-        "components/provenance_data_table.html",
-        context,
     )
 
 

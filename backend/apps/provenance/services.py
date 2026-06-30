@@ -128,6 +128,28 @@ def resolve_provenance_detail(conversation, tool_call_id: str) -> dict | None:
     return serialize_failed_sql_detail(conversation, tool_call_id)
 
 
+def resolve_claim_provenance_detail(claim) -> dict | None:
+    link = (
+        claim.provenance_links.select_related("data_access__integration")
+        .order_by("ordinal")
+        .first()
+    )
+    if link is None:
+        return None
+
+    detail = serialize_data_access_detail(link.data_access)
+    detail["failed"] = False
+    detail["status_message"] = ""
+
+    narrative = str(detail.get("narrative") or "").strip()
+    if not narrative and link.transformation:
+        narrative = str(link.transformation).strip()
+    if not narrative and claim.label:
+        narrative = str(claim.label).strip()
+    detail["narrative"] = narrative
+    return detail
+
+
 def preview_table_from_rows(preview_rows: list[dict]) -> dict | None:
     if not preview_rows:
         return None

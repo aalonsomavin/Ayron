@@ -181,11 +181,6 @@
             '<span class="ay-provenance-panel__source-value">' +
             escapeHtml(source.source_label || source.name || "") +
             "</span>" +
-            '<span class="ay-provenance-panel__status ay-provenance-panel__status--' +
-            escapeHtml(source.status || "connected") +
-            '">' +
-            escapeHtml(source.status_label || "") +
-            "</span>" +
           "</div>" +
         "</div>"
       );
@@ -245,6 +240,70 @@
       encodeURIComponent(claimKey) +
       "/"
     );
+  }
+
+  function claimByIdUrl(claimId) {
+    return "/provenance/claims/" + encodeURIComponent(claimId) + "/";
+  }
+
+  function fetchAndRenderClaim(body, url) {
+    if (!body) return Promise.resolve();
+    body.innerHTML = renderLoading();
+    return fetch(url, {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error(response.status === 404 ? "not_found" : "error");
+        }
+        return response.json();
+      })
+      .then(function (payload) {
+        body.innerHTML = renderPanelContent(payload);
+      })
+      .catch(function (err) {
+        var message =
+          err && err.message === "not_found"
+            ? "Procedencia no disponible para este dato."
+            : "No se pudo cargar la procedencia.";
+        body.innerHTML = renderError(message);
+      });
+  }
+
+  function createOriginButton(claimId) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ay-provenance-origin-btn";
+    btn.setAttribute("data-provenance-claim-open", "");
+    btn.setAttribute("data-provenance-claim-id", claimId);
+    btn.textContent = "Ver datos de origen";
+    return btn;
+  }
+
+  function appendInlineProvenanceFooter(card, claimId, caption, captionClass) {
+    if (!card) return;
+    if (!claimId) {
+      if (!caption) return;
+      var soloCaption = document.createElement("div");
+      soloCaption.className = captionClass;
+      soloCaption.textContent = caption;
+      card.appendChild(soloCaption);
+      return;
+    }
+    var footer = document.createElement("div");
+    footer.className = "ay-inline-block__footer";
+    var existingCaption = captionClass ? card.querySelector("." + captionClass) : null;
+    if (existingCaption) {
+      footer.appendChild(existingCaption);
+    } else if (caption) {
+      var captionEl = document.createElement("div");
+      captionEl.className = captionClass;
+      captionEl.textContent = caption;
+      footer.appendChild(captionEl);
+    }
+    footer.appendChild(createOriginButton(claimId));
+    card.appendChild(footer);
   }
 
   function getStage(root) {
@@ -317,19 +376,17 @@
     stage.classList.remove("ay-dash-detail__stage--panel-open");
   }
 
-  function bindPanelActions(root) {
-    var panel = getPanel(root);
-    var body = getPanelBody(root);
-    if (!panel || panel.dataset.bound === "true") return;
-    panel.dataset.bound = "true";
+  function bindPanelBodyActions(panel, body, onClose) {
+    if (!panel || panel.dataset.actionsBound === "true") return;
+    panel.dataset.actionsBound = "true";
 
     panel.addEventListener("click", function (e) {
       if (e.target.closest("[data-provenance-panel-close]")) {
-        closePanel(root);
+        if (onClose) onClose();
         return;
       }
       var copyBtn = e.target.closest("[data-provenance-panel-copy]");
-      if (!copyBtn) return;
+      if (!copyBtn || !body) return;
       var code = body.querySelector(".ay-provenance-panel__sql code");
       if (!code) return;
       var text = code.textContent || "";
@@ -340,33 +397,35 @@
     });
   }
 
+  function bindPanelActions(root) {
+    var panel = getPanel(root);
+    var body = getPanelBody(root);
+    if (!panel || panel.dataset.bound === "true") return;
+    panel.dataset.bound = "true";
+    bindPanelBodyActions(panel, body, function () {
+      closePanel(root);
+    });
+  }
+
   function loadClaim(root, fileId, claimKey) {
     var body = getPanelBody(root);
     if (!body) return;
 
     openPanel(root);
-    body.innerHTML = renderLoading();
+    fetchAndRenderClaim(body, claimUrl(fileId, claimKey));
+  }
 
-    fetch(claimUrl(fileId, claimKey), {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    })
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error(response.status === 404 ? "not_found" : "error");
-        }
-        return response.json();
-      })
-      .then(function (payload) {
-        body.innerHTML = renderPanelContent(payload);
-      })
-      .catch(function (err) {
-        var message =
-          err && err.message === "not_found"
-            ? "Procedencia no disponible para este dato."
-            : "No se pudo cargar la procedencia.";
-        body.innerHTML = renderError(message);
-      });
+  function openChatClaim(claimId) {
+    if (!claimId) return;
+    if (window.AyronToolTrace && window.AyronToolTrace.openProvenanceHtmlModal) {
+      window.AyronToolTrace.openProvenanceHtmlModal(claimByIdUrl(claimId));
+      return;
+    }
+    var dialog = document.getElementById("ay-provenance-sql-dialog");
+    var contentEl = document.getElementById("ay-provenance-sql-content");
+    if (!dialog || !contentEl) return;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    fetchAndRenderClaim(contentEl, claimByIdUrl(claimId));
   }
 
   function isPreviewMessageSource(stage, event) {
@@ -425,6 +484,14 @@
 
   window.addEventListener("message", onWindowMessage);
 
+  document.body.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-provenance-claim-open]");
+    if (!btn) return;
+    e.preventDefault();
+    var claimId = btn.getAttribute("data-provenance-claim-id");
+    if (claimId) openChatClaim(claimId);
+  });
+
   function findDashboardRoot(node) {
     if (!node) return null;
     if (node.id === "dashboards-view" && node.classList.contains("ay-dash-detail")) {
@@ -479,7 +546,10 @@
   window.AyronProvenance = {
     initDashboard: initDashboard,
     initArtifactPanel: initArtifactPanel,
+    openChatClaim: openChatClaim,
+    appendInlineProvenanceFooter: appendInlineProvenanceFooter,
     claimUrl: claimUrl,
+    claimByIdUrl: claimByIdUrl,
     renderPanelContent: renderPanelContent,
   };
 })();

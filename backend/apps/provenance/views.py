@@ -1,6 +1,6 @@
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseBadRequest, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.http import Http404, HttpResponseBadRequest, JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET
 
 from apps.provenance.models import DataAccess
@@ -11,6 +11,7 @@ from apps.provenance.permissions import (
     get_user_file_claim,
 )
 from apps.provenance.serializers import serialize_claim_detail, serialize_data_access
+from apps.provenance.services import resolve_claim_provenance_detail
 
 
 @login_required
@@ -40,6 +41,19 @@ def conversation_data_access_lookup(request, conversation_id):
 @require_GET
 def claim_detail(request, claim_id):
     claim = get_user_claim(request, claim_id)
+    accept = request.headers.get("Accept", "")
+    wants_html = "text/html" in accept and "application/json" not in accept
+
+    if wants_html:
+        detail = resolve_claim_provenance_detail(claim)
+        if detail is None:
+            raise Http404
+        return render(
+            request,
+            "components/provenance_sql_detail.html",
+            {"detail": detail},
+        )
+
     return JsonResponse(serialize_claim_detail(claim))
 
 

@@ -302,3 +302,36 @@ class TestProvenanceClaimApi:
         assert payload["claim"]["claim_key"] == "chat-table-call_inline"
         assert payload["transformation"] == ""
         assert len(payload["data_accesses"]) == 1
+
+    def test_claim_detail_renders_html_like_tool_trace(self, client, user, conversation, data_access):
+        message = conversation.messages.first()
+        claim = DataClaim.objects.create(
+            conversation=conversation,
+            message=message,
+            claim_key="chat-table-call_html",
+            surface=DataClaim.Surface.CHAT_TABLE,
+            label="Productos con mayor presión competitiva",
+            definition={},
+        )
+        ProvenanceLink.objects.create(
+            claim=claim,
+            data_access=data_access,
+            transformation="",
+            ordinal=0,
+        )
+
+        client.force_login(user)
+        url = reverse("provenance:claim_detail", kwargs={"claim_id": claim.id})
+        response = client.get(url, HTTP_ACCEPT="text/html")
+        content = response.content.decode()
+
+        assert response.status_code == 200
+        assert "ay-provenance-sql" in content
+        assert "Origen de los datos" in content
+        assert "Consulta de ingresos totales." in content
+        assert "Ver consulta SQL" in content
+        assert "Conectada" not in content
+        assert "data-provenance-run" not in content
+        assert "Ver datos completos" not in content
+        assert "PostgreSQL · Mexar Pharma — Producción" in content
+        assert "ay-data-table" in content

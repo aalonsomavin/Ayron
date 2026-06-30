@@ -10,7 +10,6 @@ urlpatterns = [
     path("draft/", views.conversation_draft, name="draft"),
     path("upload/", views.upload_staging_file, name="upload_staging"),
     path("upload/<uuid:file_id>/discard/", views.discard_staging_file, name="discard_staging"),
-    path("<uuid:conversation_id>/provenance/data-access/run/", views.provenance_data_access_run, name="provenance_data_access_run"),
     path("<uuid:conversation_id>/provenance/data-access/", views.provenance_data_access, name="provenance_data_access"),
     path("<uuid:conversation_id>/", views.conversation_detail, name="detail"),
     path("<uuid:conversation_id>/send/", views.send_message, name="send"),

@@ -191,13 +191,6 @@
     if (dialog) dialog.close();
   }
 
-  function provenanceRunUrl(toolCallId) {
-    var shell = document.getElementById("ay-shell");
-    var baseUrl = shell && shell.dataset.provenanceRunUrl;
-    if (!baseUrl || !toolCallId) return "";
-    return baseUrl + "?tool_call_id=" + encodeURIComponent(toolCallId);
-  }
-
   function bindProvenanceDialogActions(contentEl) {
     var closeBtn = contentEl.querySelector("[data-provenance-close]");
     if (closeBtn) {
@@ -219,37 +212,9 @@
         });
       });
     }
-
-    var runBtn = contentEl.querySelector("[data-provenance-run]");
-    if (runBtn) {
-      runBtn.addEventListener("click", function () {
-        var toolCallId = runBtn.getAttribute("data-tool-call-id");
-        var url = provenanceRunUrl(toolCallId);
-        var dataEl = contentEl.querySelector("[data-provenance-data]");
-        if (!url || !dataEl) return;
-
-        runBtn.disabled = true;
-        runBtn.textContent = "Cargando…";
-
-        fetch(url, { headers: { Accept: "text/html" } })
-          .then(function (response) {
-            if (!response.ok) throw new Error("run failed");
-            return response.text();
-          })
-          .then(function (html) {
-            dataEl.outerHTML = html;
-            runBtn.hidden = true;
-          })
-          .catch(function () {
-            runBtn.disabled = false;
-            runBtn.textContent = "Ver datos completos";
-          });
-      });
-    }
   }
 
-  function openProvenanceSqlModal(toolCallId) {
-    var url = provenanceDataAccessUrl(toolCallId);
+  function openProvenanceHtmlModal(url) {
     if (!url) return;
 
     var dialog = ensureProvenanceDialog();
@@ -262,7 +227,7 @@
       if (event.target === dialog) closeProvenanceDialog();
     };
 
-    fetch(url, { headers: { Accept: "text/html" } })
+    fetch(url, { headers: { Accept: "text/html" }, credentials: "same-origin" })
       .then(function (response) {
         if (!response.ok) throw new Error("not found");
         return response.text();
@@ -275,6 +240,10 @@
         contentEl.innerHTML =
           '<div class="ay-provenance-sql__error">No se encontró el detalle de esta consulta.</div>';
       });
+  }
+
+  function openProvenanceSqlModal(toolCallId) {
+    openProvenanceHtmlModal(provenanceDataAccessUrl(toolCallId));
   }
 
   function handleSqlTraceActivate(event) {
@@ -318,6 +287,7 @@
     initTrace: initTrace,
     markSqlTraceItem: markSqlTraceItem,
     initSqlProvenance: initSqlProvenance,
+    openProvenanceHtmlModal: openProvenanceHtmlModal,
     openProvenanceSqlModal: openProvenanceSqlModal,
     closeProvenanceDialog: closeProvenanceDialog,
   };

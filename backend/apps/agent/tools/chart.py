@@ -213,6 +213,9 @@ def prepare_chart_for_render(payload: dict) -> dict:
             )
 
     chart["datasets"] = datasets
+    for key in ("claim_id", "tool_call_id"):
+        if payload.get(key):
+            chart[key] = payload[key]
     return chart
 
 

@@ -16,8 +16,13 @@
         {% endfor %}
       </div>
     </div>
-    {% if table.caption %}
-      <div class="ay-data-table__caption">{{ table.caption }}</div>
+    {% if table.caption or claim_id %}
+      <div class="ay-inline-block__footer">
+        {% if table.caption %}
+          <div class="ay-data-table__caption">{{ table.caption }}</div>
+        {% endif %}
+        {% include "components/provenance_origin_btn.html" %}
+      </div>
     {% endif %}
   </div>
 </div>

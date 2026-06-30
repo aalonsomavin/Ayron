@@ -1587,3 +1587,178 @@ class TestClarificationViews:
         assert len(clarification_blocks) == 1
         assert clarification_blocks[0]["question"]["id"] == "periodo"
         assert clarification_blocks[0]["total_steps"] == 2
+
+
+@pytest.mark.django_db
+class TestInlineProvenanceContentBlocks:
+    def test_content_blocks_include_claim_id_for_table(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        claim_id = "00000000-0000-0000-0000-000000000101"
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "columns": ["Región"],
+                "rows": [["Norte"]],
+                "numeric_columns": [False],
+                "row_count": 1,
+                "claim_id": claim_id,
+            },
+            sequence_number=0,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "table"
+        assert blocks[0]["claim_id"] == claim_id
+        assert blocks[0]["table"]["claim_id"] == claim_id
+
+    def test_content_blocks_include_claim_id_for_chart(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        claim_id = "00000000-0000-0000-0000-000000000102"
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.CHART,
+            payload={
+                "chart_type": "bar",
+                "title": "Ventas",
+                "labels": ["Q1"],
+                "series": [{"name": "Total", "values": [100]}],
+                "claim_id": claim_id,
+            },
+            sequence_number=0,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "chart"
+        assert blocks[0]["claim_id"] == claim_id
+        assert blocks[0]["chart"]["claim_id"] == claim_id
+
+    def test_content_blocks_omit_claim_id_when_missing(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "columns": ["Región"],
+                "rows": [["Norte"]],
+                "numeric_columns": [False],
+                "row_count": 1,
+            },
+            sequence_number=0,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert blocks[0]["type"] == "table"
+        assert "claim_id" not in blocks[0]
+
+    def test_serialize_agent_event_includes_table_claim_id(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        claim_id = "00000000-0000-0000-0000-000000000103"
+        event = AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "columns": ["Región"],
+                "rows": [["Norte"]],
+                "numeric_columns": [False],
+                "row_count": 1,
+                "claim_id": claim_id,
+            },
+            sequence_number=0,
+        )
+
+        data = serialize_agent_event(event)
+
+        assert data["type"] == AgentEvent.EventType.TABLE
+        assert data["claim_id"] == claim_id
+
+    def test_chat_detail_renders_ver_origen_for_table_with_claim(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Muéstrame la tabla",
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        claim_id = "00000000-0000-0000-0000-000000000104"
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "columns": ["Región"],
+                "rows": [["Norte"]],
+                "numeric_columns": [False],
+                "row_count": 1,
+                "caption": "Por región",
+                "claim_id": claim_id,
+            },
+            sequence_number=0,
+        )
+        client.force_login(user)
+        response = client.get(reverse("chat:detail", kwargs={"conversation_id": conversation.id}))
+        content = response.content.decode()
+
+        assert response.status_code == 200
+        assert "Ver datos de origen" in content
+        assert 'data-provenance-claim-id="' + claim_id + '"' in content
+        assert "ay-provenance-sql-dialog" in content
+        assert "Por región" in content
+
+    def test_chat_detail_omits_ver_origen_without_claim(self, client, user, conversation):
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Muéstrame la tabla",
+        )
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TABLE,
+            payload={
+                "columns": ["Región"],
+                "rows": [["Norte"]],
+                "numeric_columns": [False],
+                "row_count": 1,
+            },
+            sequence_number=0,
+        )
+        client.force_login(user)
+        response = client.get(reverse("chat:detail", kwargs={"conversation_id": conversation.id}))
+        content = response.content.decode()
+
+        assert response.status_code == 200
+        assert "data-provenance-claim-open" not in content

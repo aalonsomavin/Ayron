@@ -7,8 +7,13 @@
     <div class="ay-chart__plot">
       <canvas class="ay-chart__canvas"></canvas>
     </div>
-    {% if chart.caption %}
-      <div class="ay-chart__caption">{{ chart.caption }}</div>
+    {% if chart.caption or claim_id %}
+      <div class="ay-inline-block__footer">
+        {% if chart.caption %}
+          <div class="ay-chart__caption">{{ chart.caption }}</div>
+        {% endif %}
+        {% include "components/provenance_origin_btn.html" %}
+      </div>
     {% endif %}
   </div>
 </div>

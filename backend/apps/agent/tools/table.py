@@ -295,6 +295,9 @@ def prepare_table_for_render(payload: dict) -> dict:
         for col_idx, label in enumerate(table["columns"])
     ]
     table["render_rows"] = render_rows
+    for key in ("claim_id", "tool_call_id"):
+        if payload.get(key):
+            table[key] = payload[key]
     return table
 
 
