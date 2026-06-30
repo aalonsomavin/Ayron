@@ -4,7 +4,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db.models import Count, Max, Q
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
@@ -41,6 +41,13 @@ from apps.files.services import (
     serialize_file_for_ui,
 )
 from apps.chat.tool_trace import tool_trace_for_message
+from apps.provenance.query import execute_stored_select
+from apps.provenance.services import (
+    get_data_access_for_tool_call,
+    preview_table_from_rows,
+    resolve_provenance_detail,
+    serialize_data_access_detail,
+)
 from config.celery import app as celery_app
 
 
@@ -104,7 +111,11 @@ def serialize_agent_event(event: AgentEvent, *, user=None) -> dict:
     ):
         tool_name = data.get("tool")
         if tool_name:
-            tool_input = data.get("input") if event.event_type == AgentEvent.EventType.TOOL_START else None
+            tool_input = data.get("input")
+        if tool_name == "run_sql_query" and isinstance(tool_input, dict):
+            if str(tool_input.get("purpose") or "").strip():
+                data.update(get_tool_display(tool_name, tool_input))
+        elif event.event_type == AgentEvent.EventType.TOOL_START:
             data.update(get_tool_display(tool_name, tool_input))
 
     if event.event_type in (
@@ -479,6 +490,71 @@ def _finalize_cancelled_conversation(conversation: Conversation) -> bool:
     conversation.status = Conversation.Status.ACTIVE
     conversation.save(update_fields=["status", "updated_at"])
     return True
+
+
+@require_GET
+def provenance_data_access(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    tool_call_id = (request.GET.get("tool_call_id") or "").strip()
+    if not tool_call_id:
+        return HttpResponseBadRequest("tool_call_id is required.")
+
+    detail = resolve_provenance_detail(conversation, tool_call_id)
+    if detail is None:
+        raise Http404
+
+    accept = request.headers.get("Accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        detail_json = {key: value for key, value in detail.items() if key != "preview_table"}
+        detail_json["executed_at"] = detail["executed_at"].isoformat()
+        return JsonResponse(detail_json)
+
+    return render(
+        request,
+        "components/provenance_sql_detail.html",
+        {"detail": detail},
+    )
+
+
+@require_GET
+def provenance_data_access_run(request, conversation_id):
+    conversation = _get_conversation(request, conversation_id)
+    tool_call_id = (request.GET.get("tool_call_id") or "").strip()
+    if not tool_call_id:
+        return HttpResponseBadRequest("tool_call_id is required.")
+
+    data_access = get_data_access_for_tool_call(conversation, tool_call_id)
+    if data_access is None:
+        raise Http404
+
+    sql = (data_access.request or {}).get("sql") or ""
+    if not sql:
+        raise Http404
+
+    try:
+        result = execute_stored_select(sql)
+    except ValueError:
+        return HttpResponseBadRequest("Stored SQL is invalid.")
+    except Exception:
+        return HttpResponseBadRequest("Could not execute stored SQL.")
+
+    table = preview_table_from_rows(result["rows"])
+    context = {
+        "table": table,
+        "row_count": result["row_count"],
+        "truncated": result["truncated"],
+        "max_rows": result["max_rows"],
+        "live": True,
+    }
+    accept = request.headers.get("Accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        return JsonResponse(context)
+
+    return render(
+        request,
+        "components/provenance_data_table.html",
+        context,
+    )
 
 
 @require_GET

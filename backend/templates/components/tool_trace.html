@@ -6,7 +6,7 @@
     </button>
     <ul class="ay-tool-trace__list">
       {% for item in trace.items %}
-        <li class="ay-tool-trace__item{% if item.tool == 'done' %} ay-tool-trace__item--done{% endif %}{% if item.overflow %} ay-tool-trace__item--overflow{% endif %}" data-label="{{ item.label }}" data-icon="{{ item.icon|default:'file' }}"{% if item.tool %} data-tool="{{ item.tool }}"{% endif %}>
+        <li class="ay-tool-trace__item{% if item.tool == 'done' %} ay-tool-trace__item--done{% endif %}{% if item.tool == 'run_sql_query' and item.tool_call_id %} ay-tool-trace__item--sql{% endif %}{% if item.overflow %} ay-tool-trace__item--overflow{% endif %}" data-label="{{ item.label }}" data-icon="{{ item.icon|default:'file' }}"{% if item.tool %} data-tool="{{ item.tool }}"{% endif %}{% if item.tool_call_id %} data-tool-call-id="{{ item.tool_call_id }}"{% endif %}{% if item.tool == 'run_sql_query' and item.tool_call_id %} role="button" tabindex="0" title="Ver origen de los datos"{% endif %}>
           <span class="ay-tool-trace__icon"></span>
           <div class="ay-tool-trace__body">
             <span class="ay-tool-trace__verb">{{ item.label }}</span>

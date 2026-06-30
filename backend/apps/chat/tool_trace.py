@@ -30,17 +30,48 @@ def _trace_item_from_display(
     *,
     tool_input=None,
 ) -> dict:
-    display = get_tool_display(tool_name, tool_input)
-    return {
-        "label": payload.get("tool_label") or display.get("tool_label") or tool_name,
-        "detail": payload.get("tool_subtitle") or display.get("tool_subtitle", ""),
+    resolved_input = tool_input if tool_input is not None else payload.get("input")
+    display = get_tool_display(tool_name, resolved_input)
+    purpose = ""
+    if isinstance(resolved_input, dict):
+        purpose = str(resolved_input.get("purpose") or "").strip()
+    if tool_name == "run_sql_query" and purpose:
+        label = display.get("tool_label") or tool_name
+        detail = display.get("tool_subtitle", "")
+    else:
+        label = payload.get("tool_label") or display.get("tool_label") or tool_name
+        detail = payload.get("tool_subtitle") or display.get("tool_subtitle", "")
+    item = {
+        "label": label,
+        "detail": detail,
         "tool": tool_name,
         "tag": payload.get("tool_tag") or display.get("tool_tag", ""),
         "icon": payload.get("tool_icon") or display.get("tool_icon", "file"),
     }
+    if tool_name == "run_sql_query":
+        tool_call_id = payload.get("tool_call_id")
+        if tool_call_id:
+            item["tool_call_id"] = tool_call_id
+    return item
 
 
-def _trace_items_from_events(events: list[AgentEvent]) -> list[dict]:
+def _trace_items_from_events(events: list[AgentEvent], *, conversation=None) -> list[dict]:
+    sql_end_inputs: dict[str, dict] = {}
+    sql_end_payloads: dict[str, dict] = {}
+    for event in events:
+        if event.event_type != AgentEvent.EventType.TOOL_END:
+            continue
+        payload = event.payload
+        if payload.get("tool") != "run_sql_query":
+            continue
+        tool_call_id = payload.get("tool_call_id")
+        tool_input = payload.get("input")
+        if tool_call_id and isinstance(tool_input, dict):
+            sql_end_inputs[tool_call_id] = tool_input
+        if tool_call_id:
+            sql_end_payloads[tool_call_id] = payload
+
+    started_sql_ids: set[str] = set()
     items: list[dict] = []
     for event in events:
         payload = event.payload
@@ -62,7 +93,49 @@ def _trace_items_from_events(events: list[AgentEvent]) -> list[dict]:
             continue
 
         tool_name = payload.get("tool", "")
-        items.append(_trace_item_from_display(tool_name, payload, tool_input=payload.get("input")))
+        tool_input = payload.get("input")
+        if tool_name == "run_sql_query":
+            tool_call_id = payload.get("tool_call_id")
+            start_purpose = str((tool_input or {}).get("purpose") or "").strip()
+            if tool_call_id and not start_purpose:
+                tool_input = sql_end_inputs.get(tool_call_id, tool_input)
+            if tool_call_id:
+                started_sql_ids.add(tool_call_id)
+        items.append(_trace_item_from_display(tool_name, payload, tool_input=tool_input))
+
+    if conversation is not None:
+        from apps.provenance.models import DataAccess
+
+        for tool_call_id, end_payload in sql_end_payloads.items():
+            if tool_call_id in started_sql_ids:
+                continue
+            tool_input = dict(sql_end_inputs.get(tool_call_id) or {})
+            if not str(tool_input.get("purpose") or "").strip():
+                data_access = (
+                    DataAccess.objects.filter(
+                        conversation=conversation,
+                        tool_call_id=tool_call_id,
+                    )
+                    .only("request")
+                    .first()
+                )
+                if data_access is not None:
+                    request = data_access.request or {}
+                    tool_input = {
+                        "sql": request.get("sql") or "",
+                        "purpose": request.get("purpose") or "",
+                    }
+            synthetic_payload = {
+                **end_payload,
+                "input": tool_input,
+            }
+            items.append(
+                _trace_item_from_display(
+                    "run_sql_query",
+                    synthetic_payload,
+                    tool_input=tool_input,
+                )
+            )
 
     return items
 
@@ -153,10 +226,11 @@ def tool_trace_for_message(message) -> dict | None:
             event_type__in=(
                 AgentEvent.EventType.PLAN,
                 AgentEvent.EventType.TOOL_START,
+                AgentEvent.EventType.TOOL_END,
             ),
         ).order_by("sequence_number")
     )
-    items = _trace_items_from_events(events)
+    items = _trace_items_from_events(events, conversation=message.conversation)
     if not items:
         return None
 

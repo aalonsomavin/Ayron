@@ -1,0 +1,13 @@
+<div class="ay-provenance-sql__data ay-provenance-sql__data--live" data-provenance-data>
+  {% if live %}
+    <p class="ay-provenance-sql__live-note">Resultado actual de la base — puede diferir del momento en que Ayron consultó.</p>
+  {% endif %}
+  {% if table %}
+    {% include "components/data_table.html" with table=table %}
+    {% if truncated %}
+      <p class="ay-provenance-sql__truncated-note">Mostrando hasta {{ max_rows }} filas.</p>
+    {% endif %}
+  {% else %}
+    <p class="ay-provenance-sql__no-data">No se pudieron mostrar los datos.</p>
+  {% endif %}
+</div>

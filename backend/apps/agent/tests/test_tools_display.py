@@ -45,6 +45,19 @@ class TestGetToolDisplay:
             "tool_icon": "terminal",
         }
 
+    def test_run_sql_query_uses_purpose_as_label(self):
+        purpose = "Busco ventas totales por área terapéutica para ver dónde concentra el negocio."
+        display = get_tool_display(
+            "run_sql_query",
+            {
+                "sql": "SELECT a.nombre, SUM(pl.cantidad) FROM comercial_pedido_lineas pl GROUP BY 1",
+                "purpose": purpose,
+            },
+        )
+        assert display["tool_label"] == purpose
+        assert display["tool_subtitle"] == "comercial_pedido_lineas"
+        assert display["tool_tag"] == "SQL"
+
     def test_unknown_tool_humanizes_name(self):
         assert get_tool_display("propose_skill_revision") == {
             "tool_label": "Propose Skill Revision",

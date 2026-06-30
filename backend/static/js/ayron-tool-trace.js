@@ -145,9 +145,166 @@
     syncStepVisibility(trace);
   }
 
+  function isSqlTraceItem(item) {
+    return (
+      item &&
+      item.dataset.tool === "run_sql_query" &&
+      item.dataset.toolCallId &&
+      item.dataset.toolCallId !== "done"
+    );
+  }
+
+  function markSqlTraceItem(item) {
+    if (!isSqlTraceItem(item)) return;
+    item.classList.add("ay-tool-trace__item--sql");
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
+    item.setAttribute("title", "Ver origen de los datos");
+  }
+
+  function markSqlTraceItems(root) {
+    (root || document).querySelectorAll(".ay-tool-trace__item").forEach(markSqlTraceItem);
+  }
+
+  function provenanceDataAccessUrl(toolCallId) {
+    var shell = document.getElementById("ay-shell");
+    var baseUrl = shell && shell.dataset.provenanceDataAccessUrl;
+    if (!baseUrl || !toolCallId) return "";
+    return baseUrl + "?tool_call_id=" + encodeURIComponent(toolCallId);
+  }
+
+  function ensureProvenanceDialog() {
+    var dialog = document.getElementById("ay-provenance-sql-dialog");
+    if (!dialog) {
+      dialog = document.createElement("dialog");
+      dialog.id = "ay-provenance-sql-dialog";
+      dialog.className = "ay-provenance-sql-dialog";
+      dialog.innerHTML =
+        '<div id="ay-provenance-sql-content" class="ay-provenance-sql-dialog__content"></div>';
+      document.body.appendChild(dialog);
+    }
+    return dialog;
+  }
+
+  function closeProvenanceDialog() {
+    var dialog = document.getElementById("ay-provenance-sql-dialog");
+    if (dialog) dialog.close();
+  }
+
+  function provenanceRunUrl(toolCallId) {
+    var shell = document.getElementById("ay-shell");
+    var baseUrl = shell && shell.dataset.provenanceRunUrl;
+    if (!baseUrl || !toolCallId) return "";
+    return baseUrl + "?tool_call_id=" + encodeURIComponent(toolCallId);
+  }
+
+  function bindProvenanceDialogActions(contentEl) {
+    var closeBtn = contentEl.querySelector("[data-provenance-close]");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", closeProvenanceDialog);
+    }
+
+    var copyBtn = contentEl.querySelector("[data-provenance-copy]");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function () {
+        var code = contentEl.querySelector(".ay-provenance-sql__sql code");
+        if (!code) return;
+        var text = code.textContent || "";
+        if (!navigator.clipboard || !navigator.clipboard.writeText) return;
+        navigator.clipboard.writeText(text).then(function () {
+          copyBtn.textContent = "Copiado";
+          window.setTimeout(function () {
+            copyBtn.textContent = "Copiar";
+          }, 2000);
+        });
+      });
+    }
+
+    var runBtn = contentEl.querySelector("[data-provenance-run]");
+    if (runBtn) {
+      runBtn.addEventListener("click", function () {
+        var toolCallId = runBtn.getAttribute("data-tool-call-id");
+        var url = provenanceRunUrl(toolCallId);
+        var dataEl = contentEl.querySelector("[data-provenance-data]");
+        if (!url || !dataEl) return;
+
+        runBtn.disabled = true;
+        runBtn.textContent = "Cargando…";
+
+        fetch(url, { headers: { Accept: "text/html" } })
+          .then(function (response) {
+            if (!response.ok) throw new Error("run failed");
+            return response.text();
+          })
+          .then(function (html) {
+            dataEl.outerHTML = html;
+            runBtn.hidden = true;
+          })
+          .catch(function () {
+            runBtn.disabled = false;
+            runBtn.textContent = "Ver datos completos";
+          });
+      });
+    }
+  }
+
+  function openProvenanceSqlModal(toolCallId) {
+    var url = provenanceDataAccessUrl(toolCallId);
+    if (!url) return;
+
+    var dialog = ensureProvenanceDialog();
+    var contentEl = document.getElementById("ay-provenance-sql-content");
+    contentEl.innerHTML = '<div class="ay-provenance-sql__loading">Cargando…</div>';
+
+    if (!dialog.open) dialog.showModal();
+
+    dialog.onclick = function (event) {
+      if (event.target === dialog) closeProvenanceDialog();
+    };
+
+    fetch(url, { headers: { Accept: "text/html" } })
+      .then(function (response) {
+        if (!response.ok) throw new Error("not found");
+        return response.text();
+      })
+      .then(function (html) {
+        contentEl.innerHTML = html;
+        bindProvenanceDialogActions(contentEl);
+      })
+      .catch(function () {
+        contentEl.innerHTML =
+          '<div class="ay-provenance-sql__error">No se encontró el detalle de esta consulta.</div>';
+      });
+  }
+
+  function handleSqlTraceActivate(event) {
+    var item = event.target.closest(".ay-tool-trace__item--sql");
+    if (!item || !isSqlTraceItem(item)) return;
+    if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
+    if (event.type === "keydown") event.preventDefault();
+    openProvenanceSqlModal(item.dataset.toolCallId);
+  }
+
+  function initSqlProvenance(root) {
+    if (document.documentElement.dataset.provenanceBound === "true") return;
+    document.documentElement.dataset.provenanceBound = "true";
+
+    markSqlTraceItems(root);
+
+    document.addEventListener("click", function (event) {
+      if (event.target.closest(".ay-tool-trace__toggle, .ay-tool-trace__expand-steps")) return;
+      handleSqlTraceActivate(event);
+    });
+
+    document.addEventListener("keydown", function (event) {
+      handleSqlTraceActivate(event);
+    });
+  }
+
   function initTrace(trace) {
     populateTraceIcons(trace);
     initStepExpand(trace);
+    markSqlTraceItems(trace);
   }
 
   window.AyronToolTrace = {
@@ -159,5 +316,9 @@
     syncStepVisibility: syncStepVisibility,
     initStepExpand: initStepExpand,
     initTrace: initTrace,
+    markSqlTraceItem: markSqlTraceItem,
+    initSqlProvenance: initSqlProvenance,
+    openProvenanceSqlModal: openProvenanceSqlModal,
+    closeProvenanceDialog: closeProvenanceDialog,
   };
 })();

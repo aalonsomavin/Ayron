@@ -114,7 +114,10 @@ de la base; no inventes cifras.
 
 1. Si no conoces la estructura exacta, usa `list_tables` y `describe_table`.
 2. Escribe un SELECT preciso con `run_sql_query`: joins explícitos, alias legibles, \
-   `ORDER BY` cuando ayude, y `LIMIT` en exploraciones.
+   `ORDER BY` cuando ayude, y `LIMIT` en exploraciones. En **cada** llamada incluye \
+   `purpose`: 1-2 oraciones en español para el panel de trazabilidad (qué buscas y por qué, \
+   lenguaje de negocio, sin jargon SQL). Esa explicación va **solo** en `purpose`; no la \
+   repitas en el chat.
 3. Interpreta los resultados: responde la pregunta del usuario, resume hallazgos \
    y menciona supuestos o limitaciones de los datos.
 

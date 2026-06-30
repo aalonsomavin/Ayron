@@ -9,6 +9,7 @@ from apps.agent.cancellation import check_agent_not_cancelled
 from apps.agent.db import MAX_ROWS, demo_db_connection
 from apps.agent.tools.errors import build_query_error_response
 from apps.integrations.data_access import DATA_ACCESS_TOOL_SPECS
+from apps.provenance.query import serialize_preview_rows
 from apps.provenance.recorder import record_data_access
 from apps.provenance.sql_metadata import columns_from_rows, extract_sql_tables
 
@@ -83,21 +84,28 @@ def _record_sql_data_access(
     *,
     tool_call_id: str,
     sql: str,
+    purpose: str,
     rows: list[dict],
     truncated: bool,
 ) -> None:
     spec = DATA_ACCESS_TOOL_SPECS.get(RUN_SQL_QUERY_TOOL, {})
+    tables = extract_sql_tables(sql)
+    columns = columns_from_rows(rows)
+    preview_rows = serialize_preview_rows(rows)
+    user_summary = purpose.strip()
     record_data_access(
         tool_name=RUN_SQL_QUERY_TOOL,
         tool_call_id=tool_call_id,
         access_kind=spec.get("kind", "sql"),
-        request={"sql": sql},
+        request={"sql": sql, "purpose": user_summary},
         response_summary={
-            "tables": extract_sql_tables(sql),
-            "columns": columns_from_rows(rows),
+            "tables": tables,
+            "columns": columns,
             "row_count": len(rows),
             "truncated": truncated,
             "max_rows": MAX_ROWS,
+            "preview_rows": preview_rows,
+            "user_summary": user_summary,
         },
     )
 
@@ -180,10 +188,20 @@ def describe_table(table_name: str) -> str:
 @tool
 def run_sql_query(
     sql: str,
+    purpose: str,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
-    """Execute a read-only SELECT query against the Mexar Pharma demo database."""
+    """Execute a read-only SELECT query against the Mexar Pharma demo database.
+
+    purpose: Brief explanation in Spanish (1-2 sentences) for the traceability panel.
+    Describe what you are looking for and why, in business language without SQL jargon.
+    Do not repeat this explanation in the chat response.
+    """
     check_agent_not_cancelled()
+    if tool_call_id:
+        from apps.agent.context import record_sql_tool_trace_input
+
+        record_sql_tool_trace_input(tool_call_id, sql=sql, purpose=purpose)
     try:
         query = validate_select_only(sql)
     except ValueError as exc:
@@ -212,6 +230,7 @@ def run_sql_query(
         _record_sql_data_access(
             tool_call_id=tool_call_id,
             sql=query,
+            purpose=purpose,
             rows=rows,
             truncated=truncated,
         )

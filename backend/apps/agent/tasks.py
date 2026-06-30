@@ -8,7 +8,7 @@ from openai import OpenAIError
 from apps.agent.cancellation import AgentCancelledError, clear_cancel, is_cancelled
 from apps.agent.checkpoint import agent_config, has_checkpoint, rollback_thread_to_turn
 from apps.agent.clarification_interrupt import find_clarification_tool_call, has_clarification_interrupt
-from apps.agent.context import set_agent_context
+from apps.agent.context import clear_sql_tool_trace_inputs, set_agent_context
 from apps.agent.deliverable_intent import detect_deliverable_intent
 from apps.agent.events import persist_event
 from apps.agent.runner import create_agent
@@ -150,6 +150,7 @@ def run_agent_conversation(
     )
 
     clear_cancel(conversation_id)
+    clear_sql_tool_trace_inputs()
 
     agent = None
     try:

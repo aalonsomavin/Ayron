@@ -16,13 +16,17 @@ from apps.provenance.services import get_data_access_for_tool_call
 User = get_user_model()
 
 
-def invoke_run_sql_query(sql: str, tool_call_id: str = "call_sql_test"):
+def invoke_run_sql_query(
+    sql: str,
+    tool_call_id: str = "call_sql_test",
+    purpose: str = "Consulta de prueba para validar datos.",
+):
     result = run_sql_query.invoke(
         {
             "type": "tool_call",
             "name": "run_sql_query",
             "id": tool_call_id,
-            "args": {"sql": sql},
+            "args": {"sql": sql, "purpose": purpose},
         }
     )
     return result.content if hasattr(result, "content") else result
@@ -126,10 +130,12 @@ class TestRunSqlQueryRecorder:
         conn.__exit__ = MagicMock(return_value=False)
         mock_connection.return_value = conn
 
+        purpose = "Revisé el catálogo comercial para confirmar el producto Asgen."
         result = json.loads(
             invoke_run_sql_query(
                 "SELECT sku, marca_comercial FROM comercial_productos LIMIT 1",
                 tool_call_id="call_record_1",
+                purpose=purpose,
             )
         )
 
@@ -138,6 +144,38 @@ class TestRunSqlQueryRecorder:
         assert "comercial_productos" in data_access.response_summary["tables"]
         assert data_access.integration.slug == "mexar-demo"
         assert data_access.request["sql"].startswith("SELECT sku")
+        assert data_access.request["purpose"] == purpose
+        assert data_access.response_summary["user_summary"] == purpose
+        assert data_access.response_summary["preview_rows"] == [
+            {"sku": "ASGEN", "marca_comercial": "Asgen"}
+        ]
+
+    @patch("apps.agent.tools.sql.demo_db_connection")
+    def test_record_sql_persists_preview_rows_and_summary(self, mock_connection, conversation):
+        conv, message, user = conversation
+        set_agent_context(conv, user, message=message)
+
+        cursor = MagicMock()
+        cursor.fetchmany.return_value = [
+            {"posicion_competitiva": "Dentro del rango mercado", "ventas_totales": 1200},
+        ]
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__ = MagicMock(return_value=cursor)
+        conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=False)
+        mock_connection.return_value = conn
+
+        purpose = "Comparé posición competitiva y ventas por producto."
+        invoke_run_sql_query(
+            "SELECT posicion_competitiva, ventas_totales FROM comercial_productos LIMIT 1",
+            tool_call_id="call_preview",
+            purpose=purpose,
+        )
+
+        data_access = DataAccess.objects.get(conversation=conv, tool_call_id="call_preview")
+        assert data_access.response_summary["preview_rows"]
+        assert data_access.response_summary["user_summary"] == purpose
 
     @patch("apps.agent.tools.sql.demo_db_connection")
     def test_failed_query_does_not_create_data_access(self, mock_connection, conversation):

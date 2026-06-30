@@ -542,6 +542,51 @@ class TestStreamEventHandler:
             message=assistant_message,
             persist_fn=capture_persist,
         )
+        purpose = "Busco artistas para revisar el catálogo."
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_sql",
+                                "name": "run_sql_query",
+                                "args": json.dumps(
+                                    {
+                                        "sql": 'SELECT * FROM "Artist" LIMIT 5',
+                                        "purpose": purpose,
+                                    }
+                                ),
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        assert len(emitted) == 1
+        assert emitted[0]["event_type"] == AgentEvent.EventType.TOOL_START
+        assert emitted[0]["payload"]["tool_label"] == purpose
+        assert emitted[0]["payload"]["input"]["purpose"] == purpose
+        assert emitted[0]["payload"]["tool_tag"] == "SQL"
+
+    def test_sql_tool_start_waits_for_purpose(self, conversation_with_messages):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
         handler.handle_chunk(
             {
                 "type": "messages",
@@ -561,12 +606,74 @@ class TestStreamEventHandler:
                 ),
             }
         )
+        assert emitted == []
 
+        purpose = "Busco artistas para revisar el catálogo."
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    AIMessageChunk(
+                        content="",
+                        tool_call_chunks=[
+                            {
+                                "id": "call_sql",
+                                "name": "run_sql_query",
+                                "args": json.dumps({"purpose": purpose}),
+                            }
+                        ],
+                    ),
+                    {},
+                ),
+            }
+        )
         assert len(emitted) == 1
+        assert emitted[0]["payload"]["tool_label"] == purpose
+
+    def test_sql_tool_start_emits_on_tool_result_when_stream_lacks_args(
+        self, conversation_with_messages
+    ):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        purpose = "Busco ventas por región para comparar desempeño."
+        from apps.agent.context import record_sql_tool_trace_input
+
+        record_sql_tool_trace_input(
+            "call_streamless",
+            sql="SELECT region, SUM(ventas) FROM ventas GROUP BY 1",
+            purpose=purpose,
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content='{"rows": [], "row_count": 0, "truncated": false, "max_rows": 100}',
+                        name="run_sql_query",
+                        tool_call_id="call_streamless",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        assert len(emitted) == 2
         assert emitted[0]["event_type"] == AgentEvent.EventType.TOOL_START
-        assert emitted[0]["payload"]["tool_label"] == "Consultó datos de Artist"
-        assert emitted[0]["payload"]["tool_subtitle"] == 'SELECT * FROM "Artist" LIMIT 5'
-        assert emitted[0]["payload"]["tool_tag"] == "SQL"
+        assert emitted[0]["payload"]["tool_label"] == purpose
+        assert emitted[1]["event_type"] == AgentEvent.EventType.TOOL_END
+        assert emitted[1]["payload"]["input"]["purpose"] == purpose
 
     def test_tool_error_emits_success_false_in_tool_end(self, conversation_with_messages):
         conversation, _, assistant_message = conversation_with_messages
@@ -580,6 +687,14 @@ class TestStreamEventHandler:
             conversation=conversation,
             message=assistant_message,
             persist_fn=capture_persist,
+        )
+        purpose = "Intenté borrar datos del catálogo."
+        from apps.agent.context import record_sql_tool_trace_input
+
+        record_sql_tool_trace_input(
+            "call_err",
+            sql="DELETE FROM comercial_productos",
+            purpose=purpose,
         )
         error_output = json.dumps(
             {
@@ -603,10 +718,15 @@ class TestStreamEventHandler:
             }
         )
 
-        tool_end = emitted[0]
+        tool_end = emitted[-1]
+        assert len(emitted) == 2
+        assert emitted[0]["event_type"] == AgentEvent.EventType.TOOL_START
+        assert emitted[0]["payload"]["tool_label"] == purpose
         assert tool_end["event_type"] == AgentEvent.EventType.TOOL_END
         assert tool_end["payload"]["success"] is False
         assert "Only SELECT" in tool_end["payload"]["error"]
+        assert tool_end["payload"]["input"]["purpose"] == purpose
+        assert tool_end["payload"]["tool_label"] == purpose
 
     def test_show_data_table_emits_table_event(self, conversation_with_messages):
         conversation, _, assistant_message = conversation_with_messages

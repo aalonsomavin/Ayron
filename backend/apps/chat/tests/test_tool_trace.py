@@ -1,7 +1,19 @@
 import pytest
 
-from apps.chat.models import AgentEvent, Message
+from apps.chat.models import AgentEvent, Conversation, Message
 from apps.chat.tool_trace import apply_step_visibility, build_trace_summary, tool_trace_for_message
+
+
+@pytest.fixture
+def user(db):
+    from django.contrib.auth import get_user_model
+
+    return get_user_model().objects.create_user(username="traceuser", password="pass")
+
+
+@pytest.fixture
+def conversation(user):
+    return Conversation.objects.create(user=user)
 
 
 @pytest.mark.django_db
@@ -58,6 +70,7 @@ class TestToolTrace:
         assert trace["items"][0]["label"] == "Consultó datos de comercial_productos"
         assert trace["items"][0]["tag"] == "SQL"
         assert trace["items"][0]["icon"] == "terminal"
+        assert trace["items"][0]["tool_call_id"] == "call_1"
         assert trace["items"][1]["tool"] == "show_data_table"
         assert trace["items"][2]["label"] == "Listo"
         assert trace["items"][2]["tool"] == "done"
@@ -131,3 +144,164 @@ class TestToolTrace:
         assert trace is not None
         assert len(trace["items"]) == 1
         assert trace["items"][0]["tool"] == "run_sql_query"
+
+    def test_tool_trace_item_includes_tool_call_id(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_call_id": "call_sql_only",
+                "input": {"sql": "SELECT 1"},
+            },
+            sequence_number=0,
+        )
+
+        trace = tool_trace_for_message(assistant_message)
+
+        assert trace is not None
+        assert trace["items"][0]["tool_call_id"] == "call_sql_only"
+
+    def test_tool_trace_reconstructs_sql_steps_from_data_access(self, conversation, db):
+        from apps.integrations.models import Integration
+        from apps.provenance.models import DataAccess
+
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        purpose = "Identifico los productos con mayor ingreso vendido."
+        integration = Integration.objects.create(
+            slug="trace-db",
+            name="Trace DB",
+            type=Integration.Type.POSTGRES,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_END,
+            payload={
+                "tool": "run_sql_query",
+                "tool_call_id": "call_only_end",
+                "success": False,
+            },
+            sequence_number=0,
+        )
+        DataAccess.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            integration=integration,
+            tool_call_id="call_only_end",
+            access_kind=DataAccess.AccessKind.SQL,
+            request={
+                "sql": "SELECT producto, SUM(ventas) FROM ventas GROUP BY 1",
+                "purpose": purpose,
+            },
+            response_summary={"row_count": 3},
+        )
+
+        trace = tool_trace_for_message(assistant_message)
+
+        assert trace is not None
+        assert trace["items"][0]["label"] == purpose
+        assert trace["items"][0]["tool_call_id"] == "call_only_end"
+
+    def test_tool_trace_uses_tool_end_purpose_when_start_input_is_empty(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        purpose = "Quiero ver ventas por región para comparar desempeño."
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_label": "Consultó datos",
+                "tool_call_id": "call_failed",
+                "input": {"sql": "DELETE FROM comercial_productos"},
+            },
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_END,
+            payload={
+                "tool": "run_sql_query",
+                "tool_call_id": "call_failed",
+                "success": False,
+                "input": {
+                    "sql": "DELETE FROM comercial_productos",
+                    "purpose": purpose,
+                },
+            },
+            sequence_number=1,
+        )
+
+        trace = tool_trace_for_message(assistant_message)
+
+        assert trace is not None
+        assert trace["items"][0]["label"] == purpose
+
+    def test_tool_trace_uses_purpose_over_stale_tool_label(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        purpose = "Quiero ver ventas por región para comparar desempeño."
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "run_sql_query",
+                "tool_label": "Consultó datos",
+                "tool_subtitle": "DELETE FROM comercial_productos",
+                "tool_call_id": "call_failed",
+                "input": {
+                    "sql": "DELETE FROM comercial_productos",
+                    "purpose": purpose,
+                },
+            },
+            sequence_number=0,
+        )
+
+        trace = tool_trace_for_message(assistant_message)
+
+        assert trace is not None
+        assert trace["items"][0]["label"] == purpose
+        assert trace["items"][0]["detail"] == "comercial_productos"
+
+    def test_tool_trace_omits_tool_call_id_for_non_sql_tools(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            payload={
+                "tool": "show_data_table",
+                "tool_call_id": "call_table",
+                "input": {},
+            },
+            sequence_number=0,
+        )
+
+        trace = tool_trace_for_message(assistant_message)
+
+        assert trace is not None
+        assert "tool_call_id" not in trace["items"][0]

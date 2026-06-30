@@ -170,19 +170,25 @@ def _describe_table_display(tool_input: ToolInput) -> dict[str, str]:
 
 
 def _run_sql_query_display(tool_input: ToolInput) -> dict[str, str]:
+    purpose = _text_value(tool_input, "purpose")
     sql = _text_value(tool_input, "sql")
     table_name = _extract_sql_table(sql) if sql else ""
-    if table_name:
+    if purpose:
+        label = _truncate(purpose)
+        subtitle = table_name or (_truncate(sql) if sql else "")
+    elif table_name:
         label = f"Consultó datos de {table_name}"
+        subtitle = _truncate(sql) if sql else ""
     else:
         label = "Consultó datos"
+        subtitle = _truncate(sql) if sql else ""
     display = {
         "tool_label": label,
         "tool_tag": "SQL",
         "tool_icon": "terminal",
     }
-    if sql:
-        display["tool_subtitle"] = _truncate(sql)
+    if subtitle:
+        display["tool_subtitle"] = subtitle
     return display
 
 

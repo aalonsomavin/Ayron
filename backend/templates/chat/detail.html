@@ -4,7 +4,7 @@
 {% block title %}{{ conversation.title|default:"Chat" }} — Ayron{% endblock %}
 
 {% block content %}
-<div class="ay-shell" id="ay-shell">
+<div class="ay-shell" id="ay-shell" data-provenance-data-access-url="{% url 'chat:provenance_data_access' conversation_id=conversation.id %}" data-provenance-run-url="{% url 'chat:provenance_data_access_run' conversation_id=conversation.id %}">
   {% include "chat/sidebar.html" with new_chat_active=False active_conversation_id=conversation.id %}
 
   <div class="ay-main" id="ay-main">
@@ -164,6 +164,10 @@
   {% include "components/cancelled_notice.html" %}
 </template>
 
+<dialog id="ay-provenance-sql-dialog" class="ay-provenance-sql-dialog">
+  <div id="ay-provenance-sql-content" class="ay-provenance-sql-dialog__content"></div>
+</dialog>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -220,12 +224,55 @@
   const TOOL_TAGS = {{ tool_tags_json|safe }};
   const TOOL_ICONS = {{ tool_icons_json|safe }};
 
+  function resolveSqlTraceText(event) {
+    if (event.tool !== "run_sql_query") return null;
+    var input = event.input || {};
+    var purpose = String(input.purpose || "").trim();
+    if (purpose) {
+      return {
+        title: purpose,
+        subtitle: event.tool_subtitle || "",
+      };
+    }
+    var label = String(event.tool_label || "").trim();
+    if (label) {
+      return {
+        title: label,
+        subtitle: event.tool_subtitle || "",
+      };
+    }
+    return null;
+  }
+
   function resolveToolLabel(event) {
+    var sqlText = resolveSqlTraceText(event);
+    if (sqlText) return sqlText.title;
     return event.tool_label || TOOL_LABELS[event.tool] || event.tool || "Herramienta";
   }
 
   function resolveToolSubtitle(event) {
+    var sqlText = resolveSqlTraceText(event);
+    if (sqlText) return sqlText.subtitle;
     return event.tool_subtitle || "";
+  }
+
+  function updateSqlTraceItem(item, event) {
+    if (!item || event.tool !== "run_sql_query") return;
+    var sqlText = resolveSqlTraceText(event);
+    if (!sqlText) return;
+    item.dataset.label = sqlText.title;
+    var verbEl = item.querySelector(".ay-tool-trace__verb");
+    if (verbEl) verbEl.textContent = sqlText.title;
+    if (!sqlText.subtitle) return;
+    var bodyEl = item.querySelector(".ay-tool-trace__body");
+    if (!bodyEl) return;
+    var detailEl = item.querySelector(".ay-tool-trace__detail");
+    if (!detailEl) {
+      detailEl = document.createElement("span");
+      detailEl.className = "ay-tool-trace__detail";
+      bodyEl.appendChild(detailEl);
+    }
+    detailEl.textContent = sqlText.subtitle;
   }
 
   function resolveToolTag(event) {
@@ -700,6 +747,7 @@
 
   function initToolTraces(root) {
     (root || document).querySelectorAll(".ay-tool-trace").forEach(initToolTraceToggle);
+    if (window.AyronToolTrace) window.AyronToolTrace.initSqlProvenance(document);
   }
 
   function ensureToolTrace(toolsEl) {
@@ -817,7 +865,10 @@
       : '<span class="ay-tool-trace__icon"></span><div class="ay-tool-trace__body"><span class="ay-tool-trace__verb"></span></div>';
     li.innerHTML = itemHtml;
     li.querySelector(".ay-tool-trace__verb").textContent = label;
-    if (window.AyronToolTrace) window.AyronToolTrace.populateItemIcon(li);
+    if (window.AyronToolTrace) {
+      window.AyronToolTrace.populateItemIcon(li);
+      window.AyronToolTrace.markSqlTraceItem(li);
+    }
     trace.querySelector(".ay-tool-trace__list").appendChild(li);
     updateTraceSummary(trace);
     if (window.AyronToolTrace) window.AyronToolTrace.syncStepVisibility(trace);
@@ -836,10 +887,7 @@
       const item = trace.querySelector('[data-tool-call-id="' + toolCallId + '"]');
       if (item) return item;
     }
-    const running = trace.querySelector(".ay-tool-trace__item.is-running");
-    if (running) return running;
-    const items = trace.querySelectorAll(".ay-tool-trace__item");
-    return items.length ? items[items.length - 1] : null;
+    return trace.querySelector(".ay-tool-trace__item.is-running");
   }
 
   function buildRenderRows(table) {
@@ -1177,10 +1225,11 @@
       let item = findTraceItem(trace, event.tool_call_id);
       if (!item) {
         const title = resolveToolLabel(event);
+        const subtitle = resolveToolSubtitle(event);
         item = appendTraceItem(
           trace,
           title,
-          "",
+          subtitle,
           event.tool_call_id,
           false,
           event.tool,
@@ -1190,6 +1239,10 @@
       }
       item.classList.remove("is-running");
       updateTraceSummary(trace);
+      if (event.tool === "run_sql_query") {
+        updateSqlTraceItem(item, event);
+        if (window.AyronToolTrace) window.AyronToolTrace.markSqlTraceItem(item);
+      }
       if (event.tool === "show_chart" || event.tool === "show_data_table") {
         removeContentPlaceholder(bubble, event);
       }

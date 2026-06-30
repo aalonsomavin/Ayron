@@ -16,6 +16,35 @@ _deliverable_intent_ctx: ContextVar[DeliverableIntent | None] = ContextVar(
 )
 _deliverable_nudge_count_ctx: ContextVar[int] = ContextVar("agent_deliverable_nudge_count", default=0)
 _backend_ctx: ContextVar["BackendProtocol | None"] = ContextVar("agent_backend", default=None)
+_sql_tool_trace_inputs: dict[str, dict[str, str]] = {}
+
+
+def clear_sql_tool_trace_inputs() -> None:
+    _sql_tool_trace_inputs.clear()
+
+
+def record_sql_tool_trace_input(tool_call_id: str, *, sql: str, purpose: str) -> None:
+    if not tool_call_id:
+        return
+    _sql_tool_trace_inputs[tool_call_id] = {
+        "sql": sql.strip(),
+        "purpose": purpose.strip(),
+    }
+
+
+def pop_sql_tool_trace_input(tool_call_id: str) -> dict[str, str] | None:
+    if not tool_call_id:
+        return None
+    return _sql_tool_trace_inputs.pop(tool_call_id, None)
+
+
+def peek_sql_tool_trace_input(tool_call_id: str) -> dict[str, str] | None:
+    if not tool_call_id:
+        return None
+    traced = _sql_tool_trace_inputs.get(tool_call_id)
+    if not traced:
+        return None
+    return dict(traced)
 
 
 def reset_agent_context() -> None:

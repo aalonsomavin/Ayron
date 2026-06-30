@@ -16,12 +16,14 @@ from apps.agent.tools.chart import (
 from apps.agent.tools.document import pop_document_display
 from apps.agent.tools.html_report import pop_html_report_display
 from apps.agent.tools.spreadsheet import pop_spreadsheet_display
+from apps.agent.context import peek_sql_tool_trace_input, pop_sql_tool_trace_input
 from apps.agent.tools.display import get_tool_display
 from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
 
 PLAN_TOOLS = {"write_todos"}
 CLARIFICATION_TOOL = "ask_clarification"
+RUN_SQL_QUERY_TOOL = "run_sql_query"
 HIDDEN_TRACE_TOOLS = PLAN_TOOLS | {CLARIFICATION_TOOL}
 DISPLAY_TOOLS = {
     "show_data_table",
@@ -194,6 +196,45 @@ class StreamEventHandler:
         questions = tool_input.get("questions")
         return isinstance(questions, list) and len(questions) > 0
 
+    def _resolve_tool_input(self, tool_call_id: str, tool_input: dict | None = None) -> dict:
+        accumulated = self.tool_call_inputs.get(tool_call_id, tool_input or {})
+        if str(accumulated.get("purpose") or "").strip() and str(accumulated.get("sql") or "").strip():
+            return accumulated
+        args_text = self.tool_call_args_text.get(tool_call_id, "")
+        if args_text.strip():
+            try:
+                parsed = json.loads(args_text)
+            except json.JSONDecodeError:
+                parsed = {}
+            if isinstance(parsed, dict):
+                accumulated = merge_tool_input(accumulated, parsed)
+        traced = peek_sql_tool_trace_input(tool_call_id)
+        if traced:
+            accumulated = merge_tool_input(accumulated, traced)
+        return accumulated
+
+    def _ensure_sql_tool_start(self, tool_call_id: str | None) -> None:
+        if not tool_call_id or tool_call_id in self.started_tool_calls:
+            return
+        tool_input = self._resolve_tool_input(tool_call_id, {})
+        purpose = str(tool_input.get("purpose") or "").strip()
+        sql = str(tool_input.get("sql") or "").strip()
+        if not purpose and not sql:
+            return
+        self.started_tool_calls.add(tool_call_id)
+        self._emit_tool_start(
+            RUN_SQL_QUERY_TOOL,
+            tool_input,
+            tool_call_id,
+            self.tool_call_args_text.get(tool_call_id, ""),
+        )
+
+    def _run_sql_query_tool_start_ready(self, tool_call_id: str, tool_input: dict) -> bool:
+        resolved = self._resolve_tool_input(tool_call_id, tool_input)
+        purpose = str(resolved.get("purpose") or "").strip()
+        sql = str(resolved.get("sql") or "").strip()
+        return bool(purpose and sql)
+
     def _maybe_emit_tool_start(
         self,
         name: str,
@@ -209,6 +250,9 @@ class StreamEventHandler:
                 return
         elif name == CLARIFICATION_TOOL:
             if not self._clarification_tool_start_ready(tool_call_id, tool_input):
+                return
+        elif name == RUN_SQL_QUERY_TOOL:
+            if not self._run_sql_query_tool_start_ready(tool_call_id, tool_input):
                 return
 
         self.started_tool_calls.add(tool_call_id)
@@ -271,6 +315,9 @@ class StreamEventHandler:
         if name in HIDDEN_TRACE_TOOLS:
             return
 
+        if name == RUN_SQL_QUERY_TOOL:
+            self._ensure_sql_tool_start(tool_call_id)
+
         output = extract_text_content(getattr(token, "content", ""))
         if name in DISPLAY_TOOLS:
             self._handle_display_tool_result(name, output, tool_call_id)
@@ -280,20 +327,29 @@ class StreamEventHandler:
         if len(output) > OUTPUT_SUMMARY_MAX_LEN:
             summary += "..."
 
+        payload = {
+            "tool": name,
+            "output_summary": summary,
+            "tool_call_id": tool_call_id,
+        }
+        if name == RUN_SQL_QUERY_TOOL and tool_call_id:
+            final_input = self._resolve_tool_input(tool_call_id, {})
+            if final_input:
+                payload["input"] = final_input
+                payload.update(get_tool_display(name, final_input))
+            else:
+                payload.update(get_tool_display(name))
+        else:
+            payload.update(get_tool_display(name))
+
         self.persist(
             conversation=self.conversation,
             event_type=AgentEvent.EventType.TOOL_END,
-            payload=merge_tool_output_status(
-                {
-                    "tool": name,
-                    "output_summary": summary,
-                    "tool_call_id": tool_call_id,
-                    **get_tool_display(name),
-                },
-                output,
-            ),
+            payload=merge_tool_output_status(payload, output),
             message=self.message,
         )
+        if name == RUN_SQL_QUERY_TOOL and tool_call_id:
+            pop_sql_tool_trace_input(tool_call_id)
 
     def _handle_display_tool_result(self, name: str, output: str, tool_call_id: str | None) -> None:
         if name == TABLE_DISPLAY_TOOL:

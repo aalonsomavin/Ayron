@@ -13,13 +13,17 @@ from apps.agent.tools.sql import (
 )
 
 
-def invoke_run_sql_query(sql: str, tool_call_id: str = "call_sql_test"):
+def invoke_run_sql_query(
+    sql: str,
+    tool_call_id: str = "call_sql_test",
+    purpose: str = "Consulta de prueba para validar datos.",
+):
     result = run_sql_query.invoke(
         {
             "type": "tool_call",
             "name": "run_sql_query",
             "id": tool_call_id,
-            "args": {"sql": sql},
+            "args": {"sql": sql, "purpose": purpose},
         }
     )
     return result.content if hasattr(result, "content") else result

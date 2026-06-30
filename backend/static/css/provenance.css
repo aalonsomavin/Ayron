@@ -1,0 +1,285 @@
+.ay-tool-trace__item--sql {
+  cursor: pointer;
+  border-radius: 6px;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  transition: background-color var(--ay-dur-fast) var(--ay-ease);
+}
+
+.ay-tool-trace__item--sql:hover,
+.ay-tool-trace__item--sql:focus-visible {
+  background: var(--ay-bg-subtle);
+  outline: none;
+}
+
+.ay-tool-trace__item--sql:hover .ay-tool-trace__verb,
+.ay-tool-trace__item--sql:focus-visible .ay-tool-trace__verb {
+  color: var(--ay-text);
+}
+
+.ay-provenance-sql-dialog {
+  border: none;
+  padding: 0;
+  margin: auto;
+  background: transparent;
+  max-width: calc(100vw - 32px);
+  color: var(--ay-text);
+}
+
+.ay-provenance-sql-dialog::backdrop {
+  background: rgba(16, 16, 20, 0.42);
+}
+
+.ay-provenance-sql-dialog__content {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.ay-provenance-sql {
+  background: var(--ay-surface);
+  border: 1px solid var(--ay-border);
+  border-radius: 14px;
+  box-shadow: var(--ay-shadow-lg);
+  padding: 22px 24px 20px;
+}
+
+.ay-provenance-sql__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ay-provenance-sql__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ay-text);
+  letter-spacing: -0.01em;
+}
+
+.ay-provenance-sql__summary {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ay-text);
+}
+
+.ay-provenance-sql__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ay-text-muted);
+  cursor: pointer;
+}
+
+.ay-provenance-sql__close:hover {
+  background: var(--ay-bg-subtle);
+  color: var(--ay-text);
+}
+
+.ay-provenance-sql__source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ay-blue-50);
+  border: 1px solid var(--ay-blue-100);
+}
+
+.ay-provenance-sql__data {
+  margin-bottom: 12px;
+}
+
+.ay-provenance-sql__data .ay-data-table {
+  margin: 0;
+}
+
+.ay-provenance-sql__data .ay-data-table__scroll {
+  max-height: 280px;
+}
+
+.ay-provenance-sql__data--live {
+  margin-top: 0;
+}
+
+.ay-provenance-sql__no-data {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--ay-border);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ay-text-muted);
+  text-align: center;
+}
+
+.ay-provenance-sql__status-note {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--ay-border);
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ay-text-muted);
+  text-align: center;
+  background: var(--ay-surface-subtle, rgba(0, 0, 0, 0.02));
+}
+
+.ay-provenance-sql__live-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ay-warning-700);
+}
+
+.ay-provenance-sql__truncated-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ay-text-subtle);
+}
+
+.ay-provenance-sql__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--ay-text-subtle);
+}
+
+.ay-provenance-sql__technical {
+  margin-bottom: 12px;
+  border: 1px solid var(--ay-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ay-provenance-sql__technical summary {
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ay-text-muted);
+  cursor: pointer;
+  list-style: none;
+  background: var(--ay-bg-subtle);
+}
+
+.ay-provenance-sql__technical summary::-webkit-details-marker {
+  display: none;
+}
+
+.ay-provenance-sql__technical[open] summary {
+  border-bottom: 1px solid var(--ay-border);
+}
+
+.ay-provenance-sql__technical .ay-provenance-sql__sql-wrap {
+  border: none;
+  border-radius: 0;
+}
+
+.ay-provenance-sql__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.ay-provenance-sql__source-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ay-text-subtle);
+}
+
+.ay-provenance-sql__source-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ay-text);
+}
+
+.ay-provenance-sql__status {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ay-provenance-sql__status--connected {
+  background: var(--ay-success-50);
+  color: var(--ay-success-700);
+}
+
+.ay-provenance-sql__status--disconnected {
+  background: var(--ay-danger-50);
+  color: var(--ay-danger-700);
+}
+
+.ay-provenance-sql__sql-wrap {
+  border: 1px solid var(--ay-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ay-neutral-950);
+}
+
+.ay-provenance-sql__sql-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ay-provenance-sql__sql-toolbar .ay-btn--ghost {
+  color: var(--ay-neutral-300);
+}
+
+.ay-provenance-sql__sql-toolbar .ay-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ay-neutral-0);
+}
+
+.ay-provenance-sql__sql {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--ay-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ay-neutral-100);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ay-provenance-sql__sql code {
+  font-family: inherit;
+}
+
+.ay-provenance-sql__truncated {
+  color: var(--ay-warning-700);
+}
+
+.ay-provenance-sql__loading,
+.ay-provenance-sql__error {
+  padding: 28px 24px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--ay-text-muted);
+  background: var(--ay-surface);
+  border: 1px solid var(--ay-border);
+  border-radius: 14px;
+  box-shadow: var(--ay-shadow-lg);
+}
+
+.ay-provenance-sql__error {
+  color: var(--ay-danger-700);
+}

@@ -1,0 +1,63 @@
+<div class="ay-provenance-sql" data-tool-call-id="{{ detail.tool_call_id }}">
+  <header class="ay-provenance-sql__header">
+    <h2 class="ay-provenance-sql__title">Origen de los datos</h2>
+    <button type="button" class="ay-provenance-sql__close" data-provenance-close aria-label="Cerrar">
+      {% include "components/icon.html" with name="close" size=18 %}
+    </button>
+  </header>
+
+  {% if detail.narrative %}
+    <p class="ay-provenance-sql__summary">{{ detail.narrative }}</p>
+  {% endif %}
+
+  {% if detail.integration %}
+    <div class="ay-provenance-sql__source">
+      <span class="ay-provenance-sql__source-label">Fuente</span>
+      <span class="ay-provenance-sql__source-value">{{ detail.integration.source_label }}</span>
+      <span class="ay-provenance-sql__status ay-provenance-sql__status--{{ detail.integration.status }}">{{ detail.integration.status_label }}</span>
+    </div>
+  {% endif %}
+
+  <div class="ay-provenance-sql__data" data-provenance-data>
+    {% if detail.failed %}
+      <p class="ay-provenance-sql__status-note">{{ detail.status_message }}</p>
+    {% elif detail.preview_table %}
+      {% include "components/data_table.html" with table=detail.preview_table %}
+    {% else %}
+      <p class="ay-provenance-sql__no-data">No hay vista previa guardada para esta consulta.</p>
+    {% endif %}
+  </div>
+
+  <div class="ay-provenance-sql__meta">
+    {% if not detail.failed and detail.row_count is not None %}
+      <span>
+        {{ detail.row_count }}
+        {% if detail.row_count == 1 %}fila{% else %}filas{% endif %}
+        {% if detail.truncated %}
+          <span class="ay-provenance-sql__truncated">(truncado{% if detail.max_rows %}, máx. {{ detail.max_rows }}{% endif %})</span>
+        {% endif %}
+      </span>
+    {% endif %}
+    <span>Ejecutada {{ detail.executed_at|date:"j M Y, H:i" }}</span>
+  </div>
+
+  {% if detail.has_sql %}
+    <details class="ay-provenance-sql__technical">
+      <summary>Ver consulta SQL</summary>
+      <div class="ay-provenance-sql__sql-wrap">
+        <div class="ay-provenance-sql__sql-toolbar">
+          <button type="button" class="ay-btn ay-btn--ghost ay-btn--sm" data-provenance-copy>Copiar</button>
+        </div>
+        <pre class="ay-provenance-sql__sql"><code>{{ detail.sql }}</code></pre>
+      </div>
+    </details>
+  {% endif %}
+
+  {% if detail.has_sql and not detail.failed %}
+    <div class="ay-provenance-sql__actions">
+      <button type="button" class="ay-btn ay-btn--ghost ay-btn--sm" data-provenance-run data-tool-call-id="{{ detail.tool_call_id }}">
+        Ver datos completos
+      </button>
+    </div>
+  {% endif %}
+</div>
