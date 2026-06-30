@@ -161,6 +161,7 @@ def run_agent_conversation(
             conversation,
             conversation.user,
             deliverable_intent=deliverable_intent,
+            message=assistant_message,
         )
         agent = create_agent(conversation, user_message=user_message)
         input_state, config = build_stream_input(

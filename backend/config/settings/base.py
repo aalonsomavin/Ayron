@@ -39,6 +39,8 @@ INSTALLED_APPS = [
     "apps.chat",
     "apps.agent",
     "apps.files",
+    "apps.integrations",
+    "apps.provenance",
     "apps.sources",
     "apps.automations",
 ]

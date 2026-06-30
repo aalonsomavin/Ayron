@@ -13,6 +13,18 @@ from apps.agent.tools.sql import (
 )
 
 
+def invoke_run_sql_query(sql: str, tool_call_id: str = "call_sql_test"):
+    result = run_sql_query.invoke(
+        {
+            "type": "tool_call",
+            "name": "run_sql_query",
+            "id": tool_call_id,
+            "args": {"sql": sql},
+        }
+    )
+    return result.content if hasattr(result, "content") else result
+
+
 class TestValidateSelectOnly:
     def test_accepts_simple_select(self):
         assert validate_select_only("SELECT 1") == "SELECT 1"
@@ -92,15 +104,13 @@ class TestSqlToolsIntegration:
 
     def test_run_sql_query_returns_products(self):
         result = json.loads(
-            run_sql_query.invoke(
-                {
-                    "sql": """
+            invoke_run_sql_query(
+                """
                         SELECT marca_comercial, molecula
                         FROM comercial_productos
                         WHERE sku = 'ASGEN'
                         LIMIT 1
                     """
-                }
             )
         )
         assert result["row_count"] == 1
@@ -109,9 +119,8 @@ class TestSqlToolsIntegration:
 
     def test_run_sql_query_sales_by_area(self):
         result = json.loads(
-            run_sql_query.invoke(
-                {
-                    "sql": """
+            invoke_run_sql_query(
+                """
                         SELECT a.nombre, SUM(pl.cantidad * pl.precio_unitario) AS ingreso
                         FROM comercial_pedido_lineas pl
                         JOIN comercial_productos p ON p.id = pl.producto_id
@@ -120,7 +129,6 @@ class TestSqlToolsIntegration:
                         ORDER BY ingreso DESC
                         LIMIT 5
                     """
-                }
             )
         )
         assert result["row_count"] >= 1
@@ -128,15 +136,13 @@ class TestSqlToolsIntegration:
 
     def test_run_sql_query_competencia_vs_lista(self):
         result = json.loads(
-            run_sql_query.invoke(
-                {
-                    "sql": """
+            invoke_run_sql_query(
+                """
                         SELECT p.marca_comercial, p.precio_lista, r.precio_min, r.precio_max
                         FROM comercial_productos p
                         JOIN competencia_resumen r ON r.producto_id = p.id
                         WHERE p.sku = 'ARGLIPTIN-D'
                     """
-                }
             )
         )
         assert result["row_count"] == 1
@@ -145,7 +151,7 @@ class TestSqlToolsIntegration:
         assert result["rows"][0]["precio_min"] is not None
 
     def test_run_sql_query_rejects_non_select(self):
-        result = json.loads(run_sql_query.invoke({"sql": "DELETE FROM comercial_productos"}))
+        result = json.loads(invoke_run_sql_query("DELETE FROM comercial_productos"))
         assert result["ok"] is False
         assert "Only SELECT" in result["error"]
         assert "agent_instruction" in result
@@ -158,7 +164,7 @@ class TestSqlToolsIntegration:
 
     def test_run_sql_query_db_error_returns_error_json(self):
         result = json.loads(
-            run_sql_query.invoke({"sql": "SELECT * FROM not_a_real_table LIMIT 1"})
+            invoke_run_sql_query("SELECT * FROM not_a_real_table LIMIT 1")
         )
         assert result["ok"] is False
         assert "agent_instruction" in result

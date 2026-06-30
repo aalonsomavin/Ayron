@@ -38,6 +38,29 @@ class TestSourcesList:
         assert "Conectada" in content
         assert "842k filas · 128 MB" in content
 
+    def test_sources_read_from_integrations(self, client, user):
+        from apps.integrations.models import Integration
+
+        Integration.objects.all().delete()
+        Integration.objects.create(
+            slug="test-source",
+            name="Test Source",
+            type=Integration.Type.POSTGRES,
+            config={
+                "display": {
+                    "subtitle": "test · PostgreSQL",
+                    "structure_label": "3 tablas",
+                    "volume_label": "1k filas",
+                }
+            },
+            is_active=True,
+        )
+        client.force_login(user)
+        response = client.get(reverse("sources:list"))
+        content = response.content.decode()
+        assert "Test Source" in content
+        assert "3 tablas" in content
+
     def test_htmx_returns_partial(self, client, user):
         client.force_login(user)
         response = client.get(

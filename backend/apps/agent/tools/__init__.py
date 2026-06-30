@@ -1,5 +1,6 @@
 from apps.agent.tools.clarification import ask_clarification
 from apps.agent.tools.chart import show_chart
+from apps.integrations.data_access import DATA_ACCESS_TOOL_SPECS
 from apps.agent.tools.document import (
     create_document,
     get_document,
@@ -45,9 +46,12 @@ SQL_TOOLS = [
     show_chart,
 ]
 
+DATA_ACCESS_TOOLS = DATA_ACCESS_TOOL_SPECS
+
 __all__ = [
     "AGENT_TOOLS",
     "SQL_TOOLS",
+    "DATA_ACCESS_TOOLS",
     "create_document",
     "create_spreadsheet",
     "describe_table",

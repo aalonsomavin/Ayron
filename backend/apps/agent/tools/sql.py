@@ -1,12 +1,16 @@
 import json
 import re
+from typing import Annotated
 
 import psycopg
-from langchain_core.tools import tool
+from langchain_core.tools import InjectedToolCallId, tool
 
 from apps.agent.cancellation import check_agent_not_cancelled
 from apps.agent.db import MAX_ROWS, demo_db_connection
 from apps.agent.tools.errors import build_query_error_response
+from apps.integrations.data_access import DATA_ACCESS_TOOL_SPECS
+from apps.provenance.recorder import record_data_access
+from apps.provenance.sql_metadata import columns_from_rows, extract_sql_tables
 
 TABLE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
@@ -35,6 +39,8 @@ FORBIDDEN_KEYWORDS = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+RUN_SQL_QUERY_TOOL = "run_sql_query"
 
 
 def validate_select_only(sql: str) -> str:
@@ -71,6 +77,29 @@ def validate_table_name(table_name: str) -> str:
 
 def _rows_to_json(rows: list[dict]) -> str:
     return json.dumps(rows, default=str)
+
+
+def _record_sql_data_access(
+    *,
+    tool_call_id: str,
+    sql: str,
+    rows: list[dict],
+    truncated: bool,
+) -> None:
+    spec = DATA_ACCESS_TOOL_SPECS.get(RUN_SQL_QUERY_TOOL, {})
+    record_data_access(
+        tool_name=RUN_SQL_QUERY_TOOL,
+        tool_call_id=tool_call_id,
+        access_kind=spec.get("kind", "sql"),
+        request={"sql": sql},
+        response_summary={
+            "tables": extract_sql_tables(sql),
+            "columns": columns_from_rows(rows),
+            "row_count": len(rows),
+            "truncated": truncated,
+            "max_rows": MAX_ROWS,
+        },
+    )
 
 
 @tool
@@ -149,7 +178,10 @@ def describe_table(table_name: str) -> str:
 
 
 @tool
-def run_sql_query(sql: str) -> str:
+def run_sql_query(
+    sql: str,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> str:
     """Execute a read-only SELECT query against the Mexar Pharma demo database."""
     check_agent_not_cancelled()
     try:
@@ -176,6 +208,13 @@ def run_sql_query(sql: str) -> str:
                     rows = rows[:MAX_ROWS]
     except psycopg.Error as exc:
         return build_query_error_response(str(exc).strip())
+    if tool_call_id:
+        _record_sql_data_access(
+            tool_call_id=tool_call_id,
+            sql=query,
+            rows=rows,
+            truncated=truncated,
+        )
     result = {
         "rows": rows,
         "row_count": len(rows),
