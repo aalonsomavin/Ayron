@@ -633,6 +633,44 @@ class TestConversationDetail:
         assert blocks[1]["chart"]["labels"] == ["EMEA"]
         assert blocks[1]["chart_id"].startswith("chart-")
 
+    def test_content_blocks_origin_diagram_before_text(self, conversation):
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.PROVENANCE_DIAGRAM,
+            payload={
+                "pattern": "converge",
+                "sources": [
+                    {"label": "Cuentas", "subtitle": "CRM"},
+                    {"label": "Ventas", "subtitle": "ERP"},
+                ],
+                "merge": {"label": "Cruce por cuenta"},
+                "result": {"label": "Ranking"},
+                "caption": "dos fuentes → cruce → resultado",
+                "hint": "Cuando hay un JOIN entre dos tablas.",
+            },
+            sequence_number=0,
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            event_type=AgentEvent.EventType.TOKEN,
+            payload={"content": "Los datos vienen del CRM y ventas comerciales."},
+            sequence_number=1,
+        )
+
+        blocks = _content_blocks_for_message(assistant_message)
+
+        assert [block["type"] for block in blocks] == ["origin_diagram", "text"]
+        assert blocks[0]["diagram"]["pattern"] == "converge"
+        assert blocks[0]["diagram_id"].startswith("origin-")
+        assert blocks[1]["content"].startswith("Los datos vienen")
+
     def test_content_blocks_split_text_around_tools(self, conversation):
         assistant_message = Message.objects.create(
             conversation=conversation,

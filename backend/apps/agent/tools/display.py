@@ -230,6 +230,14 @@ def _show_chart_display(tool_input: ToolInput) -> dict[str, str]:
     return display
 
 
+def _show_origin_diagram_display(_: ToolInput) -> dict[str, str]:
+    return {
+        "tool_label": "Explicó origen de los datos",
+        "tool_tag": "Procedencia",
+        "tool_icon": "git-branch",
+    }
+
+
 def _create_document_display(tool_input: ToolInput) -> dict[str, str]:
     filename = _text_value(tool_input, "filename")
     display = {
@@ -375,6 +383,7 @@ TOOL_DISPLAY_BUILDERS: dict[str, DisplayBuilder] = {
     "run_sql_query": _run_sql_query_display,
     "show_data_table": _show_data_table_display,
     "show_chart": _show_chart_display,
+    "show_origin_diagram": _show_origin_diagram_display,
     "create_document": _create_document_display,
     "update_document": _update_document_display,
     "create_spreadsheet": _create_spreadsheet_display,

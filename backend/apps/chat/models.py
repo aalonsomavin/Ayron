@@ -68,6 +68,7 @@ class AgentEvent(models.Model):
         ERROR = "error", "Error"
         CLARIFICATION = "clarification", "Clarification"
         PROVENANCE_ASK = "provenance_ask", "Provenance Ask"
+        PROVENANCE_DIAGRAM = "provenance_diagram", "Provenance Diagram"
         DONE = "done", "Done"
 
     conversation = models.ForeignKey(

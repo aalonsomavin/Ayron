@@ -18,6 +18,11 @@ from apps.agent.tools.html_report import pop_html_report_display
 from apps.agent.tools.spreadsheet import pop_spreadsheet_display
 from apps.agent.context import peek_sql_tool_trace_input, pop_sql_tool_trace_input
 from apps.agent.tools.display import get_tool_display
+from apps.agent.tools.origin_diagram import (
+    pop_origin_diagram_display,
+    prepare_origin_diagram_for_render,
+    validate_origin_diagram_input,
+)
 from apps.agent.tools.table import pop_table_display, prepare_table_for_render, validate_table_input
 from apps.chat.models import AgentEvent, Conversation, Message
 
@@ -28,6 +33,7 @@ HIDDEN_TRACE_TOOLS = PLAN_TOOLS | {CLARIFICATION_TOOL}
 DISPLAY_TOOLS = {
     "show_data_table",
     "show_chart",
+    "show_origin_diagram",
     "create_document",
     "update_document",
     "create_spreadsheet",
@@ -36,6 +42,7 @@ DISPLAY_TOOLS = {
 }
 TABLE_DISPLAY_TOOL = "show_data_table"
 CHART_DISPLAY_TOOL = "show_chart"
+ORIGIN_DIAGRAM_TOOL = "show_origin_diagram"
 CHART_TYPE_PATTERN = re.compile(r'"chart_type"\s*:\s*"(bar|line|pie)"')
 VALID_CHART_TYPES = frozenset({"bar", "line", "pie"})
 CREATE_DOCUMENT_TOOL = "create_document"
@@ -379,6 +386,23 @@ class StreamEventHandler:
                     message=self.message,
                 )
             output_summary = "Gráfico mostrado" if result.get("ok") else "Error al mostrar gráfico"
+        elif name == ORIGIN_DIAGRAM_TOOL:
+            result = self._resolve_origin_diagram_display_result(output, tool_call_id)
+            if result.get("ok") and result.get("sources"):
+                self.persist(
+                    conversation=self.conversation,
+                    event_type=AgentEvent.EventType.PROVENANCE_DIAGRAM,
+                    payload={
+                        **prepare_origin_diagram_for_render(result),
+                        "tool_call_id": tool_call_id,
+                    },
+                    message=self.message,
+                )
+            output_summary = (
+                "Diagrama de origen mostrado"
+                if result.get("ok")
+                else "Error al mostrar diagrama de origen"
+            )
         elif name in (
             CREATE_DOCUMENT_TOOL,
             UPDATE_DOCUMENT_TOOL,
@@ -505,6 +529,38 @@ class StreamEventHandler:
         except json.JSONDecodeError:
             return {"ok": False}
         if parsed.get("ok") and parsed.get("labels"):
+            return parsed
+        return {"ok": False}
+
+    def _resolve_origin_diagram_display_result(
+        self,
+        output: str,
+        tool_call_id: str | None,
+    ) -> dict:
+        registry_result = pop_origin_diagram_display(tool_call_id)
+        if registry_result:
+            return registry_result
+
+        if tool_call_id and tool_call_id in self.tool_call_inputs:
+            try:
+                tool_input = self.tool_call_inputs.pop(tool_call_id)
+                return validate_origin_diagram_input(
+                    tool_input.get("pattern", ""),
+                    tool_input.get("sources", []),
+                    tool_input.get("result", {}),
+                    tool_input.get("caption", ""),
+                    tool_input.get("hint", ""),
+                    tool_input.get("merge"),
+                    tool_input.get("transforms"),
+                )
+            except ValueError:
+                pass
+
+        try:
+            parsed = json.loads(output)
+        except json.JSONDecodeError:
+            return {"ok": False}
+        if parsed.get("ok") and parsed.get("sources"):
             return parsed
         return {"ok": False}
 

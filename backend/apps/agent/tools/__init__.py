@@ -19,6 +19,7 @@ from apps.agent.tools.html_report import (
 )
 from apps.agent.tools.sql import describe_table, list_tables, run_sql_query
 from apps.agent.tools.table import show_data_table
+from apps.agent.tools.origin_diagram import show_origin_diagram
 
 AGENT_TOOLS = [
     list_tables,
@@ -63,6 +64,7 @@ __all__ = [
     "publish_html_artifact",
     "run_sql_query",
     "show_chart",
+    "show_origin_diagram",
     "ask_clarification",
     "show_data_table",
     "update_document",

@@ -992,6 +992,78 @@ class TestStreamEventHandler:
         assert tool_end["payload"]["tool"] == "show_chart"
         assert tool_end["payload"]["output_summary"] == "Gráfico mostrado"
 
+    def test_show_origin_diagram_emits_provenance_diagram_event(
+        self, conversation_with_messages
+    ):
+        conversation, _, assistant_message = conversation_with_messages
+        emitted = []
+
+        def capture_persist(**kwargs):
+            emitted.append(kwargs)
+            return len(emitted) - 1, MagicMock()
+
+        handler = StreamEventHandler(
+            conversation=conversation,
+            message=assistant_message,
+            persist_fn=capture_persist,
+        )
+        diagram_args = {
+            "pattern": "converge",
+            "sources": [
+                {"label": "Cuentas", "subtitle": "CRM"},
+                {"label": "Ventas", "subtitle": "ERP"},
+            ],
+            "merge": {"label": "Cruce por cuenta"},
+            "result": {"label": "Ranking"},
+            "caption": "dos fuentes → cruce → resultado",
+            "hint": "Cuando hay un JOIN entre dos tablas.",
+        }
+        from apps.agent.tools.origin_diagram import show_origin_diagram
+
+        show_origin_diagram.invoke(
+            {
+                "type": "tool_call",
+                "name": "show_origin_diagram",
+                "id": "call_origin",
+                "args": diagram_args,
+            }
+        )
+        handler.handle_chunk(
+            {
+                "type": "messages",
+                "ns": (),
+                "data": (
+                    ToolMessage(
+                        content=json.dumps(
+                            {
+                                "ok": True,
+                                "displayed_to_user": True,
+                                "pattern": "converge",
+                                "source_count": 2,
+                            }
+                        ),
+                        name="show_origin_diagram",
+                        tool_call_id="call_origin",
+                    ),
+                    {},
+                ),
+            }
+        )
+
+        diagram_event = next(
+            item
+            for item in emitted
+            if item["event_type"] == AgentEvent.EventType.PROVENANCE_DIAGRAM
+        )
+        tool_end = next(
+            item for item in emitted if item["event_type"] == AgentEvent.EventType.TOOL_END
+        )
+        assert diagram_event["payload"]["pattern"] == "converge"
+        assert len(diagram_event["payload"]["sources"]) == 2
+        assert diagram_event["payload"]["tool_call_id"] == "call_origin"
+        assert tool_end["payload"]["tool"] == "show_origin_diagram"
+        assert tool_end["payload"]["output_summary"] == "Diagrama de origen mostrado"
+
     def test_show_chart_tool_start_includes_chart_type(self, conversation_with_messages):
         conversation, _, assistant_message = conversation_with_messages
         emitted = []

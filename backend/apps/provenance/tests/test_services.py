@@ -88,9 +88,12 @@ class TestFormatProvenanceAskBlock:
         assert "source_refs: sql_1" in block
         assert "ventas" in block
         assert "SUM por región" in block
+        assert "integración:" in block
         assert "### Cómo responder" in block
-        assert "2–4 frases" in block
-        assert "Evita en la respuesta" in block
+        assert "show_origin_diagram" in block
+        assert "integraciones" in block
+        assert "una sola frase" in block
+        assert "merge" in block
 
     def test_tool_trace_context_includes_narrative(self, conversation, data_access):
         message = Message.objects.create(

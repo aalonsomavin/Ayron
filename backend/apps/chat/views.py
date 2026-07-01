@@ -14,6 +14,7 @@ from apps.agent.checkpoint import get_checkpointer, rollback_thread_to_turn
 from apps.agent.events import get_redis_client, persist_event
 from apps.agent.tools.display import TOOL_ICONS, TOOL_LABELS, TOOL_TAGS, get_tool_display
 from apps.agent.tools.chart import prepare_chart_for_render
+from apps.agent.tools.origin_diagram import prepare_origin_diagram_for_render
 from apps.agent.tools.table import prepare_table_for_render
 from apps.agent.tasks import run_agent_conversation
 from apps.chat.models import AgentEvent, Conversation, Message
@@ -230,6 +231,16 @@ def _content_blocks_for_message(message: Message, *, user=None) -> list[dict]:
             if claim_id:
                 block["claim_id"] = claim_id
             blocks.append(block)
+            can_merge_token = False
+        elif event.event_type == AgentEvent.EventType.PROVENANCE_DIAGRAM:
+            diagram = prepare_origin_diagram_for_render(event.payload)
+            blocks.append(
+                {
+                    "type": "origin_diagram",
+                    "diagram": diagram,
+                    "diagram_id": f"origin-{message.id}-{len(blocks)}",
+                }
+            )
             can_merge_token = False
         elif event.event_type == AgentEvent.EventType.CLARIFICATION:
             payload = dict(event.payload)

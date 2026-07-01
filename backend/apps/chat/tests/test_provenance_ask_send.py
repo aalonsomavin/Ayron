@@ -179,3 +179,57 @@ class TestProvenanceAskSendMessage:
         )
 
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestProvenanceAskAgentTools:
+    def test_create_agent_includes_origin_diagram_for_provenance_ask(
+        self, user, conversation, data_access
+    ):
+        from unittest.mock import patch
+
+        from apps.agent.runner import create_agent
+        from apps.agent.tools.origin_diagram import show_origin_diagram
+        from apps.provenance.services import record_provenance_ask_event
+
+        user_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="Explícame de dónde salieron los datos.",
+        )
+        record_provenance_ask_event(
+            user_message,
+            {
+                "open_source": "tool_trace",
+                "tool_call_id": data_access.tool_call_id,
+                "source_ref": data_access.source_ref,
+            },
+        )
+
+        with patch("apps.agent.runner.create_deep_agent") as mock_create:
+            mock_create.return_value = object()
+            create_agent(conversation, user_message=user_message)
+
+        tools = mock_create.call_args.kwargs["tools"]
+        assert show_origin_diagram in tools
+
+    def test_create_agent_excludes_origin_diagram_for_normal_turn(self, user, conversation):
+        from unittest.mock import patch
+
+        from apps.agent.runner import create_agent
+        from apps.agent.tools import AGENT_TOOLS
+        from apps.agent.tools.origin_diagram import show_origin_diagram
+
+        user_message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.USER,
+            content="¿Cuánto vendimos este mes?",
+        )
+
+        with patch("apps.agent.runner.create_deep_agent") as mock_create:
+            mock_create.return_value = object()
+            create_agent(conversation, user_message=user_message)
+
+        tools = mock_create.call_args.kwargs["tools"]
+        assert tools == AGENT_TOOLS
+        assert show_origin_diagram not in tools

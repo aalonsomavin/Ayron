@@ -25,7 +25,7 @@ from apps.files.services import (
     format_user_attachments_block,
     get_context_attachments_for_message,
 )
-from apps.provenance.services import format_provenance_ask_block
+from apps.provenance.services import format_provenance_ask_block, user_message_has_provenance_ask
 
 MEXAR_SYSTEM_PROMPT = """\
 Eres un asistente de datos para Mexar Pharma: distribución y licenciamiento \
@@ -216,12 +216,13 @@ de la base; no inventes cifras.
 ## Explicación de procedencia
 
 - Si aparece el bloque «Solicitud de explicación de procedencia», el usuario abrió el modal \
-  «Origen de los datos» y quiere saber **de dónde salieron los datos**, no cómo se armó la consulta.
-- Responde en **2–4 frases**, muy sintético, en lenguaje de negocio (p. ej. cuentas del CRM, \
-  ventas comerciales, catálogo de instituciones).
-- Di qué fuentes usaste y qué representa el gráfico o tabla. **Sin** nombres de tablas SQL, \
-  joins, campos técnicos, listas numeradas paso a paso ni secciones tipo «Qué tablas participaron».
-- No repitas SQL ni detalles de implementación salvo que el usuario lo pida explícitamente.
+  «Origen de los datos» y quiere saber **de dónde salieron los datos**.
+- Debes invocar `show_origin_diagram` **antes** de escribir texto.
+- En el diagrama, cada nodo `sources` representa una **integración** (PostgreSQL, Excel, CSV, etc.), \
+  no una tabla SQL. Si hubo una sola integración → `chain`; dos → `converge`; tres o cuatro → `multi_source`.
+- Usa labels en lenguaje de negocio en nodos visibles. Tablas, uniones, filtros y agregaciones (SUM, COUNT, …) \
+  van en `merge`, `transforms` o `detail` de los nodos cuando aporten claridad.
+- Tras la tool, escribe **una sola frase** de cierre (máx. 25 palabras). No repitas el diagrama ni pegues SQL.
 """
 
 
@@ -262,9 +263,15 @@ CLARIFICATION_INTERRUPT_ON = {
 def create_agent(conversation: Conversation, user_message: str | Message = ""):
     backend = build_agent_backend()
     set_agent_backend(backend)
+    user_message_obj = user_message if isinstance(user_message, Message) else None
+    tools = list(AGENT_TOOLS)
+    if user_message_has_provenance_ask(user_message_obj):
+        from apps.agent.tools.origin_diagram import show_origin_diagram
+
+        tools.append(show_origin_diagram)
     return create_deep_agent(
         model=settings.DEFAULT_LLM_MODEL,
-        tools=AGENT_TOOLS,
+        tools=tools,
         system_prompt=build_system_prompt(conversation, user_message),
         backend=backend,
         skills=get_platform_skill_sources(),

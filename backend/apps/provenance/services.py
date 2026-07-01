@@ -311,6 +311,15 @@ def parse_provenance_ask_context(raw: str, conversation: Conversation) -> dict:
     }
 
 
+def user_message_has_provenance_ask(user_message: Message | None) -> bool:
+    if user_message is None:
+        return False
+    return AgentEvent.objects.filter(
+        message=user_message,
+        event_type=AgentEvent.EventType.PROVENANCE_ASK,
+    ).exists()
+
+
 def record_provenance_ask_event(user_message: Message, context: dict) -> None:
     persist_event(
         conversation=user_message.conversation,
@@ -332,6 +341,9 @@ def _format_data_access_lines(data_access: DataAccess, transformation: str = "")
     if source_ref:
         header = f"{header} ({source_ref})"
     parts = [header]
+    integration_data = _serialize_integration(getattr(data_access, "integration", None))
+    if integration_data:
+        parts.append(f"integración: {integration_data['source_label']}")
     if tables:
         parts.append(f"tablas: {', '.join(tables)}")
     if purpose:
@@ -385,7 +397,7 @@ def format_provenance_ask_block(user_message: Message | None) -> str:
 
         if claim is not None:
             links = list(
-                claim.provenance_links.select_related("data_access").order_by("ordinal")
+                claim.provenance_links.select_related("data_access__integration").order_by("ordinal")
             )
             source_refs = []
             for link in links:
@@ -433,12 +445,25 @@ def format_provenance_ask_block(user_message: Message | None) -> str:
             "",
             "### Cómo responder",
             "",
-            "Usa la procedencia técnica de arriba solo como referencia interna. "
-            "Tu respuesta al usuario debe ser muy breve (2–4 frases), en lenguaje de negocio, "
-            "y decir de dónde salieron los datos y qué representa el gráfico o tabla.",
+            "Usa la procedencia técnica de arriba solo como referencia interna para construir el diagrama.",
             "",
-            "Evita en la respuesta: nombres de tablas SQL, campos, joins, agregaciones técnicas, "
-            "listas paso a paso, secciones tipo «Qué tablas participaron» o SQL.",
+            "Debes invocar `show_origin_diagram` **antes** de escribir texto.",
+            "",
+            "**Nodos `sources` = integraciones**, no tablas ni consultas sueltas. Cada source es una "
+            "conexión de datos distinta (p. ej. PostgreSQL · Mexar Pharma, hoja de cálculo, archivo CSV). "
+            "Si todo sale de la misma integración, usa `chain` con una sola source; si intervinieron "
+            "2 integraciones → `converge`; 3–4 → `multi_source`.",
+            "",
+            "En labels visibles usa lenguaje de negocio. Detalla tablas, uniones, filtros, SUM/COUNT u "
+            "otras operaciones donde corresponda:",
+            "- en `merge` cuando cruzas fuentes,",
+            "- en `transforms` cuando hay pasos en cadena,",
+            "- en `detail` de cualquier nodo (el usuario puede hacer clic para ampliar).",
+            "",
+            "Iconos: `database` para PostgreSQL/SQL, `sheet` para Excel/Sheets, `file` para CSV u otros archivos.",
+            "",
+            "Tras la tool, escribe **una sola frase** de cierre (máx. 25 palabras) en lenguaje de negocio. "
+            "No repitas el diagrama ni pegues SQL en el texto.",
             "",
         ]
     )

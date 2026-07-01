@@ -47,6 +47,8 @@
                             {% include "components/data_table.html" with table=block.table claim_id=block.claim_id %}
                           {% elif block.type == "chart" %}
                             {% include "components/inline_chart.html" with chart=block.chart chart_id=block.chart_id claim_id=block.claim_id %}
+                          {% elif block.type == "origin_diagram" %}
+                            {% include "components/inline_origin_diagram.html" with diagram=block.diagram diagram_id=block.diagram_id %}
                           {% elif block.type == "files" %}
                             <div class="ay-msg-agent__files">
                               {% for file in block.files %}
@@ -168,11 +170,24 @@
   <div id="ay-provenance-sql-content" class="ay-provenance-sql-dialog__content"></div>
 </dialog>
 
+<dialog id="ay-origin-diagram-dialog" class="ay-origin-diagram-dialog">
+  <div class="ay-origin-diagram-dialog__panel">
+    <div class="ay-origin-diagram-dialog__header">
+      <h2 class="ay-origin-diagram-dialog__title">Origen de los datos</h2>
+      <button type="button" class="ay-origin-diagram-dialog__close" data-origin-diagram-close title="Cerrar" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div id="ay-origin-diagram-dialog-body" class="ay-origin-diagram-dialog__body"></div>
+  </div>
+</dialog>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="{% static 'js/ayron-avatar.js' %}"></script>
 <script src="{% static 'js/ayron-chart.js' %}"></script>
+<script src="{% static 'js/ayron-origin-diagram.js' %}"></script>
 <script src="{% static 'js/ayron-dashboard.js' %}"></script>
 <script src="{% static 'js/ayron-content-skeleton.js' %}"></script>
 <script src="{% static 'js/ayron-tool-trace.js' %}"></script>
@@ -997,6 +1012,18 @@
     scheduleMarkdownRender();
   }
 
+  function originDiagramPayloadFromEvent(event) {
+    return {
+      pattern: event.pattern,
+      sources: event.sources || [],
+      merge: event.merge,
+      transforms: event.transforms || [],
+      result: event.result || {},
+      caption: event.caption || "",
+      hint: event.hint || "",
+    };
+  }
+
   function chartPayloadFromEvent(event) {
     return {
       chart_type: event.chart_type,
@@ -1092,6 +1119,15 @@
       kind,
       event.tool_call_id
     );
+  }
+
+  function appendOriginDiagramBlock(bubble, event) {
+    const contentEl = bubble.querySelector(".ay-msg-agent__content");
+    finalizeCurrentTextBlock();
+    if (!contentEl || !window.AyronOriginDiagram) return;
+    const diagramEl = window.AyronOriginDiagram.create(originDiagramPayloadFromEvent(event));
+    contentEl.appendChild(diagramEl);
+    window.AyronOriginDiagram.mount(diagramEl);
   }
 
   function appendChartBlock(bubble, event) {
@@ -1266,6 +1302,8 @@
       appendTableBlock(bubble, event);
     } else if (event.type === "chart" && bubble) {
       appendChartBlock(bubble, event);
+    } else if (event.type === "provenance_diagram" && bubble) {
+      appendOriginDiagramBlock(bubble, event);
     } else if (event.type === "clarification" && bubble) {
       finalizeCurrentTextBlock();
       mountClarificationWizard(bubble, event);
@@ -1362,7 +1400,7 @@
   function openStream() {
     closeStream();
     eventSource = new EventSource(streamUrl + "?after=" + lastAppliedSeq);
-    ["token", "plan", "tool_start", "tool_end", "table", "chart", "clarification", "file_created", "file_updated", "error", "done"].forEach(function (type) {
+    ["token", "plan", "tool_start", "tool_end", "table", "chart", "provenance_diagram", "clarification", "file_created", "file_updated", "error", "done"].forEach(function (type) {
       eventSource.addEventListener(type, function (e) {
         try {
           applyEvent(JSON.parse(e.data));
@@ -1697,6 +1735,7 @@
   if (window.AyronMarkdown) window.AyronMarkdown.mountAll(chatThreadEl);
   window.AyronAgentAvatar.mountAll(chatThreadEl);
   if (window.AyronChart) window.AyronChart.mountAll(chatThreadEl);
+  if (window.AyronOriginDiagram) window.AyronOriginDiagram.mountAll(chatThreadEl);
   if (window.AyronArtifact) {
     window.AyronArtifact.init({ panelEl: artifactPanelEl, mainEl: mainEl, csrfToken: csrfToken });
   }

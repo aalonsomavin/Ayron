@@ -1,0 +1,27 @@
+<div class="ay-origin-diagram" data-diagram-id="{{ diagram_id }}">
+  {{ diagram|json_script:diagram_id }}
+  <div class="ay-card ay-origin-diagram__card">
+    <div class="ay-origin-diagram__header">
+      <p class="ay-origin-diagram__header-title">Origen de los datos</p>
+      <div class="ay-origin-diagram__header-actions">
+        <button type="button" class="ay-origin-diagram__header-btn" data-origin-diagram-expand title="Pantalla completa" aria-label="Pantalla completa">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="ay-origin-diagram__scroll">
+      <div class="ay-origin-diagram__stage"></div>
+    </div>
+    {% if diagram.caption or diagram.hint %}
+    <div class="ay-origin-diagram__footer">
+      {% if diagram.caption %}
+        <div class="ay-origin-diagram__caption">{{ diagram.caption }}</div>
+      {% endif %}
+      {% if diagram.hint %}
+        <div class="ay-origin-diagram__hint">{{ diagram.hint }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+    <div class="ay-origin-diagram__detail" hidden></div>
+  </div>
+</div>
