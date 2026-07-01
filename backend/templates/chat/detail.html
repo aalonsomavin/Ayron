@@ -221,7 +221,6 @@
   const AGENT_AVATAR_HTML = '<div class="ay-agent-avatar ay-agent-avatar--active"><canvas class="ay-agent-avatar__canvas" aria-hidden="true"></canvas></div>';
 
   const statusEl = document.getElementById("chat-status");
-  const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
   const sendWrapEl = document.getElementById("chat-send-wrap");
   const stopEl = document.getElementById("chat-stop");
@@ -238,6 +237,62 @@
   const TOOL_LABELS = {{ tool_labels_json|safe }};
   const TOOL_TAGS = {{ tool_tags_json|safe }};
   const TOOL_ICONS = {{ tool_icons_json|safe }};
+
+  function getInputEl() {
+    return document.getElementById("chat-input");
+  }
+
+  function isComposerBusy() {
+    const stopWrap = document.getElementById("chat-stop-wrap");
+    return isStreaming || (stopWrap && !stopWrap.hidden);
+  }
+
+  function ensureProvenanceContextInput(form) {
+    let hidden = form.querySelector('input[name="provenance_context"]');
+    if (!hidden) {
+      hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = "provenance_context";
+      form.appendChild(hidden);
+    }
+    return hidden;
+  }
+
+  function stageMessage(content, provenanceContext) {
+    const input = getInputEl();
+    const form = document.getElementById("chat-composer");
+    if (!input || !form) return false;
+    input.value = content;
+    ensureProvenanceContextInput(form).value = provenanceContext
+      ? JSON.stringify(provenanceContext)
+      : "";
+    return true;
+  }
+
+  function resolveComposerStatus(status) {
+    if (status === "failed") return "failed";
+    if (status === "awaiting_clarification") return "awaiting_clarification";
+    if (status === "processing") return "processing";
+    return "active";
+  }
+
+  function reconcileComposerWithServer() {
+    return fetch(eventsUrl)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        const resolved = resolveComposerStatus(data.status);
+        if (resolved === "processing") {
+          lastAppliedSeq = Math.max(lastAppliedSeq, data.last_sequence);
+          setConversationStatus("processing");
+          openStream();
+        } else {
+          finishIdleState(data.status);
+        }
+      })
+      .catch(function () {
+        setConversationStatus("active");
+      });
+  }
 
   function resolveSqlTraceText(event) {
     if (event.tool !== "run_sql_query") return null;
@@ -1529,20 +1584,18 @@
   }
 
   function submitMessage(content, provenanceContext) {
-    const input = document.getElementById("chat-input");
-    if (!input || input.disabled) return false;
+    const input = getInputEl();
+    if (!input) return false;
+    if (input.disabled || isComposerBusy()) {
+      return stageMessage(content, provenanceContext) ? "staged" : false;
+    }
     input.value = content;
     const form = document.getElementById("chat-composer");
-    let hidden = form.querySelector('input[name="provenance_context"]');
-    if (!hidden) {
-      hidden = document.createElement("input");
-      hidden.type = "hidden";
-      hidden.name = "provenance_context";
-      form.appendChild(hidden);
-    }
-    hidden.value = provenanceContext ? JSON.stringify(provenanceContext) : "";
+    ensureProvenanceContextInput(form).value = provenanceContext
+      ? JSON.stringify(provenanceContext)
+      : "";
     htmx.trigger(form, "submit");
-    return true;
+    return "sent";
   }
 
   window.AyronChat = { submitMessage: submitMessage };
@@ -1553,7 +1606,9 @@
 
   document.getElementById("chat-composer").addEventListener("htmx:afterRequest", function (e) {
     if (!e.detail.successful) return;
-    const content = inputEl.value.trim();
+    const input = getInputEl();
+    if (!input) return;
+    const content = input.value.trim();
     if (!content) return;
 
     try {
@@ -1581,7 +1636,7 @@
     beginNewTurn(row);
     scheduleFloatingUserPill();
 
-    inputEl.value = "";
+    input.value = "";
     pendingUploads = [];
     syncFileIdsInput();
     renderPendingAttachments();
@@ -1597,6 +1652,10 @@
     closeStream();
     openStream();
     scrollToBottom(true);
+  });
+
+  document.getElementById("chat-composer").addEventListener("htmx:responseError", function () {
+    reconcileComposerWithServer();
   });
 
   if (userPillEl) {
@@ -1637,7 +1696,8 @@
           window.alert(err.message || "No se pudo subir el archivo.");
         })
         .finally(function () {
-          attachEl.disabled = inputEl && inputEl.disabled;
+          const input = getInputEl();
+          attachEl.disabled = input && input.disabled;
         });
     });
   }
