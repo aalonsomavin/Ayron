@@ -1,11 +1,25 @@
+import json
+
+from apps.agent.events import persist_event
 from apps.agent.tools.display import get_tool_display
 from apps.agent.tools.table import prepare_table_for_render, validate_table_input
-from apps.chat.models import AgentEvent
+from apps.chat.models import AgentEvent, Conversation, Message
 from apps.integrations.services import get_integration_for_data_access_tool
-from apps.provenance.models import DataAccess
+from apps.provenance.models import DataAccess, DataClaim
 
 RUN_SQL_QUERY_TOOL = "run_sql_query"
 FAILED_SQL_STATUS_MESSAGE = "Esta búsqueda no devolvió datos."
+
+SURFACE_LABELS = {
+    DataClaim.Surface.CHAT_CHART: "gráfico inline",
+    DataClaim.Surface.CHAT_TABLE: "tabla inline",
+    DataClaim.Surface.DASHBOARD_KPI: "KPI de dashboard",
+}
+
+ELEMENT_TYPE_LABELS = {
+    DataClaim.Surface.CHAT_CHART: "gráfico",
+    DataClaim.Surface.CHAT_TABLE: "tabla",
+}
 
 
 def _humanize_name(name: str) -> str:
@@ -124,16 +138,20 @@ def resolve_provenance_detail(conversation, tool_call_id: str) -> dict | None:
         detail = serialize_data_access_detail(data_access)
         detail["failed"] = False
         detail["status_message"] = ""
+        _attach_provenance_ask_fields(detail, open_source="tool_trace")
         return detail
-    return serialize_failed_sql_detail(conversation, tool_call_id)
+    detail = serialize_failed_sql_detail(conversation, tool_call_id)
+    if detail is not None:
+        _attach_provenance_ask_fields(detail, open_source="tool_trace")
+    return detail
 
 
 def resolve_claim_provenance_detail(claim) -> dict | None:
-    link = (
+    links = list(
         claim.provenance_links.select_related("data_access__integration")
         .order_by("ordinal")
-        .first()
     )
+    link = links[0] if links else None
     if link is None:
         return None
 
@@ -147,6 +165,7 @@ def resolve_claim_provenance_detail(claim) -> dict | None:
     if not narrative and claim.label:
         narrative = str(claim.label).strip()
     detail["narrative"] = narrative
+    _attach_provenance_ask_fields(detail, open_source="claim", claim=claim)
     return detail
 
 
@@ -195,3 +214,232 @@ def serialize_data_access_detail(data_access: DataAccess) -> dict:
         "has_preview_rows": bool(preview_rows),
         "has_sql": bool(request_data.get("sql")),
     }
+
+
+def _summarize_sql(sql: str) -> str:
+    trimmed = " ".join(str(sql or "").split())
+    if len(trimmed) > 200:
+        return trimmed[:197] + "..."
+    return trimmed
+
+
+def _build_ask_message(*, claim_label: str = "", claim_surface: str = "", narrative: str = "") -> str:
+    if claim_label:
+        element = ELEMENT_TYPE_LABELS.get(claim_surface, "elemento")
+        return f"Explícame de forma sencilla de dónde salieron los datos del {element} «{claim_label}»."
+    if narrative:
+        return "Explícame de forma sencilla de dónde salieron los datos de este análisis."
+    return "Explícame de forma sencilla de dónde salieron estos datos."
+
+
+def _attach_provenance_ask_fields(
+    detail: dict,
+    *,
+    open_source: str,
+    claim: DataClaim | None = None,
+) -> None:
+    context = {
+        "open_source": open_source,
+        "tool_call_id": detail.get("tool_call_id") or "",
+        "source_ref": detail.get("source_ref") or "",
+    }
+    if open_source == "claim" and claim is not None:
+        context["claim_id"] = str(claim.id)
+        detail["claim_id"] = str(claim.id)
+        detail["claim_label"] = claim.label
+        detail["claim_surface"] = claim.surface
+    detail["provenance_ask_context"] = context
+    detail["provenance_ask_context_json"] = json.dumps(context, ensure_ascii=False)
+    detail["ask_message"] = _build_ask_message(
+        claim_label=str(detail.get("claim_label") or ""),
+        claim_surface=str(detail.get("claim_surface") or ""),
+        narrative=str(detail.get("narrative") or ""),
+    )
+
+
+def _tool_call_exists_in_conversation(conversation: Conversation, tool_call_id: str) -> bool:
+    if get_data_access_for_tool_call(conversation, tool_call_id) is not None:
+        return True
+    return serialize_failed_sql_detail(conversation, tool_call_id) is not None
+
+
+def parse_provenance_ask_context(raw: str, conversation: Conversation) -> dict:
+    if not str(raw or "").strip():
+        raise ValueError("provenance_context is required.")
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Invalid provenance_context JSON.") from exc
+
+    if not isinstance(data, dict):
+        raise ValueError("provenance_context must be a JSON object.")
+
+    open_source = str(data.get("open_source") or "").strip()
+    if open_source not in {"claim", "tool_trace"}:
+        raise ValueError("Invalid open_source in provenance_context.")
+
+    tool_call_id = str(data.get("tool_call_id") or "").strip()
+    source_ref = str(data.get("source_ref") or "").strip()
+    claim_id = str(data.get("claim_id") or "").strip()
+
+    if open_source == "claim":
+        if not claim_id:
+            raise ValueError("claim_id is required for claim provenance_context.")
+        if not DataClaim.objects.filter(id=claim_id, conversation=conversation).exists():
+            raise ValueError("claim_id does not belong to this conversation.")
+        if tool_call_id and not DataAccess.objects.filter(
+            conversation=conversation,
+            tool_call_id=tool_call_id,
+        ).exists():
+            raise ValueError("tool_call_id does not belong to this conversation.")
+        return {
+            "open_source": "claim",
+            "claim_id": claim_id,
+            "tool_call_id": tool_call_id,
+            "source_ref": source_ref,
+        }
+
+    if not tool_call_id:
+        raise ValueError("tool_call_id is required for tool_trace provenance_context.")
+    if not _tool_call_exists_in_conversation(conversation, tool_call_id):
+        raise ValueError("tool_call_id does not belong to this conversation.")
+    return {
+        "open_source": "tool_trace",
+        "tool_call_id": tool_call_id,
+        "source_ref": source_ref,
+    }
+
+
+def record_provenance_ask_event(user_message: Message, context: dict) -> None:
+    persist_event(
+        conversation=user_message.conversation,
+        event_type=AgentEvent.EventType.PROVENANCE_ASK,
+        payload=context,
+        message=user_message,
+    )
+
+
+def _format_data_access_lines(data_access: DataAccess, transformation: str = "") -> list[str]:
+    response_summary = data_access.response_summary or {}
+    request_data = data_access.request or {}
+    tables = response_summary.get("tables") or []
+    purpose = str(response_summary.get("user_summary") or "").strip() or get_tool_start_label(data_access)
+    tool_call_id = data_access.tool_call_id
+    source_ref = data_access.source_ref
+
+    header = f"tool_call_id: {tool_call_id}"
+    if source_ref:
+        header = f"{header} ({source_ref})"
+    parts = [header]
+    if tables:
+        parts.append(f"tablas: {', '.join(tables)}")
+    if purpose:
+        parts.append(f"propósito: {purpose}")
+
+    lines = [f"- {' · '.join(parts)}"]
+    if transformation:
+        lines.append(f"- transformación: {transformation}")
+    sql = str(request_data.get("sql") or "").strip()
+    if sql:
+        lines.append(f"- SQL (resumen): {_summarize_sql(sql)}")
+    return lines
+
+
+def format_provenance_ask_block(user_message: Message | None) -> str:
+    if user_message is None:
+        return ""
+
+    event = AgentEvent.objects.filter(
+        message=user_message,
+        event_type=AgentEvent.EventType.PROVENANCE_ASK,
+    ).first()
+    if event is None:
+        return ""
+
+    context = event.payload or {}
+    conversation = user_message.conversation
+    lines = [
+        "## Solicitud de explicación de procedencia",
+        "",
+        'El usuario abrió "Origen de los datos" y pidió que expliques cómo se obtuvieron los datos.',
+        "",
+    ]
+
+    open_source = context.get("open_source")
+    if open_source == "claim":
+        claim_id = str(context.get("claim_id") or "").strip()
+        claim = DataClaim.objects.filter(id=claim_id, conversation=conversation).first()
+        lines.extend(["### Elemento visual"])
+        if claim is None:
+            lines.append(f"- claim_id: {claim_id} (no encontrado)")
+        else:
+            surface_label = SURFACE_LABELS.get(claim.surface, claim.surface)
+            lines.extend(
+                [
+                    f"- Tipo: {surface_label}",
+                    f"- Etiqueta: {claim.label}",
+                ]
+            )
+        lines.extend(["", "### Procedencia consultada", f"- claim_id: {claim_id}"])
+
+        if claim is not None:
+            links = list(
+                claim.provenance_links.select_related("data_access").order_by("ordinal")
+            )
+            source_refs = []
+            for link in links:
+                ref = str(link.data_access.source_ref or "").strip()
+                if ref and ref not in source_refs:
+                    source_refs.append(ref)
+            if source_refs:
+                lines.append(f"- source_refs: {', '.join(source_refs)}")
+            lines.append("")
+            for link in links:
+                lines.extend(_format_data_access_lines(link.data_access, link.transformation))
+        else:
+            lines.append("")
+    else:
+        tool_call_id = str(context.get("tool_call_id") or "").strip()
+        source_ref = str(context.get("source_ref") or "").strip()
+        lines.extend(
+            [
+                "### Elemento visual",
+                "- Tipo: consulta SQL del tool trace",
+                "",
+                "### Procedencia consultada",
+            ]
+        )
+        if source_ref:
+            lines.append(f"- source_ref: {source_ref}")
+        lines.append(f"- tool_call_id: {tool_call_id}")
+        lines.append("")
+
+        data_access = get_data_access_for_tool_call(conversation, tool_call_id)
+        if data_access is not None:
+            lines.extend(_format_data_access_lines(data_access))
+        else:
+            failed = serialize_failed_sql_detail(conversation, tool_call_id)
+            if failed is not None:
+                narrative = str(failed.get("narrative") or failed.get("user_summary") or "").strip()
+                if narrative:
+                    lines.append(f"- propósito: {narrative}")
+                sql = str(failed.get("sql") or "").strip()
+                if sql:
+                    lines.append(f"- consulta (fallida): {_summarize_sql(sql)}")
+
+    lines.extend(
+        [
+            "",
+            "### Cómo responder",
+            "",
+            "Usa la procedencia técnica de arriba solo como referencia interna. "
+            "Tu respuesta al usuario debe ser muy breve (2–4 frases), en lenguaje de negocio, "
+            "y decir de dónde salieron los datos y qué representa el gráfico o tabla.",
+            "",
+            "Evita en la respuesta: nombres de tablas SQL, campos, joins, agregaciones técnicas, "
+            "listas paso a paso, secciones tipo «Qué tablas participaron» o SQL.",
+            "",
+        ]
+    )
+    return "\n".join(lines)

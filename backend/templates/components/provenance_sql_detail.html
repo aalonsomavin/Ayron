@@ -40,15 +40,15 @@
     <span>Ejecutada {{ detail.executed_at|date:"j M Y, H:i" }}</span>
   </div>
 
-  {% if detail.has_sql %}
-    <details class="ay-provenance-sql__technical">
-      <summary>Ver consulta SQL</summary>
-      <div class="ay-provenance-sql__sql-wrap">
-        <div class="ay-provenance-sql__sql-toolbar">
-          <button type="button" class="ay-btn ay-btn--ghost ay-btn--sm" data-provenance-copy>Copiar</button>
-        </div>
-        <pre class="ay-provenance-sql__sql"><code>{{ detail.sql }}</code></pre>
-      </div>
-    </details>
-  {% endif %}
+  <div class="ay-provenance-sql__ask">
+    <button
+      type="button"
+      class="ay-btn ay-btn--secondary ay-provenance-sql__ask-btn"
+      data-provenance-ask
+      data-ask-message="{{ detail.ask_message }}"
+      data-provenance-context="{{ detail.provenance_ask_context_json }}"
+    >
+      Preguntar a Ayron cómo se obtuvieron estos datos
+    </button>
+  </div>
 </div>

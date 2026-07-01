@@ -88,7 +88,11 @@ class TestProvenanceDataAccessView:
         assert "ay-provenance-sql" in content
         assert "Origen de los datos" in content
         assert "Ayron consultó productos para revisar el catálogo comercial." in content
-        assert "Ver consulta SQL" in content
+        assert "data-provenance-ask" in content
+        assert "data-provenance-context" in content
+        assert '"open_source": "tool_trace"' in content
+        assert "call_detail_test" in content
+        assert "Ver consulta SQL" not in content
         assert "Conectada" not in content
         assert "data-provenance-run" not in content
         assert "Ver datos completos" not in content
@@ -159,7 +163,8 @@ class TestProvenanceDataAccessView:
         assert response.status_code == 200
         assert "Intenté revisar el catálogo comercial." in content
         assert "Esta búsqueda no devolvió datos." in content
-        assert "Ver consulta SQL" in content
+        assert "data-provenance-ask" in content
+        assert "Ver consulta SQL" not in content
         assert "Only SELECT" not in content
         assert "data-provenance-run" not in content
 

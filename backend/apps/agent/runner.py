@@ -25,6 +25,7 @@ from apps.files.services import (
     format_user_attachments_block,
     get_context_attachments_for_message,
 )
+from apps.provenance.services import format_provenance_ask_block
 
 MEXAR_SYSTEM_PROMPT = """\
 Eres un asistente de datos para Mexar Pharma: distribución y licenciamiento \
@@ -211,6 +212,16 @@ de la base; no inventes cifras.
 - No la uses para preguntas analíticas simples que puedas resolver consultando datos.
 - Si puedes avanzar con supuestos razonables sin arriesgar el entregable, no aclares.
 - Tras invocar `ask_clarification`, **detente**: no escribas más texto ni llames otras tools.
+
+## Explicación de procedencia
+
+- Si aparece el bloque «Solicitud de explicación de procedencia», el usuario abrió el modal \
+  «Origen de los datos» y quiere saber **de dónde salieron los datos**, no cómo se armó la consulta.
+- Responde en **2–4 frases**, muy sintético, en lenguaje de negocio (p. ej. cuentas del CRM, \
+  ventas comerciales, catálogo de instituciones).
+- Di qué fuentes usaste y qué representa el gráfico o tabla. **Sin** nombres de tablas SQL, \
+  joins, campos técnicos, listas numeradas paso a paso ni secciones tipo «Qué tablas participaron».
+- No repitas SQL ni detalles de implementación salvo que el usuario lo pida explícitamente.
 """
 
 
@@ -227,6 +238,9 @@ def build_system_prompt(
     attachments_block = format_user_attachments_block(user_message_obj)
     if attachments_block:
         prompt = f"{prompt}\n{attachments_block}"
+    provenance_block = format_provenance_ask_block(user_message_obj)
+    if provenance_block:
+        prompt = f"{prompt}\n{provenance_block}"
     intent = detect_deliverable_intent(
         user_message_text,
         context_attachments=get_context_attachments_for_message(user_message_obj),

@@ -156,34 +156,25 @@
   color: var(--ay-text-subtle);
 }
 
-.ay-provenance-sql__technical {
-  margin-bottom: 12px;
-  border: 1px solid var(--ay-border);
-  border-radius: 10px;
-  overflow: hidden;
+.ay-provenance-sql__ask {
+  margin-top: 4px;
 }
 
-.ay-provenance-sql__technical summary {
+.ay-provenance-sql__ask-btn {
+  width: 100%;
+  justify-content: center;
   padding: 10px 12px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ay-text-muted);
-  cursor: pointer;
-  list-style: none;
   background: var(--ay-bg-subtle);
+  border-color: var(--ay-border);
 }
 
-.ay-provenance-sql__technical summary::-webkit-details-marker {
-  display: none;
-}
-
-.ay-provenance-sql__technical[open] summary {
-  border-bottom: 1px solid var(--ay-border);
-}
-
-.ay-provenance-sql__technical .ay-provenance-sql__sql-wrap {
-  border: none;
-  border-radius: 0;
+.ay-provenance-sql__ask-btn:hover {
+  color: var(--ay-text);
+  background: var(--ay-bg-subtle);
+  border-color: var(--ay-text-subtle);
 }
 
 .ay-provenance-sql__source-label {
