@@ -43,8 +43,6 @@ from apps.files.services import (
 from apps.chat.tool_trace import tool_trace_for_message
 from apps.provenance.services import (
     get_data_access_for_tool_call,
-    parse_provenance_ask_context,
-    record_provenance_ask_event,
     resolve_provenance_detail,
     serialize_data_access_detail,
 )
@@ -383,15 +381,12 @@ def _enqueue_user_message(
     *,
     user,
     file_ids: list[str] | None = None,
-    provenance_context: dict | None = None,
 ) -> tuple[Message, Message]:
     user_message = Message.objects.create(
         conversation=conversation,
         role=Message.Role.USER,
         content=content,
     )
-    if provenance_context:
-        record_provenance_ask_event(user_message, provenance_context)
     if file_ids:
         _attach_files_to_user_message(conversation, user, user_message, file_ids)
     assistant_message = Message.objects.create(
@@ -622,20 +617,12 @@ def send_message(request, conversation_id):
         return HttpResponseBadRequest("Message content is required.")
 
     file_ids = _parse_file_ids(request)
-    provenance_context_raw = (request.POST.get("provenance_context") or "").strip()
-    provenance_context = None
-    if provenance_context_raw:
-        try:
-            provenance_context = parse_provenance_ask_context(provenance_context_raw, conversation)
-        except ValueError as exc:
-            return HttpResponseBadRequest(str(exc))
     try:
         user_message, assistant_message = _enqueue_user_message(
             conversation,
             content,
             user=request.user,
             file_ids=file_ids,
-            provenance_context=provenance_context,
         )
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))

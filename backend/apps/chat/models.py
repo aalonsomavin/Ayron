@@ -67,7 +67,6 @@ class AgentEvent(models.Model):
         FILE_UPDATED = "file_updated", "File Updated"
         ERROR = "error", "Error"
         CLARIFICATION = "clarification", "Clarification"
-        PROVENANCE_ASK = "provenance_ask", "Provenance Ask"
         DONE = "done", "Done"
 
     conversation = models.ForeignKey(

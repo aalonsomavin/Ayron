@@ -329,12 +329,7 @@ class TestProvenanceClaimApi:
         assert "ay-provenance-sql" in content
         assert "Origen de los datos" in content
         assert "Consulta de ingresos totales." in content
-        assert "data-provenance-ask" in content
-        assert "data-provenance-context" in content
-        assert str(claim.id) in content
-        assert "Productos con mayor presión competitiva" in content
-        assert '"open_source": "claim"' in content
-        assert "Ver consulta SQL" not in content
+        assert "Ver consulta SQL" in content
         assert "Conectada" not in content
         assert "data-provenance-run" not in content
         assert "Ver datos completos" not in content

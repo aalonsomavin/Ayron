@@ -1,127 +1,195 @@
 import pytest
 
-from apps.agent.events import persist_event
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.integrations.models import Integration
-from apps.provenance.models import DataAccess, DataClaim, ProvenanceLink
-from apps.provenance.services import format_provenance_ask_block, record_provenance_ask_event
+from apps.provenance.models import DataAccess
+from apps.provenance.services import (
+    preview_table_from_rows,
+    resolve_provenance_detail,
+    serialize_data_access_detail,
+    serialize_failed_sql_detail,
+)
 
 
 @pytest.fixture
-def user(db):
+def data_access(db):
     from django.contrib.auth import get_user_model
 
-    return get_user_model().objects.create_user(username="provservices", password="pass")
-
-
-@pytest.fixture
-def conversation(user):
-    return Conversation.objects.create(user=user, title="Provenance services test")
-
-
-@pytest.fixture
-def data_access(conversation):
-    integration = Integration.objects.create(
-        slug="mexar-services-test",
-        name="Mexar Pharma — Producción",
-        type=Integration.Type.POSTGRES,
-    )
+    user = get_user_model().objects.create_user(username="serialuser", password="pass")
+    conversation = Conversation.objects.create(user=user, title="Serializer test")
     message = Message.objects.create(
         conversation=conversation,
         role=Message.Role.ASSISTANT,
         content="",
     )
+    integration = Integration.objects.create(
+        slug="serial-db",
+        name="Mexar Pharma — Producción",
+        type=Integration.Type.POSTGRES,
+    )
+    AgentEvent.objects.create(
+        conversation=conversation,
+        message=message,
+        event_type=AgentEvent.EventType.TOOL_START,
+        payload={
+            "tool": "run_sql_query",
+            "tool_call_id": "call_serial",
+            "tool_label": "Consultó datos de comercial_productos",
+        },
+        sequence_number=0,
+    )
     return DataAccess.objects.create(
         conversation=conversation,
         message=message,
         integration=integration,
-        tool_call_id="call_format_test",
-        source_ref="sql_1",
+        tool_call_id="call_serial",
         access_kind=DataAccess.AccessKind.SQL,
-        request={"sql": "SELECT region, SUM(total) FROM ventas GROUP BY region"},
+        request={"sql": "SELECT sku, nombre FROM comercial_productos LIMIT 2"},
         response_summary={
-            "tables": ["ventas"],
-            "columns": ["region", "sum"],
-            "row_count": 5,
-            "user_summary": "Ventas agregadas por región.",
+            "tables": ["comercial_productos"],
+            "columns": ["sku", "nombre"],
+            "row_count": 2,
+            "truncated": False,
+            "user_summary": "Ayron revisó productos para comparar ventas.",
+            "preview_rows": [
+                {"sku": "A1", "nombre": "Asgen"},
+                {"sku": "B2", "nombre": "Kebiras"},
+            ],
         },
     )
 
 
 @pytest.mark.django_db
-class TestFormatProvenanceAskBlock:
-    def test_claim_context_includes_surface_label_and_source_refs(self, conversation, data_access):
+class TestSerializeDataAccessDetail:
+    def test_serializer_includes_preview_table(self, data_access):
+        detail = serialize_data_access_detail(data_access)
+
+        assert detail["user_summary"] == "Ayron revisó productos para comparar ventas."
+        assert detail["narrative"] == detail["user_summary"]
+        assert detail["preview_table"] is not None
+        assert detail["preview_table"]["render_rows"]
+        assert detail["tool_label"] == "Consultó datos de comercial_productos"
+
+    def test_preview_table_from_rows_returns_renderable_table(self):
+        table = preview_table_from_rows(
+            [
+                {"posicion_competitiva": "Dentro del rango mercado", "ventas_totales": "1200.50"},
+                {"posicion_competitiva": "Arriba del máximo mercado", "ventas_totales": "800"},
+            ]
+        )
+
+        assert table is not None
+        assert len(table["render_rows"]) == 2
+        assert table["render_columns"][0]["label"] == "posicion competitiva"
+
+    def test_narrative_falls_back_to_tool_label(self, data_access):
+        data_access.response_summary = {
+            **data_access.response_summary,
+            "user_summary": "",
+        }
+        data_access.save(update_fields=["response_summary"])
+
+        detail = serialize_data_access_detail(data_access)
+
+        assert detail["narrative"] == "Consultó datos de comercial_productos"
+
+
+@pytest.mark.django_db
+class TestSerializeFailedSqlDetail:
+    def test_failed_sql_detail_from_agent_events(self, db):
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.create_user(username="faileduser", password="pass")
+        conversation = Conversation.objects.create(user=user, title="Failed SQL")
         message = Message.objects.create(
             conversation=conversation,
-            role=Message.Role.USER,
-            content="Explícame los datos.",
+            role=Message.Role.ASSISTANT,
+            content="",
         )
-        claim = DataClaim.objects.create(
+        AgentEvent.objects.create(
             conversation=conversation,
             message=message,
-            claim_key="chat-chart-format",
-            surface=DataClaim.Surface.CHAT_CHART,
-            label="Ventas por región",
-            definition={},
-        )
-        ProvenanceLink.objects.create(
-            claim=claim,
-            data_access=data_access,
-            transformation="SUM por región",
-            ordinal=0,
-        )
-        record_provenance_ask_event(
-            message,
-            {
-                "open_source": "claim",
-                "claim_id": str(claim.id),
-                "tool_call_id": data_access.tool_call_id,
-                "source_ref": data_access.source_ref,
-            },
-        )
-
-        block = format_provenance_ask_block(message)
-
-        assert "## Solicitud de explicación de procedencia" in block
-        assert "gráfico inline" in block
-        assert "Ventas por región" in block
-        assert "source_refs: sql_1" in block
-        assert "ventas" in block
-        assert "SUM por región" in block
-        assert "### Cómo responder" in block
-        assert "2–4 frases" in block
-        assert "Evita en la respuesta" in block
-
-    def test_tool_trace_context_includes_narrative(self, conversation, data_access):
-        message = Message.objects.create(
-            conversation=conversation,
-            role=Message.Role.USER,
-            content="Explícame los datos.",
-        )
-        persist_event(
-            conversation=conversation,
-            event_type=AgentEvent.EventType.PROVENANCE_ASK,
+            event_type=AgentEvent.EventType.TOOL_START,
+            sequence_number=0,
             payload={
-                "open_source": "tool_trace",
-                "tool_call_id": data_access.tool_call_id,
-                "source_ref": data_access.source_ref,
+                "tool": "run_sql_query",
+                "tool_call_id": "call_fail",
+                "tool_label": "Consultó datos",
+                "input": {
+                    "sql": "DELETE FROM comercial_productos",
+                    "purpose": "Quería validar el catálogo.",
+                },
             },
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
             message=message,
+            event_type=AgentEvent.EventType.TOOL_END,
+            sequence_number=1,
+            payload={
+                "tool": "run_sql_query",
+                "tool_call_id": "call_fail",
+                "success": False,
+                "error": "Only SELECT queries are allowed",
+            },
         )
 
-        block = format_provenance_ask_block(message)
+        detail = serialize_failed_sql_detail(conversation, "call_fail")
 
-        assert "consulta SQL del tool trace" in block
-        assert "call_format_test" in block
-        assert "sql_1" in block
-        assert "Ventas agregadas por región." in block
+        assert detail is not None
+        assert detail["failed"] is True
+        assert detail["status_message"] == "Esta búsqueda no devolvió datos."
+        assert detail["narrative"] == "Quería validar el catálogo."
+        assert detail["preview_table"] is None
 
-    def test_returns_empty_without_event(self, conversation):
+    def test_failed_sql_detail_uses_tool_end_purpose(self, db):
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.create_user(username="failedend", password="pass")
+        conversation = Conversation.objects.create(user=user, title="Failed SQL end")
         message = Message.objects.create(
             conversation=conversation,
-            role=Message.Role.USER,
-            content="Hola",
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        purpose = "Quería validar el catálogo comercial."
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=message,
+            event_type=AgentEvent.EventType.TOOL_START,
+            sequence_number=0,
+            payload={
+                "tool": "run_sql_query",
+                "tool_call_id": "call_fail_end",
+                "tool_label": "Consultó datos",
+                "input": {"sql": "DELETE FROM comercial_productos"},
+            },
+        )
+        AgentEvent.objects.create(
+            conversation=conversation,
+            message=message,
+            event_type=AgentEvent.EventType.TOOL_END,
+            sequence_number=1,
+            payload={
+                "tool": "run_sql_query",
+                "tool_call_id": "call_fail_end",
+                "success": False,
+                "input": {
+                    "sql": "DELETE FROM comercial_productos",
+                    "purpose": purpose,
+                },
+            },
         )
 
-        assert format_provenance_ask_block(message) == ""
-        assert format_provenance_ask_block(None) == ""
+        detail = serialize_failed_sql_detail(conversation, "call_fail_end")
+
+        assert detail is not None
+        assert detail["narrative"] == purpose
+        assert detail["user_summary"] == purpose
+
+    def test_resolve_prefers_data_access_over_failed_events(self, data_access):
+        detail = resolve_provenance_detail(data_access.conversation, "call_serial")
+
+        assert detail is not None
+        assert detail["failed"] is False
+        assert detail["preview_table"] is not None

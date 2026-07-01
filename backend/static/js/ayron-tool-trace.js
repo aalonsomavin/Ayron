@@ -197,22 +197,19 @@
       closeBtn.addEventListener("click", closeProvenanceDialog);
     }
 
-    var askBtn = contentEl.querySelector("[data-provenance-ask]");
-    if (askBtn) {
-      askBtn.addEventListener("click", function () {
-        var message = askBtn.getAttribute("data-ask-message") || "";
-        var contextRaw = askBtn.getAttribute("data-provenance-context") || "";
-        var context = null;
-        if (contextRaw) {
-          try {
-            context = JSON.parse(contextRaw);
-          } catch (err) {
-            return;
-          }
-        }
-        if (!window.AyronChat || !window.AyronChat.submitMessage) return;
-        var sent = window.AyronChat.submitMessage(message, context);
-        if (sent) closeProvenanceDialog();
+    var copyBtn = contentEl.querySelector("[data-provenance-copy]");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function () {
+        var code = contentEl.querySelector(".ay-provenance-sql__sql code");
+        if (!code) return;
+        var text = code.textContent || "";
+        if (!navigator.clipboard || !navigator.clipboard.writeText) return;
+        navigator.clipboard.writeText(text).then(function () {
+          copyBtn.textContent = "Copiado";
+          window.setTimeout(function () {
+            copyBtn.textContent = "Copiar";
+          }, 2000);
+        });
       });
     }
   }
