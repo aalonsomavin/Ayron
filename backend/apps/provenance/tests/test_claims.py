@@ -11,7 +11,11 @@ from apps.agent.tools.table import pop_table_display, show_data_table
 from apps.agent.workspace import draft_artifact_path, write_workspace_file
 from apps.chat.models import Conversation, Message
 from apps.files.models import File
-from apps.provenance.claims import extract_claim_keys_from_html, validate_provenance_payload
+from apps.provenance.claims import (
+    create_file_deliverable_claim,
+    extract_claim_keys_from_html,
+    validate_provenance_payload,
+)
 from apps.provenance.models import DataAccess, DataClaim, ProvenanceLink
 
 User = get_user_model()
@@ -126,6 +130,32 @@ def workspace_backend():
     backend = DictWorkspaceBackend()
     set_agent_backend(backend)
     return backend
+
+
+@pytest.mark.django_db
+class TestFileDeliverableClaims:
+    def test_create_file_deliverable_claim_links_sources(self, conversation):
+        conv, message = conversation
+        set_agent_context(conv, message.conversation.user, message=message)
+        sql_access = _create_data_access(conv, message)
+        file_obj = File.objects.create(
+            uploaded_by=message.conversation.user,
+            conversation=conv,
+            original_name="reporte.xlsx",
+            mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            content_json={"format": "xlsx", "title": "Reporte", "sheets": []},
+        )
+        claim = create_file_deliverable_claim(
+            conv,
+            message,
+            file_obj,
+            "tc-file-claim",
+            ["sql_1"],
+            label="Reporte",
+        )
+        assert claim.surface == DataClaim.Surface.CHAT_FILE
+        assert claim.claim_key == f"file-deliverable-{file_obj.id}"
+        assert claim.provenance_links.first().data_access_id == sql_access.id
 
 
 @pytest.mark.django_db

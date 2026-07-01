@@ -78,6 +78,7 @@ class DataClaim(models.Model):
         DASHBOARD_KPI = "dashboard_kpi", "Dashboard KPI"
         CHAT_CHART = "chat_chart", "Chat chart"
         CHAT_TABLE = "chat_table", "Chat table"
+        CHAT_FILE = "chat_file", "Chat file"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     claim_key = models.CharField(max_length=255)

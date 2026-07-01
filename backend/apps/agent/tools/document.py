@@ -8,7 +8,7 @@ from docx import Document
 from langchain_core.tools import InjectedToolCallId, tool
 
 from apps.agent.cancellation import check_agent_not_cancelled
-from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.context import get_agent_conversation, get_agent_message, get_agent_user
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.document_style import (
     CALLOUT_VARIANTS,
@@ -43,6 +43,12 @@ from apps.files.services import (
     update_generated_file,
 )
 from apps.files.services import escape_preview_text as esc
+from apps.provenance.claims import (
+    build_provenance_manifest,
+    claim_id_for_file_deliverable,
+    create_file_deliverable_claim,
+    normalize_inline_source_refs,
+)
 
 _DOCUMENT_DISPLAY_REGISTRY: dict[str, dict] = {}
 
@@ -282,10 +288,105 @@ def _build_agent_tool_response(file_obj, action: str) -> str:
     )
 
 
-def _register_display(tool_call_id: str, file_obj, updated: bool = False) -> None:
+def _register_display(
+    tool_call_id: str,
+    file_obj,
+    updated: bool = False,
+    *,
+    claim_id: str | None = None,
+) -> None:
     payload = serialize_file_for_ui(file_obj)
     payload["updated"] = updated
+    if claim_id:
+        payload["claim_id"] = claim_id
     _DOCUMENT_DISPLAY_REGISTRY[tool_call_id] = payload
+
+
+def _sync_deliverable_provenance(
+    conversation,
+    message,
+    file_obj,
+    tool_call_id: str,
+    source_refs: list[str] | None,
+    *,
+    label: str,
+) -> str | None:
+    resolved = normalize_inline_source_refs(source_refs, None)
+    if not resolved:
+        return None
+    claim = create_file_deliverable_claim(
+        conversation,
+        message,
+        file_obj,
+        tool_call_id,
+        resolved,
+        label=label,
+    )
+    manifest = build_provenance_manifest({claim.claim_key: str(claim.id)})
+    content_json = dict(file_obj.content_json)
+    content_json["provenance"] = manifest
+    file_obj.content_json = content_json
+    file_obj.save(update_fields=["content_json"])
+    return str(claim.id)
+
+
+def _create_document_with_provenance(
+    conversation,
+    message,
+    user,
+    content_json: dict,
+    original_name: str,
+    tool_call_id: str,
+    source_refs: list[str] | None,
+) -> tuple:
+    docx_bytes = build_docx(content_json)
+    preview_html = build_preview_html(content_json)
+    file_obj = save_generated_file(
+        conversation=conversation,
+        user=user,
+        original_name=original_name,
+        content_json=content_json,
+        file_bytes=docx_bytes,
+        preview_html=preview_html,
+    )
+    claim_id = _sync_deliverable_provenance(
+        conversation,
+        message,
+        file_obj,
+        tool_call_id,
+        source_refs,
+        label=content_json.get("title") or original_name,
+    )
+    return file_obj, claim_id
+
+
+def _update_document_with_provenance(
+    conversation,
+    message,
+    file_obj,
+    content_json: dict,
+    tool_call_id: str,
+    source_refs: list[str] | None,
+) -> tuple:
+    docx_bytes = build_docx(content_json)
+    preview_html = build_preview_html(content_json)
+    file_obj = update_generated_file(
+        file_obj=file_obj,
+        content_json=content_json,
+        file_bytes=docx_bytes,
+        preview_html=preview_html,
+    )
+    claim_id = _sync_deliverable_provenance(
+        conversation,
+        message,
+        file_obj,
+        tool_call_id,
+        source_refs,
+        label=content_json.get("title") or file_obj.original_name,
+    )
+    if claim_id is None:
+        claim_id = claim_id_for_file_deliverable(file_obj)
+    return file_obj, claim_id
 
 
 @tool
@@ -294,6 +395,7 @@ def create_document(
     sections: list[dict],
     subtitle: str = "",
     filename: str = "",
+    source_refs: list[str] | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Create a Word document (.docx) for the user in the chat.
@@ -307,11 +409,16 @@ def create_document(
     bold, row styles (total, subtotal), and optional caption.
     The document appears in the chat; do not repeat its content in your text response.
 
+    Optional source_refs links this document to prior data sources for provenance.
+    Use source_ref values from run_sql_query (sql_N) or get_spreadsheet on uploads
+    (chat_sheet_N).
+
     To modify an existing document later, use update_document with the same file_id.
     """
     check_agent_not_cancelled()
     conversation = get_agent_conversation()
     user = get_agent_user()
+    message = get_agent_message()
     if conversation is None or user is None:
         return build_tool_error_response("No conversation context")
 
@@ -322,20 +429,21 @@ def create_document(
 
     try:
         original_name = _sanitize_filename(filename, content_json["title"])
-        docx_bytes = build_docx(content_json)
-        preview_html = build_preview_html(content_json)
-        file_obj = save_generated_file(
-            conversation=conversation,
-            user=user,
-            original_name=original_name,
-            content_json=content_json,
-            file_bytes=docx_bytes,
-            preview_html=preview_html,
+        file_obj, claim_id = _create_document_with_provenance(
+            conversation,
+            message,
+            user,
+            content_json,
+            original_name,
+            tool_call_id,
+            source_refs,
         )
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
     except Exception as exc:
         return build_tool_error_response(str(exc))
 
-    _register_display(tool_call_id, file_obj, updated=False)
+    _register_display(tool_call_id, file_obj, updated=False, claim_id=claim_id)
     return _build_agent_tool_response(file_obj, "created")
 
 
@@ -385,15 +493,18 @@ def update_document(
     title: str | None = None,
     subtitle: str | None = None,
     sections: list[dict] | None = None,
+    source_refs: list[str] | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Update an existing Word document by file_id.
 
     Provide only the fields you want to change. sections replaces all sections when provided.
     Use a descriptive `title` for the document header when updating the document name.
+    Optional source_refs updates provenance links for this deliverable.
     """
     check_agent_not_cancelled()
     conversation = get_agent_conversation()
+    message = get_agent_message()
     if conversation is None:
         return build_tool_error_response("No conversation context")
 
@@ -410,16 +521,18 @@ def update_document(
         return build_tool_error_response(str(exc))
 
     try:
-        docx_bytes = build_docx(content_json)
-        preview_html = build_preview_html(content_json)
-        file_obj = update_generated_file(
-            file_obj=file_obj,
-            content_json=content_json,
-            file_bytes=docx_bytes,
-            preview_html=preview_html,
+        file_obj, claim_id = _update_document_with_provenance(
+            conversation,
+            message,
+            file_obj,
+            content_json,
+            tool_call_id,
+            source_refs,
         )
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
     except Exception as exc:
         return build_tool_error_response(str(exc))
 
-    _register_display(tool_call_id, file_obj, updated=True)
+    _register_display(tool_call_id, file_obj, updated=True, claim_id=claim_id)
     return _build_agent_tool_response(file_obj, "updated")

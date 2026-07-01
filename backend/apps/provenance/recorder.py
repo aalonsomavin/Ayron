@@ -1,7 +1,7 @@
 from apps.agent.context import get_agent_conversation, get_agent_message
 from apps.integrations.services import get_integration_for_data_access_tool
 from apps.provenance.models import DataAccess
-from apps.provenance.source_refs import allocate_source_ref
+from apps.provenance.source_refs import allocate_source_ref, ref_kind_for_data_access
 
 
 def record_data_access(
@@ -40,11 +40,8 @@ def record_data_access(
             "response_summary": response_summary,
         },
     )
-    if (
-        created
-        and access_kind == DataAccess.AccessKind.SQL
-        and not data_access.source_ref
-    ):
-        data_access.source_ref = allocate_source_ref(conversation)
+    ref_kind = ref_kind_for_data_access(access_kind, response_summary)
+    if created and ref_kind and not data_access.source_ref:
+        data_access.source_ref = allocate_source_ref(conversation, ref_kind)
         data_access.save(update_fields=["source_ref"])
     return data_access

@@ -196,3 +196,10 @@ Principios adaptados para documentos profesionales generados con las tools de Ay
 - Solo añade una frase breve si aporta contexto (ej. "Informe actualizado con los datos de mayo."),
   o termina sin texto.
 - La tool devuelve `agent_instruction` confirmando que no debes repetir el contenido.
+
+## Trazabilidad
+
+- Si el documento usa datos de SQL o de un Excel adjunto, pasa `source_refs` en
+  `create_document` / `update_document` (p. ej. `["sql_1", "chat_sheet_1"]`).
+- Los refs provienen de `run_sql_query` (`sql_N`) o de `get_spreadsheet` en adjuntos (`chat_sheet_N`).
+- El usuario verá «Ver datos de origen» junto al badge del archivo en el chat.

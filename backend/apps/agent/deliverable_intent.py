@@ -62,6 +62,14 @@ _ANALYTICAL_ONLY_RE = re.compile(
     r"^\s*(?:¿|cu[aá]nto|cu[aá]les|cu[aá]l|qu[eé]\s+(?:es|son)|top\s+\d+|lista(?:r)?|mu[eé]strame|dime)\b",
     re.IGNORECASE,
 )
+_PROVENANCE_ASK_RE = re.compile(
+    r"\b("
+    r"de\s+d[oó]nde\s+(?:salieron|salió|viene|vienen|provienen|obtuvieron|obtuvo)\s+(?:los\s+)?datos|"
+    r"origen\s+de\s+(?:los\s+)?datos|"
+    r"explic[aá][^.\n]{0,80}de\s+d[oó]nde\s+(?:salieron|salió|viene|vienen|provienen)"
+    r")\b",
+    re.IGNORECASE,
+)
 _DELIVERABLE_REF_RE = re.compile(
     r"\b("
     r"generaste|generado|generada|anterior|previo|previa|"
@@ -116,6 +124,9 @@ def detect_deliverable_intent(
 ) -> DeliverableIntent:
     text = (user_message or "").strip()
     if not text:
+        return DeliverableIntent.NONE
+
+    if _PROVENANCE_ASK_RE.search(text):
         return DeliverableIntent.NONE
 
     if _is_update_intent(text):

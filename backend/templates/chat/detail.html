@@ -53,7 +53,7 @@
                             <div class="ay-msg-agent__files">
                               {% for file in block.files %}
                                 {% if file.role != "context" %}
-                                  {% include "components/file_card.html" with file=file active=False %}
+                                  {% include "components/file_deliverable.html" with file=file active=False %}
                                 {% endif %}
                               {% endfor %}
                             </div>

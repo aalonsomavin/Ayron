@@ -88,6 +88,14 @@
           "</span>"
       );
     }
+    if (access.sheets && access.sheets.length) {
+      chips.push(
+        '<span class="ay-provenance-panel__meta-chip">' +
+          '<span class="ay-provenance-panel__meta-chip-label">Hojas</span> ' +
+          escapeHtml(access.sheets.join(", ")) +
+          "</span>"
+      );
+    }
     if (access.columns && access.columns.length) {
       chips.push(
         '<span class="ay-provenance-panel__meta-chip">' +
@@ -166,6 +174,13 @@
             escapeHtml(access.sql) +
             "</code></pre>" +
           "</div>" +
+          accessMetaHtml(access) +
+        "</div>"
+      );
+    } else if (access && access.access_kind === "spreadsheet") {
+      parts.push(
+        '<div class="ay-provenance-panel__section">' +
+          '<div class="ay-provenance-panel__section-label">Datos del archivo</div>' +
           accessMetaHtml(access) +
         "</div>"
       );
@@ -548,6 +563,7 @@
     initArtifactPanel: initArtifactPanel,
     openChatClaim: openChatClaim,
     appendInlineProvenanceFooter: appendInlineProvenanceFooter,
+    createOriginButton: createOriginButton,
     claimUrl: claimUrl,
     claimByIdUrl: claimByIdUrl,
     renderPanelContent: renderPanelContent,

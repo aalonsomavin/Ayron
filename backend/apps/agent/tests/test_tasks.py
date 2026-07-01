@@ -75,9 +75,56 @@ class TestPersistEvent:
             "message_id": assistant_message.id,
         }
 
+    def test_persist_file_created_hydrates_claim_id(self, conversation_with_messages):
+        from apps.files.models import File, XLSX_MIME
+        from apps.provenance.claims import build_provenance_manifest
+        from apps.provenance.models import DataClaim
 
-@pytest.mark.django_db
-class TestBuildStreamInput:
+        conversation, _, assistant_message = conversation_with_messages
+        file_obj = File.objects.create(
+            uploaded_by=conversation.user,
+            conversation=conversation,
+            original_name="reporte.xlsx",
+            mime_type=XLSX_MIME,
+            content_json={"format": "xlsx", "title": "Reporte", "sheets": []},
+        )
+        claim = DataClaim.objects.create(
+            conversation=conversation,
+            message=assistant_message,
+            surface=DataClaim.Surface.CHAT_FILE,
+            claim_key=f"file-deliverable-{file_obj.id}",
+            label="Reporte",
+            artifact_file=file_obj,
+        )
+        manifest = build_provenance_manifest({claim.claim_key: str(claim.id)})
+        content_json = dict(file_obj.content_json)
+        content_json["provenance"] = manifest
+        file_obj.content_json = content_json
+        file_obj.save(update_fields=["content_json"])
+
+        with patch("apps.agent.events.get_redis_client") as mock_get_redis:
+            mock_redis = MagicMock()
+            mock_get_redis.return_value = mock_redis
+            persist_event(
+                conversation=conversation,
+                event_type=AgentEvent.EventType.FILE_CREATED,
+                payload={
+                    "file_id": str(file_obj.id),
+                    "name": "reporte.xlsx",
+                    "ext": "XLSX",
+                    "kind": "sheet",
+                    "format": "xlsx",
+                    "meta": "Spreadsheet · 1 hoja",
+                    "version": 1,
+                    "download_url": f"/files/{file_obj.id}/download/",
+                    "preview_url": f"/files/{file_obj.id}/preview/",
+                    "updated": False,
+                },
+                message=assistant_message,
+            )
+
+        published = json.loads(mock_redis.publish.call_args.args[1])
+        assert published["claim_id"] == str(claim.id)
     def test_bootstrap_when_no_checkpoint(self, conversation_with_messages):
         conversation, user_message, assistant_message = conversation_with_messages
         with patch("apps.agent.tasks.has_checkpoint", return_value=False):

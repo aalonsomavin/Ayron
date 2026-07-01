@@ -33,6 +33,10 @@ class TestDetectDeliverableIntent:
             ("¿Cuáles son los 5 artistas top?", DeliverableIntent.NONE),
             ("¿Cuánto vendimos en mayo?", DeliverableIntent.NONE),
             ("Muéstrame el top 10 de álbumes", DeliverableIntent.NONE),
+            (
+                "Explícame de forma sencilla de dónde salieron los datos del archivo «Comparativo Excel competencia vs catálogo Mexar».",
+                DeliverableIntent.NONE,
+            ),
             ("", DeliverableIntent.NONE),
         ],
     )

@@ -6,6 +6,7 @@ from apps.agent.tools.table import prepare_table_for_render, validate_table_inpu
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.integrations.services import get_integration_for_data_access_tool
 from apps.provenance.models import DataAccess, DataClaim
+from apps.provenance.spreadsheet_access import spreadsheet_source_label
 
 RUN_SQL_QUERY_TOOL = "run_sql_query"
 FAILED_SQL_STATUS_MESSAGE = "Esta búsqueda no devolvió datos."
@@ -13,12 +14,14 @@ FAILED_SQL_STATUS_MESSAGE = "Esta búsqueda no devolvió datos."
 SURFACE_LABELS = {
     DataClaim.Surface.CHAT_CHART: "gráfico inline",
     DataClaim.Surface.CHAT_TABLE: "tabla inline",
+    DataClaim.Surface.CHAT_FILE: "archivo generado",
     DataClaim.Surface.DASHBOARD_KPI: "KPI de dashboard",
 }
 
 ELEMENT_TYPE_LABELS = {
     DataClaim.Surface.CHAT_CHART: "gráfico",
     DataClaim.Surface.CHAT_TABLE: "tabla",
+    DataClaim.Surface.CHAT_FILE: "archivo",
 }
 
 
@@ -34,7 +37,7 @@ def get_data_access_for_tool_call(conversation, tool_call_id: str) -> DataAccess
             conversation=conversation,
             tool_call_id=tool_call_id,
         )
-        .select_related("integration")
+        .select_related("integration", "file")
         .first()
     )
 
@@ -188,20 +191,53 @@ def preview_table_from_rows(preview_rows: list[dict]) -> dict | None:
 
 
 def serialize_data_access_detail(data_access: DataAccess) -> dict:
-    integration_data = _serialize_integration(data_access.integration)
-
     request_data = data_access.request or {}
     response_summary = data_access.response_summary or {}
     preview_rows = response_summary.get("preview_rows") or []
     user_summary = response_summary.get("user_summary") or ""
     tool_label = get_tool_start_label(data_access)
 
+    if data_access.access_kind == DataAccess.AccessKind.SPREADSHEET:
+        source_label = spreadsheet_source_label(data_access)
+        integration_data = None
+        if source_label:
+            integration_data = {"source_label": source_label}
+        sheets = response_summary.get("sheets") or []
+        return {
+            "tool_call_id": data_access.tool_call_id,
+            "source_ref": data_access.source_ref,
+            "access_kind": data_access.access_kind,
+            "source_origin": response_summary.get("source_origin") or "",
+            "sql": "",
+            "tables": [],
+            "columns": response_summary.get("columns") or [],
+            "sheets": sheets,
+            "file_name": response_summary.get("file_name") or "",
+            "row_count": response_summary.get("row_count"),
+            "truncated": bool(response_summary.get("truncated")),
+            "max_rows": response_summary.get("max_rows"),
+            "executed_at": data_access.executed_at,
+            "integration": integration_data,
+            "user_summary": user_summary,
+            "tool_label": tool_label,
+            "narrative": user_summary or tool_label,
+            "preview_table": preview_table_from_rows(preview_rows),
+            "has_preview_rows": bool(preview_rows),
+            "has_sql": False,
+        }
+
+    integration_data = _serialize_integration(data_access.integration)
+
     return {
         "tool_call_id": data_access.tool_call_id,
         "source_ref": data_access.source_ref,
+        "access_kind": data_access.access_kind,
+        "source_origin": "",
         "sql": request_data.get("sql") or "",
         "tables": response_summary.get("tables") or [],
         "columns": response_summary.get("columns") or [],
+        "sheets": [],
+        "file_name": "",
         "row_count": response_summary.get("row_count"),
         "truncated": bool(response_summary.get("truncated")),
         "max_rows": response_summary.get("max_rows"),
@@ -464,6 +500,10 @@ def format_provenance_ask_block(user_message: Message | None) -> str:
             "",
             "Tras la tool, escribe **una sola frase** de cierre (máx. 25 palabras) en lenguaje de negocio. "
             "No repitas el diagrama ni pegues SQL en el texto.",
+            "",
+            "**No generes ni actualices entregables** en este turno: no invoques `create_spreadsheet`, "
+            "`update_spreadsheet`, `create_document`, `update_document`, `publish_html_artifact` "
+            "ni `write_todos` para crear archivos.",
             "",
         ]
     )

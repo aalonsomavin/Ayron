@@ -12,6 +12,7 @@ from django.utils.timesince import timesince
 
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.files.models import DOCX_MIME, HTML_MIME, XLSX_MIME, File, SavedDashboard
+from apps.provenance.claims import claim_id_for_file_deliverable
 
 
 def _section_count(content_json: dict) -> int:
@@ -111,6 +112,8 @@ def hydrate_file_payload_for_ui(payload: dict, *, conversation_id=None, user=Non
     fresh = serialize_file_for_ui(file_obj, user=user)
     if normalized.get("updated"):
         fresh["updated"] = True
+    if normalized.get("claim_id"):
+        fresh["claim_id"] = normalized["claim_id"]
     return fresh
 
 
@@ -141,6 +144,9 @@ def serialize_file_for_ui(file_obj: File, *, user=None) -> dict:
         payload["open_expanded"] = _html_kind(file_obj.content_json) == "dashboard"
     if user is not None and payload["kind"] == "dashboard":
         payload["saved"] = is_dashboard_saved(user, file_obj.id)
+    claim_id = claim_id_for_file_deliverable(file_obj)
+    if claim_id:
+        payload["claim_id"] = claim_id
     return payload
 
 

@@ -105,7 +105,7 @@
   }
 
   function filePayloadFromEvent(event) {
-    return {
+    var payload = {
       file_id: event.file_id,
       name: event.name,
       ext: event.ext || "DOCX",
@@ -118,7 +118,9 @@
       preview_url: event.preview_url,
       open_expanded: Boolean(event.open_expanded),
       saved: Boolean(event.saved),
+      claim_id: event.claim_id || "",
     };
+    return payload;
   }
 
   function metaSuffix(meta) {
@@ -175,6 +177,17 @@
       btn.querySelector(".ay-file-card__ext").textContent = file.ext || "DOCX";
     }
     return btn;
+  }
+
+  function wrapFileDeliverable(card, claimId) {
+    if (!claimId) return card;
+    var wrap = document.createElement("div");
+    wrap.className = "ay-file-deliverable";
+    wrap.appendChild(card);
+    if (window.AyronProvenance && window.AyronProvenance.createOriginButton) {
+      wrap.appendChild(window.AyronProvenance.createOriginButton(claimId));
+    }
+    return wrap;
   }
 
   function downloadUrlForFile(file) {
@@ -562,7 +575,7 @@
 
     renderFileCard: function (file, container) {
       const card = createFileCard(file, false);
-      container.appendChild(card);
+      container.appendChild(wrapFileDeliverable(card, file.claim_id));
       return card;
     },
 

@@ -1,0 +1,6 @@
+<div class="ay-file-deliverable">
+  {% include "components/file_card.html" with file=file active=active %}
+  {% if file.claim_id %}
+    {% include "components/provenance_origin_btn.html" with claim_id=file.claim_id %}
+  {% endif %}
+</div>

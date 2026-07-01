@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import Max
 
 from apps.chat.models import AgentEvent, Conversation, Message
+from apps.files.services import hydrate_file_payload_for_ui
 
 _redis_client = None
 
@@ -53,18 +54,27 @@ def persist_event(
     payload: dict,
     message: Message | None,
 ) -> tuple[int, AgentEvent]:
+    stored_payload = dict(payload)
+    if event_type in (
+        AgentEvent.EventType.FILE_CREATED,
+        AgentEvent.EventType.FILE_UPDATED,
+    ):
+        stored_payload = hydrate_file_payload_for_ui(
+            stored_payload,
+            conversation_id=conversation.id,
+        )
     seq = next_sequence_number(conversation)
     event = AgentEvent.objects.create(
         conversation=conversation,
         message=message,
         event_type=event_type,
-        payload=payload,
+        payload=stored_payload,
         sequence_number=seq,
     )
     event_message = build_event_message(
         seq=seq,
         event_type=event_type,
-        payload=payload,
+        payload=stored_payload,
         message_id=message.id if message else None,
     )
     publish_event(conversation.id, event_message)

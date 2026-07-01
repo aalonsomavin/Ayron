@@ -9,12 +9,13 @@ from apps.agent.cancellation import AgentCancelledError, clear_cancel, is_cancel
 from apps.agent.checkpoint import agent_config, has_checkpoint, rollback_thread_to_turn
 from apps.agent.clarification_interrupt import find_clarification_tool_call, has_clarification_interrupt
 from apps.agent.context import clear_sql_tool_trace_inputs, set_agent_context
-from apps.agent.deliverable_intent import detect_deliverable_intent
+from apps.agent.deliverable_intent import DeliverableIntent, detect_deliverable_intent
 from apps.agent.events import persist_event
 from apps.agent.runner import create_agent
 from apps.agent.streaming import StreamEventHandler
 from apps.chat.models import AgentEvent, Conversation, Message
 from apps.files.services import get_context_attachments_for_message
+from apps.provenance.services import user_message_has_provenance_ask
 
 logger = logging.getLogger(__name__)
 
@@ -154,10 +155,14 @@ def run_agent_conversation(
 
     agent = None
     try:
-        deliverable_intent = detect_deliverable_intent(
-            user_message.content,
-            context_attachments=get_context_attachments_for_message(user_message),
-        )
+        has_provenance_ask = user_message_has_provenance_ask(user_message)
+        if has_provenance_ask:
+            deliverable_intent = DeliverableIntent.NONE
+        else:
+            deliverable_intent = detect_deliverable_intent(
+                user_message.content,
+                context_attachments=get_context_attachments_for_message(user_message),
+            )
         set_agent_context(
             conversation,
             conversation.user,

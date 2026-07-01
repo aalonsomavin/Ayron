@@ -6,15 +6,19 @@ import pytest
 from django.contrib.auth import get_user_model
 from openpyxl import load_workbook
 
-from apps.agent.context import set_agent_context
+from apps.agent.context import reset_agent_context, set_agent_context
 from apps.agent.tools.spreadsheet import (
     build_preview_html,
     build_xlsx,
     create_spreadsheet,
     get_spreadsheet,
+    pop_spreadsheet_display,
     update_spreadsheet,
     validate_content_json,
 )
+from apps.chat.models import Message
+from apps.integrations.models import Integration
+from apps.provenance.models import DataAccess, DataClaim
 from apps.agent.tools.spreadsheet_content import revalidate_xlsx_content_json
 from apps.agent.tools.table_style_tokens import COLORS
 from apps.chat.models import Conversation
@@ -34,6 +38,13 @@ def invoke_tool(tool, tool_call_id, **kwargs):
         }
     )
     return result.content if hasattr(result, "content") else result
+
+
+@pytest.fixture(autouse=True)
+def _reset_agent_context():
+    reset_agent_context()
+    yield
+    reset_agent_context()
 
 
 @pytest.fixture
@@ -354,3 +365,97 @@ class TestSpreadsheetTool:
         assert "ay-sheet-preview__cell--fill-success_light" in html
         assert "ay-sheet-preview__cell--striped" in html
         assert "ay-sheet-preview__cell--total" in html
+
+    def test_get_spreadsheet_context_file_records_chat_sheet_ref(self, user, conversation):
+        from apps.files.parsers import parse_upload
+        from apps.files.services import save_uploaded_file
+        from apps.files.tests.test_parsers_xlsx import build_sample_xlsx_bytes
+
+        message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        set_agent_context(conversation, user, message=message)
+        parsed = parse_upload(build_sample_xlsx_bytes(), "ventas.xlsx")
+        file_obj = save_uploaded_file(
+            conversation=conversation,
+            user=user,
+            original_name="ventas.xlsx",
+            file_bytes=build_sample_xlsx_bytes(),
+            parsed=parsed,
+        )
+        result = json.loads(
+            invoke_tool(
+                get_spreadsheet,
+                "tc-read-upload",
+                file_id=str(file_obj.id),
+                purpose="Revisé el adjunto del usuario.",
+            )
+        )
+        assert result["ok"] is True
+        assert result["source_ref"] == "chat_sheet_1"
+        data_access = DataAccess.objects.get(conversation=conversation, tool_call_id="tc-read-upload")
+        assert data_access.access_kind == DataAccess.AccessKind.SPREADSHEET
+        assert data_access.file_id == file_obj.id
+        assert data_access.response_summary["source_origin"] == "chat_upload"
+
+    def test_get_spreadsheet_deliverable_does_not_record_source_ref(self, user, conversation, sample_content):
+        set_agent_context(conversation, user)
+        created = json.loads(
+            invoke_tool(
+                create_spreadsheet,
+                "tc-deliverable-read",
+                title=sample_content["title"],
+                sheets=sample_content["sheets"],
+            )
+        )
+        result = json.loads(
+            invoke_tool(get_spreadsheet, "tc-read-deliverable", file_id=created["file_id"])
+        )
+        assert result["ok"] is True
+        assert "source_ref" not in result
+        assert not DataAccess.objects.filter(conversation=conversation, tool_call_id="tc-read-deliverable").exists()
+
+    def test_create_spreadsheet_with_source_refs_sets_claim(self, user, conversation, sample_content):
+        message = Message.objects.create(
+            conversation=conversation,
+            role=Message.Role.ASSISTANT,
+            content="",
+        )
+        set_agent_context(conversation, user, message=message)
+        integration = Integration.objects.create(
+            slug="prov-db",
+            name="Prov DB",
+            type=Integration.Type.POSTGRES,
+        )
+        DataAccess.objects.create(
+            conversation=conversation,
+            message=message,
+            integration=integration,
+            tool_call_id="sql-existing",
+            access_kind=DataAccess.AccessKind.SQL,
+            source_ref="sql_1",
+            request={"sql": "SELECT 1"},
+            response_summary={"row_count": 1},
+        )
+
+        result = json.loads(
+            invoke_tool(
+                create_spreadsheet,
+                "tc-create-prov",
+                title=sample_content["title"],
+                sheets=sample_content["sheets"],
+                source_refs=["sql_1"],
+            )
+        )
+        assert result["ok"] is True
+        display = pop_spreadsheet_display("tc-create-prov")
+        assert display["claim_id"]
+        claim = DataClaim.objects.get(id=display["claim_id"])
+        assert claim.surface == DataClaim.Surface.CHAT_FILE
+        assert claim.provenance_links.count() == 1
+        assert claim.provenance_links.first().data_access.source_ref == "sql_1"
+        file_obj = File.objects.get(id=result["file_id"])
+        ui_payload = serialize_file_for_ui(file_obj, user=user)
+        assert ui_payload["claim_id"] == display["claim_id"]

@@ -139,3 +139,10 @@ Las filas pueden ser listas simples o objetos con `style` (`total`, `subtotal`) 
 - Colores hex arbitrarios, merge de celdas, freeze panes, anchos de columna
 - Fórmulas Excel, formato numérico nativo, formato condicional automático
 - Bordes personalizados por celda
+
+## Trazabilidad
+
+- Tras leer un Excel **adjunto** con `get_spreadsheet`, la respuesta incluye `source_ref` (`chat_sheet_1`, …).
+- Al crear o actualizar un entregable con datos de SQL o de adjuntos, pasa `source_refs` en
+  `create_spreadsheet` / `update_spreadsheet` (p. ej. `["sql_1", "chat_sheet_1"]`).
+- El usuario verá «Ver datos de origen» junto al badge del archivo en el chat.

@@ -202,6 +202,15 @@ de la base; no inventes cifras.
 - En tablas o gráficos inline del chat, pasa `source_refs` en `show_data_table` / `show_chart` \
   cuando quieras trazabilidad.
 
+## Trazabilidad en archivos Excel subidos y entregables
+
+- Tras leer un Excel **adjunto/subido** con `get_spreadsheet`, usa el `source_ref` devuelto \
+  (`chat_sheet_1`, `chat_sheet_2`, …) igual que los `sql_N`.
+- Al generar un Excel o Word con datos de SQL o de archivos subidos, pasa `source_refs` en \
+  `create_spreadsheet`, `update_spreadsheet`, `create_document` o `update_document`.
+- Puedes combinar refs (`sql_1`, `chat_sheet_1`) cuando el entregable mezcla fuentes.
+- No uses refs genéricos ni `tool_call_id` como sustituto de `source_ref`.
+
 ## Consultas de aclaración
 
 - Si la petición tiene ambigüedades que cambiarían cómo ejecutas la tarea (alcance, \
@@ -240,12 +249,15 @@ def build_system_prompt(
     if attachments_block:
         prompt = f"{prompt}\n{attachments_block}"
     provenance_block = format_provenance_ask_block(user_message_obj)
+    has_provenance_ask = user_message_has_provenance_ask(user_message_obj)
     if provenance_block:
         prompt = f"{prompt}\n{provenance_block}"
-    intent = detect_deliverable_intent(
-        user_message_text,
-        context_attachments=get_context_attachments_for_message(user_message_obj),
-    )
+    intent = DeliverableIntent.NONE
+    if not has_provenance_ask:
+        intent = detect_deliverable_intent(
+            user_message_text,
+            context_attachments=get_context_attachments_for_message(user_message_obj),
+        )
     if intent != DeliverableIntent.NONE:
         block = format_deliverable_prompt_block(intent)
         if block:

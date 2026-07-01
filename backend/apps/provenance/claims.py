@@ -177,6 +177,43 @@ def normalize_inline_source_refs(
     return refs or None
 
 
+def create_file_deliverable_claim(
+    conversation,
+    message,
+    file_obj,
+    display_tool_call_id: str,
+    source_refs: list[str],
+    *,
+    label: str,
+    definition: dict | None = None,
+) -> DataClaim:
+    data_access_map = resolve_source_identifiers(conversation, source_refs)
+    claim_key = f"file-deliverable-{file_obj.id}"
+
+    claim, _created = DataClaim.objects.update_or_create(
+        artifact_file=file_obj,
+        claim_key=claim_key,
+        defaults={
+            "conversation": conversation,
+            "message": message,
+            "surface": DataClaim.Surface.CHAT_FILE,
+            "label": label,
+            "definition": definition or {},
+            "artifact_version": file_obj.version,
+        },
+    )
+    _replace_claim_links(claim, source_refs, data_access_map, "")
+    return claim
+
+
+def claim_id_for_file_deliverable(file_obj) -> str | None:
+    provenance = (file_obj.content_json or {}).get("provenance") or {}
+    claim_keys = provenance.get("claim_keys") or {}
+    deliverable_key = f"file-deliverable-{file_obj.id}"
+    claim_id = claim_keys.get(deliverable_key)
+    return str(claim_id) if claim_id else None
+
+
 def create_inline_claim(
     conversation,
     message,

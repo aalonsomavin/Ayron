@@ -8,7 +8,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from apps.agent.cancellation import check_agent_not_cancelled
-from apps.agent.context import get_agent_conversation, get_agent_user
+from apps.agent.context import get_agent_conversation, get_agent_message, get_agent_user
 from apps.agent.tools.errors import build_tool_error_response
 from apps.agent.tools.spreadsheet_content import (
     revalidate_xlsx_content_json,
@@ -27,11 +27,21 @@ from apps.files.services import escape_preview_text as esc
 from apps.files.services import (
     context_update_error,
     get_file_for_conversation,
+    is_context_file,
     save_generated_file,
     serialize_file_for_agent,
     serialize_file_for_ui,
     update_generated_file,
 )
+from apps.provenance.claims import (
+    build_provenance_manifest,
+    claim_id_for_file_deliverable,
+    create_file_deliverable_claim,
+    normalize_inline_source_refs,
+)
+from apps.provenance.models import DataAccess
+from apps.provenance.recorder import record_data_access
+from apps.provenance.spreadsheet_access import build_spreadsheet_access_summary
 
 _SPREADSHEET_DISPLAY_REGISTRY: dict[str, dict] = {}
 
@@ -312,10 +322,106 @@ def _build_agent_tool_response(file_obj, action: str) -> str:
     )
 
 
-def _register_display(tool_call_id: str, file_obj, updated: bool = False) -> None:
+def _register_display(
+    tool_call_id: str,
+    file_obj,
+    updated: bool = False,
+    *,
+    claim_id: str | None = None,
+) -> None:
     payload = serialize_file_for_ui(file_obj)
     payload["updated"] = updated
+    if claim_id:
+        payload["claim_id"] = claim_id
     _SPREADSHEET_DISPLAY_REGISTRY[tool_call_id] = payload
+
+
+def _sync_deliverable_provenance(
+    conversation,
+    message,
+    file_obj,
+    tool_call_id: str,
+    source_refs: list[str] | None,
+    *,
+    label: str,
+) -> str | None:
+    resolved = normalize_inline_source_refs(source_refs, None)
+    if not resolved:
+        return None
+    claim = create_file_deliverable_claim(
+        conversation,
+        message,
+        file_obj,
+        tool_call_id,
+        resolved,
+        label=label,
+    )
+    manifest = build_provenance_manifest({claim.claim_key: str(claim.id)})
+    content_json = dict(file_obj.content_json)
+    content_json["provenance"] = manifest
+    file_obj.content_json = content_json
+    file_obj.save(update_fields=["content_json"])
+    return str(claim.id)
+
+
+def _create_spreadsheet_with_provenance(
+    conversation,
+    message,
+    user,
+    content_json: dict,
+    original_name: str,
+    tool_call_id: str,
+    source_refs: list[str] | None,
+) -> tuple:
+    xlsx_bytes = build_xlsx(content_json)
+    preview = build_preview_html(content_json)
+    file_obj = save_generated_file(
+        conversation=conversation,
+        user=user,
+        original_name=original_name,
+        content_json=content_json,
+        file_bytes=xlsx_bytes,
+        preview_html=preview,
+        mime_type=XLSX_MIME,
+    )
+    claim_id = _sync_deliverable_provenance(
+        conversation,
+        message,
+        file_obj,
+        tool_call_id,
+        source_refs,
+        label=content_json.get("title") or original_name,
+    )
+    return file_obj, claim_id
+
+
+def _update_spreadsheet_with_provenance(
+    conversation,
+    message,
+    file_obj,
+    content_json: dict,
+    tool_call_id: str,
+    source_refs: list[str] | None,
+) -> tuple:
+    xlsx_bytes = build_xlsx(content_json)
+    preview = build_preview_html(content_json)
+    file_obj = update_generated_file(
+        file_obj=file_obj,
+        content_json=content_json,
+        file_bytes=xlsx_bytes,
+        preview_html=preview,
+    )
+    claim_id = _sync_deliverable_provenance(
+        conversation,
+        message,
+        file_obj,
+        tool_call_id,
+        source_refs,
+        label=content_json.get("title") or file_obj.original_name,
+    )
+    if claim_id is None:
+        claim_id = claim_id_for_file_deliverable(file_obj)
+    return file_obj, claim_id
 
 
 @tool
@@ -323,6 +429,7 @@ def create_spreadsheet(
     title: str,
     sheets: list[dict],
     filename: str = "",
+    source_refs: list[str] | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Create an Excel spreadsheet (.xlsx) for the user in the chat.
@@ -335,11 +442,16 @@ def create_spreadsheet(
     success_light, warning_light, danger_light, accent), and `bold`.
     The spreadsheet appears in the chat; do not repeat its content in your text response.
 
+    Optional source_refs links this file to prior data sources for provenance.
+    Use source_ref values from run_sql_query (sql_N) or get_spreadsheet on uploads
+    (chat_sheet_N).
+
     To modify an existing spreadsheet later, use update_spreadsheet with the same file_id.
     """
     check_agent_not_cancelled()
     conversation = get_agent_conversation()
     user = get_agent_user()
+    message = get_agent_message()
     if conversation is None or user is None:
         return build_tool_error_response("No conversation context")
 
@@ -350,29 +462,35 @@ def create_spreadsheet(
 
     try:
         original_name = _sanitize_filename(filename, content_json["title"])
-        xlsx_bytes = build_xlsx(content_json)
-        preview = build_preview_html(content_json)
-        file_obj = save_generated_file(
-            conversation=conversation,
-            user=user,
-            original_name=original_name,
-            content_json=content_json,
-            file_bytes=xlsx_bytes,
-            preview_html=preview,
-            mime_type=XLSX_MIME,
+        file_obj, claim_id = _create_spreadsheet_with_provenance(
+            conversation,
+            message,
+            user,
+            content_json,
+            original_name,
+            tool_call_id,
+            source_refs,
         )
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
     except Exception as exc:
         return build_tool_error_response(str(exc))
 
-    _register_display(tool_call_id, file_obj, updated=False)
+    _register_display(tool_call_id, file_obj, updated=False, claim_id=claim_id)
     return _build_agent_tool_response(file_obj, "created")
 
 
 @tool
-def get_spreadsheet(file_id: str) -> str:
+def get_spreadsheet(
+    file_id: str,
+    purpose: str = "",
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> str:
     """Read the full structured content of a spreadsheet by file_id.
 
     Call this before update_spreadsheet when you need the current sheets.
+    Optional purpose describes why you are reading the file (used for provenance).
+    When reading an uploaded context file, the response includes source_ref (chat_sheet_N).
     """
     conversation = get_agent_conversation()
     if conversation is None:
@@ -384,13 +502,31 @@ def get_spreadsheet(file_id: str) -> str:
     if file_obj.format_key != "xlsx":
         return build_tool_error_response("File is not a spreadsheet")
 
-    return json.dumps(
-        {
-            "ok": True,
-            **serialize_file_for_agent(file_obj),
-            "content_json": file_obj.content_json,
-        }
-    )
+    content_json = file_obj.content_json or {}
+    payload = {
+        "ok": True,
+        **serialize_file_for_agent(file_obj),
+        "content_json": content_json,
+    }
+
+    if is_context_file(content_json):
+        summary = build_spreadsheet_access_summary(file_obj, content_json)
+        purpose_text = str(purpose or "").strip()
+        if purpose_text:
+            summary["user_summary"] = purpose_text
+        data_access = record_data_access(
+            tool_name="get_spreadsheet",
+            tool_call_id=tool_call_id,
+            access_kind=DataAccess.AccessKind.SPREADSHEET,
+            request={"file_id": str(file_obj.id), "purpose": purpose_text},
+            response_summary=summary,
+            file=file_obj,
+            integration=None,
+        )
+        if data_access and data_access.source_ref:
+            payload["source_ref"] = data_access.source_ref
+
+    return json.dumps(payload)
 
 
 @tool
@@ -398,6 +534,7 @@ def update_spreadsheet(
     file_id: str,
     title: str | None = None,
     sheets: list[dict] | None = None,
+    source_refs: list[str] | None = None,
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Update an existing spreadsheet by file_id.
@@ -405,9 +542,11 @@ def update_spreadsheet(
     Provide only the fields you want to change. sheets replaces all sheets when provided.
     Sheets support `style` (striped, header_fill) and cells support `fill` tokens for
     background colors alongside `tone` for text color.
+    Optional source_refs updates provenance links for this deliverable.
     """
     check_agent_not_cancelled()
     conversation = get_agent_conversation()
+    message = get_agent_message()
     if conversation is None:
         return build_tool_error_response("No conversation context")
 
@@ -426,16 +565,18 @@ def update_spreadsheet(
         return build_tool_error_response(str(exc))
 
     try:
-        xlsx_bytes = build_xlsx(content_json)
-        preview = build_preview_html(content_json)
-        file_obj = update_generated_file(
-            file_obj=file_obj,
-            content_json=content_json,
-            file_bytes=xlsx_bytes,
-            preview_html=preview,
+        file_obj, claim_id = _update_spreadsheet_with_provenance(
+            conversation,
+            message,
+            file_obj,
+            content_json,
+            tool_call_id,
+            source_refs,
         )
+    except ValueError as exc:
+        return build_tool_error_response(str(exc))
     except Exception as exc:
         return build_tool_error_response(str(exc))
 
-    _register_display(tool_call_id, file_obj, updated=True)
+    _register_display(tool_call_id, file_obj, updated=True, claim_id=claim_id)
     return _build_agent_tool_response(file_obj, "updated")

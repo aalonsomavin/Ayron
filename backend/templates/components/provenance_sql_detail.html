@@ -17,6 +17,13 @@
     </div>
   {% endif %}
 
+  {% if detail.sheets %}
+    <div class="ay-provenance-sql__source">
+      <span class="ay-provenance-sql__source-label">Hojas</span>
+      <span class="ay-provenance-sql__source-value">{{ detail.sheets|join:", " }}</span>
+    </div>
+  {% endif %}
+
   <div class="ay-provenance-sql__data" data-provenance-data>
     {% if detail.failed %}
       <p class="ay-provenance-sql__status-note">{{ detail.status_message }}</p>
