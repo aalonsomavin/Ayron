@@ -1490,6 +1490,25 @@
     });
   }
 
+  function submitMessage(content, provenanceContext) {
+    const input = document.getElementById("chat-input");
+    if (!input || input.disabled) return false;
+    input.value = content;
+    const form = document.getElementById("chat-composer");
+    let hidden = form.querySelector('input[name="provenance_context"]');
+    if (!hidden) {
+      hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = "provenance_context";
+      form.appendChild(hidden);
+    }
+    hidden.value = provenanceContext ? JSON.stringify(provenanceContext) : "";
+    htmx.trigger(form, "submit");
+    return true;
+  }
+
+  window.AyronChat = { submitMessage: submitMessage };
+
   document.getElementById("chat-composer").addEventListener("htmx:configRequest", function () {
     syncFileIdsInput();
   });
@@ -1528,6 +1547,10 @@
     pendingUploads = [];
     syncFileIdsInput();
     renderPendingAttachments();
+    const provenanceInput = document.getElementById("chat-composer").querySelector(
+      'input[name="provenance_context"]'
+    );
+    if (provenanceInput) provenanceInput.value = "";
     finalizeStreamBubble();
     hideThinking();
     isStreaming = false;

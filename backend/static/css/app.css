@@ -876,6 +876,17 @@ body {
   background: var(--ay-primary-hover);
 }
 
+.ay-btn--secondary:not(:disabled) {
+  background: var(--ay-surface);
+  color: var(--ay-text);
+  border-color: var(--ay-border-strong);
+  box-shadow: var(--ay-shadow-xs);
+}
+
+.ay-btn--secondary:not(:disabled):hover {
+  background: var(--ay-surface-hover);
+}
+
 .ay-btn--ghost:not(:disabled) {
   background: transparent;
   color: var(--ay-text);
@@ -5569,6 +5580,10 @@ body {
 
 .grid{
   display:   grid;
+}
+
+.\!hidden{
+  display:   none !important;
 }
 
 .hidden{
